@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Conditional/Conditional.csproj" />
+  <Project Path="LinkedAlpha/LinkedAlpha.csproj" />
+  <Project Path="LinkedBeta/LinkedBeta.csproj" />
+  <Project Path="MultiTarget/MultiTarget.csproj" />
+</Solution>
