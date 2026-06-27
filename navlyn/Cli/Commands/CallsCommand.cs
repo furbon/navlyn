@@ -83,6 +83,7 @@ internal static class CallsCommand
             Line: resolution.Line,
             Column: resolution.Column,
             Project: options.ProjectFilter is null ? null : ProjectFilterOutput.FromAppliedFilter(options.ProjectFilter),
+            SelectionInput: options.SelectionInput,
             ResultProjects: resultFilter.AppliedProjectFilters.Count == 0
                 ? null
                 : resultFilter.AppliedProjectFilters.Select(ProjectFilterOutput.FromAppliedFilter).ToArray(),
@@ -104,6 +105,8 @@ internal static class CallsCommand
         int Column,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         ProjectFilterOutput? Project,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        CandidateSelectionInput? SelectionInput,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         IReadOnlyList<ProjectFilterOutput>? ResultProjects,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

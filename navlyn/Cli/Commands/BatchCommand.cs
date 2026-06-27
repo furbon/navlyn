@@ -172,6 +172,7 @@ internal static partial class BatchCommand
             !string.IsNullOrWhiteSpace(candidateIdElement.GetString());
         if (!TryGetOptionalBool(request.Payload, "diff", out bool? diffValue, out BatchError? error) ||
             !TryGetOptionalString(request.Payload, "goal", out string? goal, out error) ||
+            !TryGetOptionalString(request.Payload, "changeKind", out string? changeKind, out error) ||
             !TryGetOptionalString(request.Payload, "snippetPolicy", out string? snippetPolicy, out error) ||
             !TryGetOptionalInt(request.Payload, "budgetTokens", out int? budgetTokens, out error) ||
             !TryGetOptionalInt(request.Payload, "itemLimit", out int? itemLimit, out error) ||
@@ -212,6 +213,11 @@ internal static partial class BatchCommand
             return request.Failed(DiagnosticIds.ParseError, "goal must be review, modify, or understand.");
         }
 
+        if (changeKind is not null && changeKind is not ("behavior" or "signature" or "rename" or "constructor" or "nullability" or "async" or "public-api" or "di-registration" or "endpoint"))
+        {
+            return request.Failed(DiagnosticIds.ParseError, "changeKind must be behavior, signature, rename, constructor, nullability, async, public-api, di-registration, or endpoint.");
+        }
+
         if (snippetPolicy is not null && snippetPolicy is not ("none" or "signature" or "line" or "block"))
         {
             return request.Failed(DiagnosticIds.ParseError, "snippetPolicy must be none, signature, line, or block.");
@@ -233,7 +239,8 @@ internal static partial class BatchCommand
             ImpactLimit: impactLimit ?? 100,
             DiffDiagnosticLimit: diagnosticLimit ?? 100,
             RelatedTestLimit: relatedTestLimit ?? 50,
-            Depth: depth ?? 2);
+            Depth: depth ?? 2,
+            ChangeKind: changeKind);
 
         BatchError? limitError =
             GetPositiveBatchLimitError("budgetTokens", options.BudgetTokens) ??
@@ -290,6 +297,7 @@ internal static partial class BatchCommand
             {
                 mode = hasQuery ? "query" : "candidateId",
                 goal = options.Goal,
+                changeKind = options.ChangeKind,
                 excludeGenerated,
                 options
             }));
@@ -315,6 +323,7 @@ internal static partial class BatchCommand
             : request.Success(OutputProfile.Format(loadedWorkspace, "context-pack", profile, diffResult.Result!, new
             {
                 mode = "diff",
+                changeKind = options.ChangeKind,
                 excludeGenerated,
                 options
             }));
@@ -673,10 +682,17 @@ internal static partial class BatchCommand
         BatchRequest request,
         CancellationToken cancellationToken)
     {
-        if (!TryGetSourcePosition(loadedWorkspace, defaults, request, out SourcePositionBatchOptions options, out BatchError? error))
+        SourcePositionBatchResolution positionResult = await ResolveSourcePositionAsync(
+            loadedWorkspace,
+            defaults,
+            request,
+            cancellationToken);
+        if (positionResult.Error is not null)
         {
-            return request.Failed(error!);
+            return request.Failed(positionResult.Error);
         }
+
+        SourcePositionBatchOptions options = positionResult.Options!;
 
         SymbolAtResolutionResult result = await new SymbolAtResolver().ResolveAsync(
             loadedWorkspace.Solution,
@@ -698,6 +714,7 @@ internal static partial class BatchCommand
             Line: resolution.Line,
             Column: resolution.Column,
             Project: options.ProjectFilter,
+            SelectionInput: options.SelectionInput,
             ExcludeGenerated: options.ExcludeGenerated,
             Symbol: new SymbolAtSymbolResult(
                 Name: resolution.Symbol.Name,
@@ -717,10 +734,17 @@ internal static partial class BatchCommand
         BatchRequest request,
         CancellationToken cancellationToken)
     {
-        if (!TryGetSourcePosition(loadedWorkspace, defaults, request, out SourcePositionBatchOptions options, out BatchError? error))
+        SourcePositionBatchResolution positionResult = await ResolveSourcePositionAsync(
+            loadedWorkspace,
+            defaults,
+            request,
+            cancellationToken);
+        if (positionResult.Error is not null)
         {
-            return request.Failed(error!);
+            return request.Failed(positionResult.Error);
         }
+
+        SourcePositionBatchOptions options = positionResult.Options!;
 
         SymbolInfoResolutionResult result = await new SymbolInfoResolver().ResolveAsync(
             loadedWorkspace.Solution,
@@ -742,6 +766,7 @@ internal static partial class BatchCommand
             Line: resolution.Line,
             Column: resolution.Column,
             Project: options.ProjectFilter,
+            SelectionInput: options.SelectionInput,
             ExcludeGenerated: options.ExcludeGenerated,
             Symbol: resolution.Symbol,
             Expression: resolution.Expression,
@@ -758,10 +783,18 @@ internal static partial class BatchCommand
         BatchRequest request,
         CancellationToken cancellationToken)
     {
-        if (!TryGetSourcePosition(loadedWorkspace, defaults, request, out SourcePositionBatchOptions options, out BatchError? error))
+        SourcePositionBatchResolution positionResult = await ResolveSourcePositionAsync(
+            loadedWorkspace,
+            defaults,
+            request,
+            cancellationToken);
+        if (positionResult.Error is not null)
         {
-            return request.Failed(error!);
+            return request.Failed(positionResult.Error);
         }
+
+        SourcePositionBatchOptions options = positionResult.Options!;
+        BatchError? error;
 
         if (!TryGetOptionalBool(request.Payload, "includeMetadata", out bool? includeMetadata, out error))
         {
@@ -789,6 +822,7 @@ internal static partial class BatchCommand
             Line: resolution.Line,
             Column: resolution.Column,
             Project: options.ProjectFilter,
+            SelectionInput: options.SelectionInput,
             ExcludeGenerated: options.ExcludeGenerated,
             IncludeMetadata: includeMetadata ?? false,
             Symbol: new SourceSymbolResult(
@@ -810,12 +844,29 @@ internal static partial class BatchCommand
         BatchRequest request,
         CancellationToken cancellationToken)
     {
-        if (!TryGetSourcePosition(loadedWorkspace, defaults, request, out SourcePositionBatchOptions options, out BatchError? error))
+        SourcePositionBatchResolution positionResult = await ResolveSourcePositionAsync(
+            loadedWorkspace,
+            defaults,
+            request,
+            cancellationToken);
+        if (positionResult.Error is not null)
+        {
+            return request.Failed(positionResult.Error);
+        }
+
+        SourcePositionBatchOptions options = positionResult.Options!;
+        BatchError? error;
+
+        if (!TryGetNavigationResultFilter(loadedWorkspace, request.Payload, out NavigationResultBatchOptions resultFilter, out error))
         {
             return request.Failed(error!);
         }
 
-        if (!TryGetNavigationResultFilter(loadedWorkspace, request.Payload, out NavigationResultBatchOptions resultFilter, out error))
+        if (!TryGetReferenceUsageOptions(
+            request.Payload,
+            out IReadOnlyList<string> usageKinds,
+            out IReadOnlyList<string> groupBy,
+            out error))
         {
             return request.Failed(error!);
         }
@@ -836,21 +887,27 @@ internal static partial class BatchCommand
 
         ReferencesResolution resolution = result.Resolution!;
         IReadOnlyList<SymbolReferenceLocation> filteredReferences = [.. resolution.References
-            .Where(reference => NavigationResultOptions.MatchesSymbol(resultFilter.Filter, reference.Path, resolution.Symbol.Kind))];
+            .Where(reference => NavigationResultOptions.MatchesSymbol(resultFilter.Filter, reference.Path, resolution.Symbol.Kind))
+            .Where(reference => usageKinds.Count == 0 || usageKinds.Contains(reference.UsageKind, StringComparer.Ordinal))];
         IReadOnlyList<SymbolReferenceLocation> limitedReferences =
             NavigationResultOptions.ApplyLimit(filteredReferences, resultFilter.Filter.Limit);
+        IReadOnlyList<ReferenceUsageGroup> groups = ReferenceUsageTaxonomy.CreateGroups(filteredReferences, groupBy);
 
         return request.Success(new ReferencesResult(
             File: resolution.File,
             Line: resolution.Line,
             Column: resolution.Column,
             Project: options.ProjectFilter,
+            SelectionInput: options.SelectionInput,
             ResultProjects: resultFilter.ProjectFilters,
             ResultPaths: resultFilter.Filter.PathFilters.Count == 0 ? null : resultFilter.Filter.PathFilters,
             ResultKinds: resultFilter.Filter.KindFilters.Count == 0 ? null : resultFilter.Filter.KindFilters,
+            UsageKinds: usageKinds.Count == 0 ? null : usageKinds,
+            GroupBy: groupBy.Count == 0 ? null : groupBy,
             ExcludeGenerated: options.ExcludeGenerated,
             Limit: resultFilter.Filter.Limit,
             TotalMatches: filteredReferences.Count,
+            UsageKindCounts: ReferenceUsageTaxonomy.CreateCounts(filteredReferences),
             Symbol: new SourceSymbolResult(
                 Name: resolution.Symbol.Name,
                 Kind: resolution.Symbol.Kind,
@@ -862,6 +919,7 @@ internal static partial class BatchCommand
                 Column: reference.Column,
                 EndLine: reference.EndLine,
                 EndColumn: reference.EndColumn,
+                UsageKind: reference.UsageKind,
                 ContainingSymbol: reference.ContainingSymbol is null
                     ? null
                     : new SourceSymbolLocationResult(
@@ -873,7 +931,8 @@ internal static partial class BatchCommand
                         Line: reference.ContainingSymbol.Line,
                         Column: reference.ContainingSymbol.Column,
                         EndLine: reference.ContainingSymbol.EndLine,
-                        EndColumn: reference.ContainingSymbol.EndColumn))).ToArray()));
+                        EndColumn: reference.ContainingSymbol.EndColumn))).ToArray(),
+            Groups: groups.Count == 0 ? null : groups));
     }
 
     private static async Task<BatchRequestResult> ExecuteImplementationsAsync(
@@ -882,10 +941,18 @@ internal static partial class BatchCommand
         BatchRequest request,
         CancellationToken cancellationToken)
     {
-        if (!TryGetSourcePosition(loadedWorkspace, defaults, request, out SourcePositionBatchOptions options, out BatchError? error))
+        SourcePositionBatchResolution positionResult = await ResolveSourcePositionAsync(
+            loadedWorkspace,
+            defaults,
+            request,
+            cancellationToken);
+        if (positionResult.Error is not null)
         {
-            return request.Failed(error!);
+            return request.Failed(positionResult.Error);
         }
+
+        SourcePositionBatchOptions options = positionResult.Options!;
+        BatchError? error;
 
         if (!TryGetNavigationResultFilter(loadedWorkspace, request.Payload, out NavigationResultBatchOptions resultFilter, out error))
         {
@@ -917,6 +984,7 @@ internal static partial class BatchCommand
             Line: resolution.Line,
             Column: resolution.Column,
             Project: options.ProjectFilter,
+            SelectionInput: options.SelectionInput,
             ResultProjects: resultFilter.ProjectFilters,
             ResultPaths: resultFilter.Filter.PathFilters.Count == 0 ? null : resultFilter.Filter.PathFilters,
             ResultKinds: resultFilter.Filter.KindFilters.Count == 0 ? null : resultFilter.Filter.KindFilters,
@@ -946,10 +1014,18 @@ internal static partial class BatchCommand
         BatchRequest request,
         CancellationToken cancellationToken)
     {
-        if (!TryGetSourcePosition(loadedWorkspace, defaults, request, out SourcePositionBatchOptions options, out BatchError? error))
+        SourcePositionBatchResolution positionResult = await ResolveSourcePositionAsync(
+            loadedWorkspace,
+            defaults,
+            request,
+            cancellationToken);
+        if (positionResult.Error is not null)
         {
-            return request.Failed(error!);
+            return request.Failed(positionResult.Error);
         }
+
+        SourcePositionBatchOptions options = positionResult.Options!;
+        BatchError? error;
 
         if (!TryGetNavigationResultFilter(loadedWorkspace, request.Payload, out NavigationResultBatchOptions resultFilter, out error))
         {
@@ -982,6 +1058,7 @@ internal static partial class BatchCommand
             Line: resolution.Line,
             Column: resolution.Column,
             Project: options.ProjectFilter,
+            SelectionInput: options.SelectionInput,
             ResultProjects: resultFilter.ProjectFilters,
             ResultPaths: resultFilter.Filter.PathFilters.Count == 0 ? null : resultFilter.Filter.PathFilters,
             ResultKinds: resultFilter.Filter.KindFilters.Count == 0 ? null : resultFilter.Filter.KindFilters,
@@ -998,10 +1075,17 @@ internal static partial class BatchCommand
         BatchRequest request,
         CancellationToken cancellationToken)
     {
-        if (!TryGetSourcePosition(loadedWorkspace, defaults, request, out SourcePositionBatchOptions options, out BatchError? error))
+        SourcePositionBatchResolution positionResult = await ResolveSourcePositionAsync(
+            loadedWorkspace,
+            defaults,
+            request,
+            cancellationToken);
+        if (positionResult.Error is not null)
         {
-            return request.Failed(error!);
+            return request.Failed(positionResult.Error);
         }
+
+        SourcePositionBatchOptions options = positionResult.Options!;
 
         TypeHierarchyResolutionResult result = await new TypeHierarchyResolver().ResolveAsync(
             loadedWorkspace.Solution,
@@ -1023,6 +1107,7 @@ internal static partial class BatchCommand
             Line: resolution.Line,
             Column: resolution.Column,
             Project: options.ProjectFilter,
+            SelectionInput: options.SelectionInput,
             ExcludeGenerated: options.ExcludeGenerated,
             Symbol: resolution.Symbol,
             BaseTypes: resolution.BaseTypes,
@@ -1040,10 +1125,18 @@ internal static partial class BatchCommand
         BatchRequest request,
         CancellationToken cancellationToken)
     {
-        if (!TryGetSourcePosition(loadedWorkspace, defaults, request, out SourcePositionBatchOptions options, out BatchError? error))
+        SourcePositionBatchResolution positionResult = await ResolveSourcePositionAsync(
+            loadedWorkspace,
+            defaults,
+            request,
+            cancellationToken);
+        if (positionResult.Error is not null)
         {
-            return request.Failed(error!);
+            return request.Failed(positionResult.Error);
         }
+
+        SourcePositionBatchOptions options = positionResult.Options!;
+        BatchError? error;
 
         if (!TryGetNavigationResultFilter(loadedWorkspace, request.Payload, out NavigationResultBatchOptions resultFilter, out error))
         {
@@ -1084,6 +1177,7 @@ internal static partial class BatchCommand
             Line: resolution.Line,
             Column: resolution.Column,
             Project: options.ProjectFilter,
+            SelectionInput: options.SelectionInput,
             ResultProjects: resultFilter.ProjectFilters,
             ResultPaths: resultFilter.Filter.PathFilters.Count == 0 ? null : resultFilter.Filter.PathFilters,
             ResultKinds: resultFilter.Filter.KindFilters.Count == 0 ? null : resultFilter.Filter.KindFilters,
@@ -1145,7 +1239,8 @@ internal static partial class BatchCommand
             out IReadOnlyList<FuzzyProjectFilter>? projectFilters,
             out BatchError? error) ||
             !TryGetFuzzySnippetOptions(request.Payload, out bool includeSnippets, out int snippetLines, out error) ||
-            !TryGetOptionalInt(request.Payload, "limit", out int? limit, out error))
+            !TryGetOptionalInt(request.Payload, "limit", out int? limit, out error) ||
+            !TryGetReferenceUsageOptions(request.Payload, out IReadOnlyList<string> usageKinds, out IReadOnlyList<string> groupBy, out error))
         {
             return request.Failed(error!);
         }
@@ -1166,7 +1261,7 @@ internal static partial class BatchCommand
         return request.Success(await resolver.WhereUsedAsync(
             loadedWorkspace,
             options,
-            new FuzzyLocationOptions(referenceLimit, FuzzyDiscoveryResolver.DefaultReferenceFileLimit, includeSnippets, snippetLines, options.ExcludeGenerated),
+            new FuzzyLocationOptions(referenceLimit, FuzzyDiscoveryResolver.DefaultReferenceFileLimit, includeSnippets, snippetLines, options.ExcludeGenerated, usageKinds, groupBy),
             projects,
             projectFilters,
             cancellationToken));
@@ -1448,31 +1543,67 @@ internal static partial class BatchCommand
         return true;
     }
 
-    private static bool TryGetSourcePosition(
+    private static async Task<SourcePositionBatchResolution> ResolveSourcePositionAsync(
         LoadedWorkspace loadedWorkspace,
         BatchDefaults defaults,
         BatchRequest request,
-        out SourcePositionBatchOptions options,
-        out BatchError? error)
+        CancellationToken cancellationToken)
     {
-        options = default!;
-        if (!TryGetRequiredFile(request.Payload, out FileInfo file, out error) ||
-            !TryGetRequiredInt(request.Payload, "line", out int line, out error) ||
-            !TryGetRequiredInt(request.Payload, "column", out int column, out error) ||
+        if (!TryGetOptionalString(request.Payload, "candidateId", out string? candidateId, out BatchError? error) ||
+            !TryGetOptionalFile(request.Payload, "file", out FileInfo? file, out error) ||
+            !TryGetOptionalInt(request.Payload, "line", out int? line, out error) ||
+            !TryGetOptionalInt(request.Payload, "column", out int? column, out error) ||
             !TryResolveSingleProject(loadedWorkspace, request.Payload, defaults, out Project? project, out ProjectFilterOutput? projectFilter, out error) ||
             !TryGetEffectiveExcludeGenerated(request.Payload, defaults, out bool excludeGenerated, out error))
         {
-            return false;
+            return SourcePositionBatchResolution.Failed(error!);
         }
 
-        options = new SourcePositionBatchOptions(
-            File: file,
-            Line: line,
-            Column: column,
+        bool hasCandidateId = !string.IsNullOrWhiteSpace(candidateId);
+        bool hasAnySourcePosition = file is not null || line is not null || column is not null;
+        bool hasCompleteSourcePosition = file is not null && line is not null && column is not null;
+        if (hasCandidateId && hasAnySourcePosition || !hasCandidateId && !hasCompleteSourcePosition)
+        {
+            return SourcePositionBatchResolution.Failed(BatchError.FromDiagnostic(
+                DiagnosticIds.ParseError,
+                $"Specify exactly one {request.Command} input mode: candidateId or file with line and column."));
+        }
+
+        CandidateSelectionInput? selectionInput = null;
+        if (hasCandidateId)
+        {
+            IReadOnlyList<Project> projects = project is null
+                ? loadedWorkspace.Solution.Projects.ToArray()
+                : [project];
+            CandidateTargetResolutionResult targetResult = await new CandidateTargetResolver().ResolveAsync(
+                loadedWorkspace.Solution,
+                projects,
+                candidateId!,
+                excludeGenerated,
+                cancellationToken);
+            if (targetResult.Error is not null)
+            {
+                return SourcePositionBatchResolution.Failed(BatchError.FromDiagnostic(
+                    targetResult.Error.DiagnosticId,
+                    targetResult.Error.Message));
+            }
+
+            CandidateTargetResolution target = targetResult.Resolution!;
+            file = target.File;
+            line = target.Line;
+            column = target.Column;
+            project ??= target.Project;
+            selectionInput = new CandidateSelectionInput("candidateId", target.CandidateId);
+        }
+
+        return SourcePositionBatchResolution.Succeeded(new SourcePositionBatchOptions(
+            File: file!,
+            Line: line!.Value,
+            Column: column!.Value,
             Project: project,
             ProjectFilter: projectFilter,
-            ExcludeGenerated: excludeGenerated);
-        return true;
+            ExcludeGenerated: excludeGenerated,
+            SelectionInput: selectionInput));
     }
 
     private static bool TryResolveSingleProject(
@@ -1888,6 +2019,37 @@ internal static partial class BatchCommand
             ProjectFilters: projectResult.AppliedFilters.Count == 0
                 ? null
                 : projectResult.AppliedFilters.Select(ProjectFilterOutput.FromAppliedFilter).ToArray());
+        error = null;
+        return true;
+    }
+
+    private static bool TryGetReferenceUsageOptions(
+        JsonElement payload,
+        out IReadOnlyList<string> usageKinds,
+        out IReadOnlyList<string> groupBy,
+        out BatchError? error)
+    {
+        usageKinds = [];
+        groupBy = [];
+
+        if (!TryGetResultStringFilters(payload, "usageKind", "usageKinds", out IReadOnlyList<string> usageKindValues, out error) ||
+            !TryGetStringArray(payload, "groupBy", out IReadOnlyList<string> groupByValues, out error, allowStringValue: true))
+        {
+            return false;
+        }
+
+        if (!ReferenceUsageTaxonomy.TryNormalizeUsageKinds(usageKindValues, out usageKinds, out string? usageError))
+        {
+            error = BatchError.FromDiagnostic(DiagnosticIds.ParseError, usageError!);
+            return false;
+        }
+
+        if (!ReferenceUsageTaxonomy.TryNormalizeGroupKinds(groupByValues, out groupBy, out string? groupError))
+        {
+            error = BatchError.FromDiagnostic(DiagnosticIds.ParseError, groupError!);
+            return false;
+        }
+
         error = null;
         return true;
     }

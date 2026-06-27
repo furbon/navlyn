@@ -38,11 +38,12 @@ When the agent has an approximate symbol name, let Navlyn resolve candidates fir
 ```powershell
 navlyn find --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --limit 10
 navlyn about --workspace navlyn.slnx --candidate-id sym:v1:...
+navlyn references --workspace navlyn.slnx --candidate-id sym:v1:... --usage-kind invoke --usage-kind construct --group-by file --group-by usage-kind --limit 50
 navlyn related --workspace navlyn.slnx --candidate-id sym:v1:... --limit 30
 navlyn impact --workspace navlyn.slnx --candidate-id sym:v1:... --depth 2
 ```
 
-Use `about` for a compact selected-symbol summary, `related` for a file-first reading map, and `impact` before edits or risk analysis.
+Use `about` for a compact selected-symbol summary, `references` with `usageKind` and `groupBy` when the agent needs precise read/write/invocation/construction evidence, `related` for a file-first reading map, and `impact` before edits or risk analysis.
 
 ## Bounded Context Before Editing
 
@@ -53,7 +54,7 @@ Use `context-pack` when an agent needs the right material to read, not every pos
 - `understand`: prioritize outlines, relationships, repository context, and representative references.
 
 ```powershell
-navlyn context-pack --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --goal modify --profile compact --budget-tokens 8000
+navlyn context-pack --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --goal modify --change-kind signature --profile compact --budget-tokens 8000
 navlyn context-pack --workspace navlyn.slnx --candidate-id sym:v1:... --goal understand --snippet-policy signature
 ```
 
@@ -121,6 +122,20 @@ navlyn di-impact --workspace navlyn.slnx --query MyService --assume-kind NamedTy
 
 DI facts are source-level and pattern-based. They are useful for registrations, constructor dependencies, consumer relationships, and reported risk facts such as multiple registrations or captive dependency candidates.
 
+## .NET Application Domains
+
+Use application-domain packs when the code question is about framework patterns rather than one symbol reference list.
+
+```powershell
+navlyn route-map --workspace navlyn.slnx --profile compact
+navlyn options-graph --workspace navlyn.slnx --query PaymentOptions --profile compact
+navlyn where-handled --workspace navlyn.slnx --query CreateOrderCommand --assume-kind NamedType --profile compact
+navlyn ef-model --workspace navlyn.slnx --entity Order --profile compact
+navlyn package-usage --workspace navlyn.slnx --package Microsoft.EntityFrameworkCore --namespaces Microsoft.EntityFrameworkCore --profile compact
+```
+
+These commands report bounded source-level evidence. They do not claim complete runtime route tables, effective authorization, secret/config values, EF runtime models, or package compatibility.
+
 ## Framework Entrypoints
 
 Use framework entrypoint commands to help an agent understand how code may be reached from application or test frameworks.
@@ -139,9 +154,10 @@ Equivalent MCP flow for a symbol investigation:
 ```text
 navlyn_workspace_summary(profile: "compact")
 navlyn_find_symbol(query: "CheckCommand", assumeKind: "NamedType")
+navlyn_exact_navigation(operation: "references", candidateId: "sym:v1:...", usageKinds: ["invoke", "construct"], groupBy: ["file", "usage-kind"], limit: 50)
 navlyn_about_symbol(candidateId: "sym:v1:...")
 navlyn_related_files(candidateId: "sym:v1:...", limit: 30)
-navlyn_context_pack(candidateId: "sym:v1:...", goal: "modify", profile: "compact")
+navlyn_context_pack(candidateId: "sym:v1:...", goal: "modify", changeKind: "signature", profile: "compact")
 ```
 
 Equivalent MCP flow for a review:

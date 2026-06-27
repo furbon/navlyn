@@ -48,6 +48,19 @@ internal static class OutputProfile
         "constructorDependencies",
         "consumers",
         "risks",
+        "routes",
+        "options",
+        "bindings",
+        "validations",
+        "handlers",
+        "callSites",
+        "dbContexts",
+        "entities",
+        "dbSets",
+        "configurations",
+        "querySites",
+        "packageReferences",
+        "usages",
         "packResults"
     ];
 
@@ -62,7 +75,18 @@ internal static class OutputProfile
         "diagnostics",
         "registrations",
         "consumers",
-        "risks"
+        "risks",
+        "routes",
+        "options",
+        "bindings",
+        "handlers",
+        "callSites",
+        "dbContexts",
+        "entities",
+        "dbSets",
+        "querySites",
+        "packageReferences",
+        "usages"
     ];
 
     public static Option<string> CreateOption()
@@ -197,7 +221,7 @@ internal static class OutputProfile
 
     private static void CopyIdentityFields(JsonObject source, JsonObject target)
     {
-        foreach (string property in new[] { "mode", "goal", "scope", "packs", "comparison", "selectionInput", "query", "diff" })
+        foreach (string property in new[] { "mode", "goal", "changeKind", "scope", "packs", "comparison", "selectionInput", "query", "diff" })
         {
             if (source.TryGetPropertyValue(property, out JsonNode? value) && value is not null && !target.ContainsKey(property))
             {

@@ -110,6 +110,7 @@ The quick script verifies C# file format, builds the solution unless `-NoBuild` 
 ```
 
 The CLI contract script runs representative command wiring and JSON shape checks for workspace commands, source-position commands, fuzzy discovery commands, batch input, and stable error behavior. It should stay broad enough to catch broken command registration, serialization drift, and common contract regressions without becoming the full semantic fixture suite.
+Use a 600 second automation timeout for this script. It can exceed 300 seconds on slower local runs even when healthy.
 
 ### Performance Measurement
 
@@ -119,7 +120,7 @@ The CLI contract script runs representative command wiring and JSON shape checks
 ./scripts/measure-navlyn-performance.ps1 -Workspace navlyn.slnx -Scenario all -Profile evidence -Iterations 1 -Warmup 0 -NoBuild
 ```
 
-The performance script emits structured JSON with elapsed time, stdout/stderr size, exit code, JSON validity, key counts, truncation state, profile, and command arguments. Keep generated reports under ignored local paths such as `.docs/perf/` unless a curated baseline is intentionally being published. The MCP scenario records a structured skip unless a dedicated MCP tool-call probe is added to the script; use `navlyn.Tests.Mcp` coverage for functional MCP validation.
+The performance script emits structured JSON with elapsed time, stdout/stderr size, exit code, JSON validity, key counts, truncation state, profile, and command arguments. Keep generated reports under ignored local paths such as `.docs/perf/` unless a curated baseline is intentionally being published. The MCP scenario starts a local stdio MCP session and records representative tool-call latency/output-size measurements when the MCP server assembly is built; use `navlyn.Tests.Mcp` coverage for functional MCP validation.
 
 ### Package And PR Facts Scripts
 
@@ -168,7 +169,7 @@ Recommended command timeouts for automation:
 - `dotnet build navlyn.slnx`: at least 120 seconds.
 - `dotnet test navlyn.slnx`: at least 180 seconds.
 - `./scripts/test-quick.ps1`: at least 300 seconds.
-- `./scripts/test-cli-contract.ps1`: at least 300 seconds.
+- `./scripts/test-cli-contract.ps1`: at least 600 seconds.
 - `./scripts/test-symbol-navigation.ps1`: at least 420 seconds.
 - `./scripts/test-fuzzy-discovery.ps1`: at least 420 seconds.
 - `./scripts/test-multi-project-navigation.ps1`: at least 180 seconds.

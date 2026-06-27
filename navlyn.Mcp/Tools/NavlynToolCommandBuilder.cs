@@ -10,9 +10,14 @@ internal static class NavlynToolCommandBuilder
     private static readonly string[] CandidatePolicyValues = ["fail", "select", "group"];
     private static readonly string[] MinConfidenceValues = ["high", "medium", "low"];
     private static readonly string[] GoalValues = ["review", "modify", "understand"];
+    private static readonly string[] ChangeKindValues = ["behavior", "signature", "rename", "constructor", "nullability", "async", "public-api", "di-registration", "endpoint"];
     private static readonly string[] SnippetPolicyValues = ["none", "signature", "line", "block"];
     private static readonly string[] EntrypointModeValues = ["symbol", "framework"];
     private static readonly string[] ProfileValues = ["compact", "evidence", "full"];
+    private static readonly string[] ExactNavigationOperations = ["definition", "references", "callers", "calls", "implementations", "type_hierarchy", "symbol_info"];
+    private static readonly string[] FilteredExactNavigationOperations = ["references", "callers", "calls", "implementations"];
+    private static readonly string[] ReferenceUsageKindValues = ["read", "write", "invoke", "construct", "inherit", "implement", "override", "attribute", "nameof", "typeof"];
+    private static readonly string[] ReferenceGroupByValues = ["file", "project", "containing-symbol", "usage-kind", "test-vs-production"];
 
     public static CommandBuildResult WorkspaceSummary(
         string? project,
@@ -278,6 +283,7 @@ internal static class NavlynToolCommandBuilder
         bool? staged,
         bool? includeUnstaged,
         string? goal,
+        string? changeKind,
         int? budgetTokens,
         int? itemLimit,
         string? snippetPolicy,
@@ -358,6 +364,7 @@ internal static class NavlynToolCommandBuilder
         }
 
         if (!TryAddAllowedValue(args, "--goal", goal, GoalValues, out error) ||
+            !TryAddAllowedValue(args, "--change-kind", changeKind, ChangeKindValues, out error) ||
             !TryAddAllowedValue(args, "--snippet-policy", snippetPolicy, SnippetPolicyValues, out error) ||
             !TryAddPositiveInt(args, "--budget-tokens", budgetTokens, out error) ||
             !TryAddPositiveInt(args, "--item-limit", itemLimit, out error) ||
@@ -378,6 +385,238 @@ internal static class NavlynToolCommandBuilder
         }
 
         return CommandBuildResult.Valid("context-pack", args);
+    }
+
+    public static CommandBuildResult ExactNavigation(
+        string operation,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        string? project,
+        bool? excludeGenerated,
+        string? resultProject,
+        string[]? resultProjects,
+        string? resultPath,
+        string[]? resultPaths,
+        string? resultKind,
+        string[]? resultKinds,
+        string? usageKind,
+        string[]? usageKinds,
+        string[]? groupBy,
+        int? limit,
+        bool? includeMetadata)
+    {
+        if (string.IsNullOrWhiteSpace(operation))
+        {
+            return CommandBuildResult.Invalid("operation is required.");
+        }
+
+        string normalizedOperation = operation.Trim();
+        if (!ExactNavigationOperations.Contains(normalizedOperation, StringComparer.Ordinal))
+        {
+            return CommandBuildResult.Invalid($"operation must be one of: {string.Join(", ", ExactNavigationOperations)}.");
+        }
+
+        List<string> args = [];
+        if (!TryAddExactNavigationTarget(args, candidateId, file, line, column, out string? error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        AddOptionalValue(args, "--project", project);
+        AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+
+        bool hasResultFilters = !string.IsNullOrWhiteSpace(resultProject) ||
+            NormalizeValues(resultProjects).Count > 0 ||
+            !string.IsNullOrWhiteSpace(resultPath) ||
+            NormalizeValues(resultPaths).Count > 0 ||
+            !string.IsNullOrWhiteSpace(resultKind) ||
+            NormalizeValues(resultKinds).Count > 0 ||
+            limit is not null;
+        if (hasResultFilters && !FilteredExactNavigationOperations.Contains(normalizedOperation, StringComparer.Ordinal))
+        {
+            return CommandBuildResult.Invalid("result filters are supported only for references, callers, calls, and implementations.");
+        }
+
+        bool hasReferenceUsageOptions = !string.IsNullOrWhiteSpace(usageKind) ||
+            NormalizeValues(usageKinds).Count > 0 ||
+            NormalizeValues(groupBy).Count > 0;
+        if (hasReferenceUsageOptions && normalizedOperation != "references")
+        {
+            return CommandBuildResult.Invalid("usageKind, usageKinds, and groupBy are supported only for references.");
+        }
+
+        if (!TryAddSingleOrMany(args, "--result-project", resultProject, resultProjects, "resultProject", "resultProjects", out error) ||
+            !TryAddSingleOrMany(args, "--result-path", resultPath, resultPaths, "resultPath", "resultPaths", out error) ||
+            !TryAddSingleOrMany(args, "--result-kind", resultKind, resultKinds, "resultKind", "resultKinds", out error) ||
+            !TryAddSingleOrManyAllowed(args, "--usage-kind", usageKind, usageKinds, "usageKind", "usageKinds", ReferenceUsageKindValues, out error) ||
+            !TryAddManyAllowed(args, "--group-by", groupBy, "groupBy", ReferenceGroupByValues, out error) ||
+            !TryAddPositiveInt(args, "--limit", limit, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        if (includeMetadata == true && normalizedOperation is not ("definition" or "calls"))
+        {
+            return CommandBuildResult.Invalid("includeMetadata is supported only for definition and calls.");
+        }
+
+        AddOptionalFlag(args, "--include-metadata", includeMetadata);
+        return CommandBuildResult.Valid(ToCliExactNavigationCommand(normalizedOperation), args);
+    }
+
+    public static CommandBuildResult TestsForSymbol(
+        string? query,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        string? assumeKind,
+        string[]? assumeKinds,
+        string? match,
+        bool? caseSensitive,
+        string? project,
+        string[]? projects,
+        string? testProject,
+        string[]? testProjects,
+        bool? excludeGenerated,
+        int? candidateLimit,
+        int? testLimit,
+        int? referenceLimit,
+        bool? includeSnippets,
+        int? snippetLines,
+        string? candidatePolicy,
+        string? minConfidence,
+        bool? explainSelection,
+        string? profile)
+    {
+        if (!TryAddSymbolOrPositionInput([], query, candidateId, file, line, column, out List<string> args, out string? error) ||
+            !TryAddFuzzyOptions(args, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, limit: null, candidatePolicy, minConfidence, explainSelection, allowGroupPolicy: false, out error) ||
+            !TryAddSingleOrMany(args, "--test-project", testProject, testProjects, "testProject", "testProjects", out error) ||
+            !TryAddPositiveInt(args, "--candidate-limit", candidateLimit, out error) ||
+            !TryAddPositiveInt(args, "--test-limit", testLimit, out error) ||
+            !TryAddPositiveInt(args, "--reference-limit", referenceLimit, out error) ||
+            !TryAddNonNegativeInt(args, "--snippet-lines", snippetLines, out error) ||
+            !TryAddAllowedValue(args, "--profile", profile, ProfileValues, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        AddOptionalFlag(args, "--include-snippets", includeSnippets);
+        return CommandBuildResult.Valid("tests-for-symbol", args);
+    }
+
+    public static CommandBuildResult TestsForDiff(
+        string? baseRef,
+        string? head,
+        bool? staged,
+        bool? includeUnstaged,
+        string? project,
+        string[]? projects,
+        string? testProject,
+        string[]? testProjects,
+        bool? excludeGenerated,
+        int? symbolLimit,
+        int? testLimit,
+        int? referenceLimit,
+        bool? includeSnippets,
+        int? snippetLines,
+        string? profile)
+    {
+        List<string> args = [];
+        if (!TryAddDiffOptions(args, baseRef, head, staged, includeUnstaged, out string? error) ||
+            !TryAddProjects(args, project, projects, out error) ||
+            !TryAddSingleOrMany(args, "--test-project", testProject, testProjects, "testProject", "testProjects", out error) ||
+            !TryAddPositiveInt(args, "--symbol-limit", symbolLimit, out error) ||
+            !TryAddPositiveInt(args, "--test-limit", testLimit, out error) ||
+            !TryAddPositiveInt(args, "--reference-limit", referenceLimit, out error) ||
+            !TryAddNonNegativeInt(args, "--snippet-lines", snippetLines, out error) ||
+            !TryAddAllowedValue(args, "--profile", profile, ProfileValues, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+        AddOptionalFlag(args, "--include-snippets", includeSnippets);
+        return CommandBuildResult.Valid("tests-for-diff", args);
+    }
+
+    public static CommandBuildResult DiImpact(
+        string? query,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        string? assumeKind,
+        string[]? assumeKinds,
+        string? match,
+        bool? caseSensitive,
+        string? project,
+        string[]? projects,
+        bool? excludeGenerated,
+        int? candidateLimit,
+        int? registrationLimit,
+        int? consumerLimit,
+        int? dependencyLimit,
+        int? riskLimit,
+        int? depth,
+        bool? includeSnippets,
+        int? snippetLines,
+        string? candidatePolicy,
+        string? minConfidence,
+        bool? explainSelection,
+        string? profile)
+    {
+        if (!TryAddSymbolOrPositionInput([], query, candidateId, file, line, column, out List<string> args, out string? error) ||
+            !TryAddFuzzyOptions(args, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, limit: null, candidatePolicy, minConfidence, explainSelection, allowGroupPolicy: false, out error) ||
+            !TryAddPositiveInt(args, "--candidate-limit", candidateLimit, out error) ||
+            !TryAddPositiveInt(args, "--registration-limit", registrationLimit, out error) ||
+            !TryAddPositiveInt(args, "--consumer-limit", consumerLimit, out error) ||
+            !TryAddPositiveInt(args, "--dependency-limit", dependencyLimit, out error) ||
+            !TryAddPositiveInt(args, "--risk-limit", riskLimit, out error) ||
+            !TryAddNonNegativeInt(args, "--depth", depth, out error) ||
+            !TryAddNonNegativeInt(args, "--snippet-lines", snippetLines, out error) ||
+            !TryAddAllowedValue(args, "--profile", profile, ProfileValues, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        AddOptionalFlag(args, "--include-snippets", includeSnippets);
+        return CommandBuildResult.Valid("di-impact", args);
+    }
+
+    public static CommandBuildResult PublicApiDiff(
+        string? baseRef,
+        string? head,
+        string? project,
+        string[]? projects,
+        bool? excludeGenerated,
+        bool? includeAdditions,
+        bool? includeAttributes,
+        int? symbolLimit,
+        int? changeLimit,
+        string? profile)
+    {
+        if (string.IsNullOrWhiteSpace(baseRef))
+        {
+            return CommandBuildResult.Invalid("base is required.");
+        }
+
+        List<string> args = ["--base", baseRef.Trim()];
+        AddOptionalValue(args, "--head", head);
+        if (!TryAddProjects(args, project, projects, out string? error) ||
+            !TryAddPositiveInt(args, "--symbol-limit", symbolLimit, out error) ||
+            !TryAddPositiveInt(args, "--change-limit", changeLimit, out error) ||
+            !TryAddAllowedValue(args, "--profile", profile, ProfileValues, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+        AddOptionalBoolValue(args, "--include-additions", includeAdditions);
+        AddOptionalBoolValue(args, "--include-attributes", includeAttributes);
+        return CommandBuildResult.Valid("public-api-diff", args);
     }
 
     public static CommandBuildResult Batch(JsonElement? defaults, JsonElement? requests)
@@ -452,6 +691,99 @@ internal static class NavlynToolCommandBuilder
         return true;
     }
 
+    private static bool TryAddExactNavigationTarget(
+        List<string> args,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        out string? error)
+    {
+        bool hasCandidateId = !string.IsNullOrWhiteSpace(candidateId);
+        bool hasAnySourcePosition = !string.IsNullOrWhiteSpace(file) || line is not null || column is not null;
+        bool hasCompleteSourcePosition = !string.IsNullOrWhiteSpace(file) && line is not null && column is not null;
+        if (hasCandidateId && hasAnySourcePosition || !hasCandidateId && !hasCompleteSourcePosition)
+        {
+            error = "Specify exactly one target: candidateId or file with line and column.";
+            return false;
+        }
+
+        if (hasCandidateId)
+        {
+            args.Add("--candidate-id");
+            args.Add(candidateId!.Trim());
+        }
+        else
+        {
+            args.Add("--file");
+            args.Add(file!.Trim());
+            args.Add("--line");
+            args.Add(line!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            args.Add("--column");
+            args.Add(column!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        error = null;
+        return true;
+    }
+
+    private static bool TryAddSymbolOrPositionInput(
+        List<string> args,
+        string? query,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        out List<string> updatedArgs,
+        out string? error)
+    {
+        bool hasQuery = !string.IsNullOrWhiteSpace(query);
+        bool hasCandidateId = !string.IsNullOrWhiteSpace(candidateId);
+        bool hasAnySourcePosition = !string.IsNullOrWhiteSpace(file) || line is not null || column is not null;
+        bool hasCompleteSourcePosition = !string.IsNullOrWhiteSpace(file) && line is not null && column is not null;
+        int modeCount = (hasQuery ? 1 : 0) + (hasCandidateId ? 1 : 0) + (hasAnySourcePosition ? 1 : 0);
+        if (modeCount != 1 || hasAnySourcePosition && !hasCompleteSourcePosition)
+        {
+            updatedArgs = args;
+            error = "Specify exactly one target: query, candidateId, or file with line and column.";
+            return false;
+        }
+
+        updatedArgs = args;
+        if (hasQuery)
+        {
+            updatedArgs.Add("--query");
+            updatedArgs.Add(query!.Trim());
+        }
+        else if (hasCandidateId)
+        {
+            updatedArgs.Add("--candidate-id");
+            updatedArgs.Add(candidateId!.Trim());
+        }
+        else
+        {
+            updatedArgs.Add("--file");
+            updatedArgs.Add(file!.Trim());
+            updatedArgs.Add("--line");
+            updatedArgs.Add(line!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            updatedArgs.Add("--column");
+            updatedArgs.Add(column!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        error = null;
+        return true;
+    }
+
+    private static string ToCliExactNavigationCommand(string operation)
+    {
+        return operation switch
+        {
+            "type_hierarchy" => "type-hierarchy",
+            "symbol_info" => "symbol-info",
+            _ => operation
+        };
+    }
+
     private static bool TryAddDiffOptions(
         List<string> args,
         string? baseRef,
@@ -512,6 +844,58 @@ internal static class NavlynToolCommandBuilder
             AddOptionalRepeated(args, option, values);
         }
 
+        error = null;
+        return true;
+    }
+
+    private static bool TryAddSingleOrManyAllowed(
+        List<string> args,
+        string option,
+        string? single,
+        string[]? many,
+        string singleName,
+        string manyName,
+        IReadOnlyList<string> allowed,
+        out string? error)
+    {
+        bool hasSingle = !string.IsNullOrWhiteSpace(single);
+        IReadOnlyList<string> values = NormalizeValues(many);
+        if (hasSingle && values.Count > 0)
+        {
+            error = $"{singleName} and {manyName} are mutually exclusive.";
+            return false;
+        }
+
+        IReadOnlyList<string> normalized = hasSingle ? SplitCsv(single) : SplitCsv(values);
+        string? invalid = normalized.FirstOrDefault(value => !allowed.Contains(value, StringComparer.Ordinal));
+        if (invalid is not null)
+        {
+            error = $"{singleName} must be one of: {string.Join(", ", allowed)}.";
+            return false;
+        }
+
+        AddOptionalRepeated(args, option, normalized);
+        error = null;
+        return true;
+    }
+
+    private static bool TryAddManyAllowed(
+        List<string> args,
+        string option,
+        string[]? values,
+        string name,
+        IReadOnlyList<string> allowed,
+        out string? error)
+    {
+        IReadOnlyList<string> normalized = SplitCsv(NormalizeValues(values));
+        string? invalid = normalized.FirstOrDefault(value => !allowed.Contains(value, StringComparer.Ordinal));
+        if (invalid is not null)
+        {
+            error = $"{name} must be one of: {string.Join(", ", allowed)}.";
+            return false;
+        }
+
+        AddOptionalRepeated(args, option, normalized);
         error = null;
         return true;
     }
@@ -637,6 +1021,11 @@ internal static class NavlynToolCommandBuilder
         return string.IsNullOrWhiteSpace(value)
             ? []
             : [.. value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+    }
+
+    private static IReadOnlyList<string> SplitCsv(IReadOnlyList<string> values)
+    {
+        return [.. values.SelectMany(SplitCsv)];
     }
 }
 

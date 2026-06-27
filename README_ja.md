@@ -2,40 +2,56 @@
 
 English: [`README.md`](README.md)
 
-Navlyn は、AI エージェントと自動化のために、C#/.NET リポジトリの compiler-backed facts を返すツールです。
+**Navlyn は、C#/.NET リポジトリをコーディングエージェントに正確に調査させるための意味解析レイヤーです。**
 
-決定論的な JSON CLI であり、read-only な stdio MCP server でもあります。エージェントが「これは何のシンボルか」「どこで使われているか」「この PR で重要な変更は何か」「関連しそうなテストはどれか」「編集前に読むべき文脈は何か」を、素のテキストだけに頼らず調べるために使います。
+コーディングエージェントはテキスト検索を使えます。しかし `rg` の結果だけから、オーバーロード、対象フレームワーク、依存性注入の登録、ルートハンドラー、公開 API の変更、関連テストを安全に判断することはできません。Navlyn は、ローカルの Roslyn/MSBuild から得た事実を、決定論的な JSON CLI と読み取り専用の stdio MCP サーバーで返します。
 
-Navlyn は `rg`、エディタ、完全な runtime analyzer の置き換えではありません。コメント、文字列、ドキュメント、非 C# ファイルにはテキスト検索を使ってください。C# のシンボル、source location、参照、呼び出し関係、診断、リポジトリ構造、差分、テスト、public API 変更、framework entrypoint、dependency injection registration、bounded agent context など、Roslyn による意味解析が必要な場面で Navlyn を使います。
+C# の大きなコードベースにエージェントを入れてよいか判断するとき、Navlyn が減らしたいのは「違うシンボルを見て編集した」「読むべき文脈を落とした」という失敗です。
 
-## Navlyn の価値
+「この文字列はどこにあるか」ではなく、「これはどの C# シンボルか」「どこから到達するか」「変更すると何に影響するか」「編集前にどの文脈を読むべきか」を知りたいときに使います。
 
-Coding agent は意図を扱うのは得意ですが、正確な navigation command を長くつなげるのは不安定です。人間なら「`WidgetService` を変えたときの影響を見て」と言えますが、エージェントは正しい型を探し、overload や project を識別し、references を集め、callers を見て、entrypoint をたどり、関連テストを探し、しかも結果を使える大きさに抑える必要があります。
+## 何が得られるか
 
-Navlyn はその調査ステップを、安定した local machine-readable facts に変換します。
+- **安定した最初の把握**: プロジェクト、対象フレームワーク、パッケージ参照、テスト関係、診断、リポジトリ構造を返します。
+- **曖昧な意図から正確な対象へ**: `find` はおおよそのシンボル名から、順位付き候補、信頼度、理由コード、代替候補、`candidateId`、次の操作を返します。
+- **発見後の正確なナビゲーション**: `candidateId` は `definition`、`references`、`callers`、`calls`、`implementations`、`type-hierarchy`、`symbol-info`、MCP の `navlyn_exact_navigation` に渡せます。
+- **エージェントが扱える文脈**: `context-pack` は、`review`、`modify`、`understand` の目的に合わせて、読むべき材料を上限付きで順位付けします。ソース全体を無制限に出力するものではありません。
+- **レビューのための証拠**: 差分コマンドは、変更シンボル、診断、静的な影響範囲、公開 API の変更、関連テスト、レビューパックのシグナルを返します。レビューコメントの文章は生成しません。
+- **.NET アプリケーション向けの事実**: ASP.NET Core のルートと認可、Microsoft.Extensions.DependencyInjection の登録と影響、オプションと構成、MediatR ハンドラー、EF Core モデル、パッケージ利用、フレームワークの入口、関連テスト候補を扱います。
+- **自動化しやすい出力**: コマンド結果は stdout に決定論的 JSON として出し、診断は stderr に出します。パスは可能な限りリポジトリ相対にし、MCP サーバーは事実だけを返す読み取り専用の境界を保ちます。
 
-- **曖昧な意図から決定論的な候補へ**: approximate な symbol query から、ranked candidates、confidence、reason codes、alternatives、opaque な `candidateId`、next actions を返します。
-- **タスク単位の workflow**: `about`、`related`、`impact`、`entrypoints`、`review-diff`、`context-pack` は、editor-style primitive だけでなく調査タスクそのものに答えます。
-- **Evidence-first な review data**: diff workflow は changed symbols、diagnostics、static impact、public API facts、related test candidates、review-pack signals を返します。レビュー文章は生成しません。
-- **Token-aware な context retrieval**: `context-pack` は `review`、`modify`、`understand` の目的に合わせて、bounded な reading material を rank します。
-- **.NET に特化した intelligence**: repository/project graph、framework-aware entrypoints、test discovery、public API diff、Microsoft.Extensions.DependencyInjection facts を first-class に扱います。
-- **Agent-safe integration**: コマンド結果は stdout に deterministic JSON、診断は stderr、パスは可能な限り repository-relative、MCP server は read-only です。
+Navlyn は `rg`、エディタ、テスト、実行時トレーサー、セキュリティスキャナーの置き換えではありません。コメント、文字列、ドキュメント、C# 以外のファイルにはテキスト検索を使ってください。C# の意味上の同一性が重要な場面で Navlyn を使います。
 
-## 位置づけ
+## なぜ必要か
 
-Navlyn には 3 つの層があります。多くのエージェントは上の層から始め、必要なときだけ下の層へ降りるのが自然です。
+人間なら「`PaymentService` を変える前に影響範囲とテストを見て」と言えます。
 
-| Layer | 用途 | 例 |
+エージェントは、それを壊れやすい長い手順に分解しなければなりません。
+
+1. 似た名前、複数プロジェクト、対象フレームワーク、部分宣言、オーバーロードの中から正しい型やメンバーを探す。
+2. 定義、参照、呼び出し元、呼び出し先、実装、フレームワークの入口を正確に集める。
+3. 読み取り、書き込み、呼び出し、生成、継承、テスト、製品コードでの利用を分ける。
+4. 編集前に読む価値がある少数のファイルへ絞る。
+5. 自動化が信頼できるように stdout と stderr の規律を守る。
+
+Navlyn はこの一連の調査を、Roslyn の事実に基づくエージェント向けのフローとしてまとめます。重要なのは、コードベースの形を LLM に推測させないことです。Navlyn は、エージェントと人間のレビュー担当者が確認できる証拠を返します。
+
+## よくある使い方
+
+| 知りたいこと | 最初に使うもの | 次に使うもの |
 | --- | --- | --- |
-| MCP tools | MCP 対応 agent client 向けの小さな high-level tool surface | `navlyn_find_symbol`, `navlyn_about_symbol`, `navlyn_review_diff`, `navlyn_context_pack` |
-| Investigation workflows | symbol、diff、task から始める人間・script 向け CLI workflow | `find`, `about`, `related`, `impact`, `entrypoints`, `review-diff`, `context-pack` |
-| Roslyn primitives | exact source-position navigation と low-level semantic facts | `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, `calls`, `symbol-info` |
+| このワークスペースの構成は何か | `repo-graph --profile compact` | `diagnostics`, `overview` |
+| ユーザーが指したシンボルはどれか | `find --query PaymentService` | 返された `candidateId` を再利用 |
+| 編集前に何を読むべきか | `context-pack --goal modify` | `references`, `impact`, `tests-for-symbol` |
+| この PR は何に影響するか | `review-diff --profile evidence` | `tests-for-diff`, `public-api-diff`, `review-pack` |
+| 実行境界からどう到達するか | `entrypoints --framework-aware` | `route-map`, `where-handled`, `di-impact` |
+| MCP クライアントからどう聞くか | `navlyn_find_symbol` | `navlyn_exact_navigation`, `navlyn_context_pack` |
 
-## Quick Start
+## クイックスタート
 
-Navlyn は .NET 10 を target にし、MSBuild/Roslyn 経由で `.slnx`、`.sln`、`.csproj` workspace を読み込みます。
+Navlyn は .NET 10 を対象にし、MSBuild/Roslyn 経由で `.slnx`、`.sln`、`.csproj` ワークスペースを読み込みます。
 
-この repository から実行する場合:
+このリポジトリから実行する場合:
 
 ```powershell
 dotnet restore navlyn.slnx
@@ -43,7 +59,7 @@ dotnet run --no-launch-profile --project navlyn -- check --workspace navlyn.slnx
 dotnet run --no-launch-profile --project navlyn -- repo-graph --workspace navlyn.slnx --profile compact
 ```
 
-設定済みの NuGet sources から package を取得できる場合は、標準的な .NET tool command で install します。
+Navlyn のツールパッケージを含む NuGet ソースまたは社内フィードを使う場合:
 
 ```powershell
 dotnet tool install --global navlyn
@@ -53,45 +69,41 @@ navlyn check --workspace path/to/YourRepo.slnx
 navlyn repo-graph --workspace path/to/YourRepo.slnx --profile compact
 ```
 
-## Agent Investigation
+パッケージ化とリリースの流れは [`docs/navlyn-distribution.md`](docs/navlyn-distribution.md) にあります。
 
-symbol の意図はわかるが、正確な file、project、overload、column がわからないときは fuzzy discovery から始めます。
+## CLI の例
+
+最初は曖昧に探し、`candidateId` で対象を固定してから正確な事実へ進みます。
 
 ```powershell
 navlyn find --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType
-navlyn about --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType
-navlyn related --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --limit 30
-navlyn impact --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --depth 2
-```
-
-長い workflow では、`find` が返す `candidateId` を使うと、後続の問い合わせが同じ declaration を指し続けます。
-
-```powershell
 navlyn about --workspace navlyn.slnx --candidate-id sym:v1:...
-navlyn context-pack --workspace navlyn.slnx --candidate-id sym:v1:... --goal modify --profile compact
+navlyn references --workspace navlyn.slnx --candidate-id sym:v1:... --usage-kind invoke --usage-kind construct --group-by file --group-by usage-kind --limit 50
+navlyn impact --workspace navlyn.slnx --candidate-id sym:v1:... --depth 2
+navlyn context-pack --workspace navlyn.slnx --candidate-id sym:v1:... --goal modify --change-kind signature --profile compact
 ```
 
-Fuzzy command は、複数の plausible symbols を勝手に混ぜません。曖昧な query では candidates と alternatives を返し、agent が自己補正できるようにします。
+曖昧な問い合わせでも、Navlyn はそれらしい複数のシンボルを勝手に混ぜません。候補、代替候補、信頼度、次の操作を返すので、呼び出し側が軌道修正できます。
 
-## Review And Context
+## レビューの例
 
-Navlyn の review commands は facts provider です。reviewer の代替ではなく、review comments を生成せず、完全な runtime reachability も主張しません。
+Navlyn のレビュー系コマンドは証拠を返すためのものです。レビュー担当者の代わりにはならず、最終的なレビュー文章も生成せず、完全な実行時到達性も主張しません。
 
 ```powershell
 navlyn review-diff --workspace navlyn.slnx --profile evidence
-navlyn context-pack --workspace navlyn.slnx --diff --goal review --profile compact
 navlyn tests-for-diff --workspace navlyn.slnx --profile compact
 navlyn public-api-diff --workspace navlyn.slnx --base main --profile evidence
 navlyn review-pack --workspace navlyn.slnx --pack async --pack security --profile evidence
+navlyn context-pack --workspace navlyn.slnx --diff --goal review --profile compact
 ```
 
-最初の scan には `compact`、review / CI facts には `evidence`、もっとも rich な contract shape が必要なときは `full` を使います。
+最初の把握には `compact`、レビューや CI 向けの証拠には `evidence`、下流ツールが最も詳しい JSON 形状を必要とする場合は `full` を使います。
 
-## MCP Server
+## MCP サーバー
 
-`navlyn-mcp` tool は、CLI contract を背後に持つ focused read-only MCP surface を公開します。MCP 対応 agent client が、個別の CLI command を組み立てずに semantic C# question を問い合わせたいときに使います。
+`navlyn-mcp` は、同じ CLI 契約を背後に持つ、読み取り専用の MCP インターフェイスです。MCP 対応クライアントが、シェルコマンドを組み立てずに C# の意味解析上の質問をしたいときに使います。
 
-install 済み server の典型的な設定:
+インストール済みサーバーの典型的な設定:
 
 ```json
 {
@@ -100,18 +112,28 @@ install 済み server の典型的な設定:
 }
 ```
 
-MCP の setup、tool selection guidance、result envelope、boundaries は [`docs/navlyn-mcp-server.md`](docs/navlyn-mcp-server.md) を参照してください。
+最上位にワークスペース候補が 1 つだけあるリポジトリでは、自動検出も使えます。
 
-## Output Contract
+```json
+{
+  "command": "navlyn-mcp",
+  "args": ["--workspace", "auto"]
+}
+```
 
-- stdout は command result JSON 専用です。
-- stderr は diagnostics、errors、warnings、progress 用です。
-- automation-facing output は deterministic です。
-- paths は可能な限り repository-relative で、JSON output では `/` separators を使います。
-- user-facing line / column values は 1-based です。
+MCP サーバーは `navlyn_workspace_summary`、`navlyn_find_symbol`、`navlyn_exact_navigation`、`navlyn_review_diff`、`navlyn_context_pack`、`navlyn_batch` などの道具に加え、上限付きのリソースとプロンプトを公開します。詳しくは [`docs/navlyn-mcp-server.md`](docs/navlyn-mcp-server.md) を参照してください。
 
-完全な CLI contract、options、JSON shapes、error behavior、command boundaries は [`docs/navlyn-cli-commands.md`](docs/navlyn-cli-commands.md) にあります。実践的な agent recipe は [`docs/navlyn-agent-recipes.md`](docs/navlyn-agent-recipes.md) にあります。
+## 出力契約
 
-## License
+- stdout はコマンド結果の JSON 専用です。
+- stderr は診断、エラー、警告、進行状況用です。
+- 自動化向けの出力は決定論的です。
+- パスは可能な限りリポジトリ相対で、JSON 出力では `/` 区切りを使います。
+- 利用者向けの行番号と列番号は 1 始まりです。
+- 静的な影響、レビュー、フレームワーク、依存性注入、EF、構成、パッケージに関する結果は、上限付きのソースレベルの証拠であり、実行時の完全な証明ではありません。
 
-Navlyn は MIT License で公開されています。詳しくは [`LICENSE`](LICENSE) を参照してください。
+すべてのコマンド、オプション、JSON 形状、エラー動作、境界は [`docs/navlyn-cli-commands.md`](docs/navlyn-cli-commands.md) にあります。実践的なエージェント向けの流れは [`docs/navlyn-agent-recipes.md`](docs/navlyn-agent-recipes.md) にあります。
+
+## ライセンス
+
+Navlyn は MIT ライセンスで公開されています。詳しくは [`LICENSE`](LICENSE) を参照してください。

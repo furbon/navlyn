@@ -32,7 +32,9 @@ builder.Services.AddSingleton<NavlynMcpToolService>();
 builder.Services
     .AddMcpServer()
     .WithStdioServerTransport()
-    .WithToolsFromAssembly();
+    .WithToolsFromAssembly()
+    .WithResourcesFromAssembly()
+    .WithPromptsFromAssembly();
 
 await builder.Build().RunAsync();
 return 0;

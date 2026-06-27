@@ -108,4 +108,65 @@ public sealed class RelationshipResolverComponentTests(ResolverComponentTestFixt
             resolution.Calls,
             group => group.Symbol.Name == "Changed" && group.Symbol.Kind == "Event");
     }
+
+    [Fact]
+    public async Task ReferencesResolver_MethodInvocation_ReturnsInvokeUsageKind()
+    {
+        SourcePosition query = fixture.SymbolNavigationSource.Position(
+            "public string Format(int count)",
+            "Format");
+
+        ReferencesResolutionResult result = await new ReferencesResolver().ResolveAsync(
+            fixture.SymbolNavigationWorkspace.Solution,
+            fixture.SymbolNavigationSource.File,
+            query.Line,
+            query.Column,
+            project: null,
+            excludeGenerated: true,
+            CancellationToken.None);
+
+        ReferencesResolution resolution = ResolverAssert.NoError(result.Resolution, result.Error);
+        Assert.Contains(resolution.References, reference => reference.UsageKind == "invoke");
+    }
+
+    [Fact]
+    public async Task ReferencesResolver_PropertyAssignment_ReturnsReadAndWriteUsageKinds()
+    {
+        SourcePosition query = fixture.SymbolNavigationSource.Position(
+            "public int Counter { get; private set; }",
+            "Counter");
+
+        ReferencesResolutionResult result = await new ReferencesResolver().ResolveAsync(
+            fixture.SymbolNavigationWorkspace.Solution,
+            fixture.SymbolNavigationSource.File,
+            query.Line,
+            query.Column,
+            project: null,
+            excludeGenerated: true,
+            CancellationToken.None);
+
+        ReferencesResolution resolution = ResolverAssert.NoError(result.Resolution, result.Error);
+        Assert.Contains(resolution.References, reference => reference.UsageKind == "write");
+        Assert.Contains(resolution.References, reference => reference.UsageKind == "read");
+    }
+
+    [Fact]
+    public async Task ReferencesResolver_ConstructorUsage_ReturnsConstructUsageKind()
+    {
+        SourcePosition query = fixture.SymbolNavigationSource.Position(
+            "public Widget(string name)",
+            "Widget");
+
+        ReferencesResolutionResult result = await new ReferencesResolver().ResolveAsync(
+            fixture.SymbolNavigationWorkspace.Solution,
+            fixture.SymbolNavigationSource.File,
+            query.Line,
+            query.Column,
+            project: null,
+            excludeGenerated: true,
+            CancellationToken.None);
+
+        ReferencesResolution resolution = ResolverAssert.NoError(result.Resolution, result.Error);
+        Assert.Contains(resolution.References, reference => reference.UsageKind == "construct");
+    }
 }

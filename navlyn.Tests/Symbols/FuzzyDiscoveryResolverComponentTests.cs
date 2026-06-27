@@ -31,6 +31,13 @@ public sealed class FuzzyDiscoveryResolverComponentTests(ResolverComponentTestFi
         Assert.Equal("EnemyManagerTools", result.SelectedCandidate.Selector!.Name);
         Assert.Equal("net10.0", result.SelectedCandidate.Selector.TargetFramework);
         ResolverAssert.PathEndsWith(result.SelectedCandidate.Path, fixture.FuzzyDiscoverySource);
+
+        FuzzyNextAction referencesAction = Assert.Single(result.NextActions, action => action.Command == "references");
+        Assert.Equal(result.SelectedCandidate.CandidateId, referencesAction.CandidateId);
+        Assert.Equal("navlyn_exact_navigation", referencesAction.McpTool);
+        Assert.NotNull(referencesAction.Arguments);
+        Assert.Equal("references", referencesAction.Arguments["operation"]);
+        Assert.Equal(result.SelectedCandidate.CandidateId, referencesAction.Arguments["candidateId"]);
     }
 
     [Fact]
@@ -88,7 +95,9 @@ public sealed class FuzzyDiscoveryResolverComponentTests(ResolverComponentTestFi
             {
                 Assert.NotNull(reference.ContainingSymbol);
                 Assert.True(reference.EndColumn > reference.Column);
+                Assert.Equal("invoke", reference.UsageKind);
             });
+        Assert.Equal("invoke", Assert.Single(result.UsageKindCounts!).UsageKind);
     }
 
     [Fact]

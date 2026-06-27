@@ -40,7 +40,7 @@ dotnet test navlyn.slnx --no-build
 ./scripts/test-quick.ps1 -NoBuild
 ```
 
-For CLI contract changes, also run `./scripts/test-cli-contract.ps1 -NoBuild` and manually inspect the affected command. For semantic navigation behavior, add or update xUnit resolver component coverage when possible, then run the focused fixture scripts that match the change. For large refactors or release preparation, run `./scripts/test-release.ps1`. Timeout and file-lock guidance lives in `docs/navlyn-development-workflow.md`.
+For CLI contract changes, also run `./scripts/test-cli-contract.ps1 -NoBuild` with a 600 second automation timeout and manually inspect the affected command. For semantic navigation behavior, add or update xUnit resolver component coverage when possible, then run the focused fixture scripts that match the change. For large refactors or release preparation, run `./scripts/test-release.ps1`. Timeout and file-lock guidance lives in `docs/navlyn-development-workflow.md`.
 
 If CLI behavior changes, run the affected command manually and inspect stdout, stderr, deterministic JSON shape, and exit behavior.
 

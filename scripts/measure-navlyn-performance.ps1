@@ -334,6 +334,211 @@ function New-CliCommand {
     }
 }
 
+function New-McpToolCall {
+    param(
+        [string]$Name,
+        [hashtable]$Arguments
+    )
+
+    [pscustomobject]@{
+        name = $Name
+        kind = 'mcp'
+        arguments = $Arguments
+    }
+}
+
+function Write-McpFrame {
+    param(
+        [System.IO.StreamWriter]$Writer,
+        [object]$Payload
+    )
+
+    $json = $Payload | ConvertTo-Json -Depth 100 -Compress
+    $Writer.WriteLine($json)
+    $Writer.Flush()
+}
+
+function Read-McpFrame {
+    param(
+        [System.IO.StreamReader]$Reader
+    )
+
+    $readTask = $Reader.ReadLineAsync()
+    if (!$readTask.Wait($TimeoutSeconds * 1000)) {
+        throw "Timed out waiting for an MCP JSON-RPC line after $TimeoutSeconds seconds."
+    }
+
+    $line = $readTask.GetAwaiter().GetResult()
+    if ($null -eq $line) {
+        throw 'MCP server closed stdout while waiting for a JSON-RPC line.'
+    }
+
+    return $line
+}
+
+function Invoke-McpToolScenario {
+    param(
+        [string]$WorkspaceArgument,
+        [object[]]$ToolCalls,
+        [int]$Iteration,
+        [bool]$IsWarmup
+    )
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = 'dotnet'
+    $startInfo.WorkingDirectory = $repoRoot
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.RedirectStandardInput = $true
+    $startInfo.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+    $startInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+    $startInfo.StandardInputEncoding = [System.Text.Encoding]::UTF8
+    $startInfo.UseShellExecute = $false
+    foreach ($argument in @($McpDll, '--workspace', $WorkspaceArgument, '--navlyn-executable', 'dotnet', '--navlyn-arg', $NavlynDll, '--working-directory', $repoRoot, '--timeout-ms', ($TimeoutSeconds * 1000).ToString([System.Globalization.CultureInfo]::InvariantCulture), '--max-json-chars', '4000000')) {
+        [void]$startInfo.ArgumentList.Add($argument)
+    }
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    [void]$process.Start()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+    $measurementsForIteration = New-Object System.Collections.Generic.List[object]
+    $nextId = 1
+
+    try {
+        Write-McpFrame -Writer $process.StandardInput -Payload @{
+            jsonrpc = '2.0'
+            id = $nextId
+            method = 'initialize'
+            params = @{
+                protocolVersion = '2025-06-18'
+                capabilities = @{}
+                clientInfo = @{
+                    name = 'navlyn-performance'
+                    version = '0.1.0'
+                }
+            }
+        }
+        $nextId++
+        [void](Read-McpFrame -Reader $process.StandardOutput)
+        Write-McpFrame -Writer $process.StandardInput -Payload @{
+            jsonrpc = '2.0'
+            method = 'notifications/initialized'
+            params = @{}
+        }
+
+        foreach ($toolCall in $ToolCalls) {
+            $request = @{
+                jsonrpc = '2.0'
+                id = $nextId
+                method = 'tools/call'
+                params = @{
+                    name = $toolCall.name
+                    arguments = $toolCall.arguments
+                }
+            }
+            $nextId++
+
+            $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+            Write-McpFrame -Writer $process.StandardInput -Payload $request
+            $responseJson = Read-McpFrame -Reader $process.StandardOutput
+            $stopwatch.Stop()
+
+            $jsonValid = $false
+            $exitCode = 0
+            $topLevelCommand = $null
+            $resultProfile = $null
+            $counts = [pscustomobject]@{}
+            $truncated = $false
+            $warnings = @()
+            try {
+                $parsed = $responseJson | ConvertFrom-Json -Depth 100
+                $jsonValid = $true
+                if ($parsed.PSObject.Properties.Name -contains 'error' -and $null -ne $parsed.error) {
+                    $exitCode = 1
+                }
+
+                if ($parsed.PSObject.Properties.Name -contains 'result' -and
+                    $parsed.result.PSObject.Properties.Name -contains 'structuredContent') {
+                    if ($parsed.result.PSObject.Properties.Name -contains 'isError' -and $parsed.result.isError -eq $true) {
+                        $exitCode = 1
+                    }
+
+                    $structured = $parsed.result.structuredContent
+                    if ($structured.PSObject.Properties.Name -contains 'result') {
+                        $inner = $structured.result
+                        if ($inner.PSObject.Properties.Name -contains 'command') {
+                            $topLevelCommand = $inner.command
+                        }
+                        if ($inner.PSObject.Properties.Name -contains 'profile') {
+                            $resultProfile = $inner.profile
+                        }
+                        if ($inner.PSObject.Properties.Name -contains 'warnings') {
+                            $warnings = @($inner.warnings)
+                        }
+                        $counts = Get-JsonCounts -Value $inner
+                        $truncated = Get-TruncatedFlag -Value $inner
+                    }
+                }
+            }
+            catch {
+                if (!$jsonValid) {
+                    $jsonValid = $false
+                    $exitCode = 1
+                }
+            }
+
+            $measurementsForIteration.Add([pscustomobject]@{
+                name = $toolCall.name
+                kind = 'mcp'
+                iteration = $Iteration
+                warmup = $IsWarmup
+                command = [pscustomobject]@{
+                    executable = 'dotnet'
+                    arguments = @($McpDll, '--workspace', $WorkspaceArgument, '--navlyn-executable', 'dotnet', '--navlyn-arg', $NavlynDll, '--working-directory', $repoRoot)
+                    tool = $toolCall.name
+                    toolArguments = $toolCall.arguments
+                }
+                exitCode = $exitCode
+                elapsedMs = [int][Math]::Round($stopwatch.Elapsed.TotalMilliseconds)
+                stdoutChars = $responseJson.Length
+                stderrChars = 0
+                jsonValid = $jsonValid
+                topLevelCommand = $topLevelCommand
+                profile = $resultProfile
+                counts = $counts
+                truncated = $truncated
+                warnings = $warnings
+                timedOut = $false
+                skipped = $false
+            })
+        }
+    }
+    finally {
+        try {
+            $process.StandardInput.Close()
+        }
+        catch {
+        }
+
+        if (!$process.WaitForExit(5000)) {
+            try {
+                $process.Kill($true)
+            }
+            catch {
+            }
+        }
+
+        try {
+            [void]$stderrTask.GetAwaiter().GetResult()
+        }
+        catch {
+        }
+    }
+
+    return $measurementsForIteration.ToArray()
+}
+
 function Add-ProfileArgument {
     param([string[]]$Arguments)
 
@@ -388,7 +593,21 @@ function Get-ScenarioCommands {
             $commands += New-CliCommand -Name 'public-api-diff' -Arguments (Add-ProfileArgument -Arguments @('public-api-diff', '--workspace', $workspaceArg, '--base', $publicApiBase, '--change-limit', '20'))
         }
         'mcp' {
-            return @()
+            $commands += New-McpToolCall -Name 'navlyn_workspace_summary' -Arguments @{
+                relationshipLimit = 50
+                profile = $Profile
+            }
+            $commands += New-McpToolCall -Name 'navlyn_find_symbol' -Arguments @{
+                query = $Query
+                assumeKind = $AssumeKind
+                limit = 20
+            }
+            $commands += New-McpToolCall -Name 'navlyn_context_pack' -Arguments @{
+                query = $Query
+                assumeKind = $AssumeKind
+                budgetTokens = 2000
+                profile = $Profile
+            }
         }
     }
 
@@ -411,7 +630,15 @@ foreach ($scenarioName in $scenarioNames) {
             $measurements.Add((New-SkippedMeasurement -Name 'mcp' -Kind 'mcp' -Reason "MCP server assembly does not exist: $McpDll"))
         }
         else {
-            $measurements.Add((New-SkippedMeasurement -Name 'mcp' -Kind 'mcp' -Reason 'MCP tool-call latency requires the SDK probe path; use Navlyn.Tests.Mcp coverage until the probe is promoted into this script.'))
+            $workspaceArg = ConvertTo-RepositoryPath -Path $workspacePath
+            $commands = Get-ScenarioCommands -ScenarioName $scenarioName
+            for ($iteration = 1; $iteration -le ($Warmup + $Iterations); $iteration++) {
+                $isWarmup = $iteration -le $Warmup
+                $mcpResults = Invoke-McpToolScenario -WorkspaceArgument $workspaceArg -ToolCalls $commands -Iteration ([Math]::Max(1, $iteration - $Warmup)) -IsWarmup $isWarmup
+                foreach ($mcpResult in $mcpResults) {
+                    $measurements.Add($mcpResult)
+                }
+            }
         }
         continue
     }

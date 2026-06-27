@@ -49,14 +49,16 @@ function Invoke-CheckedProcess {
     $startInfo.Arguments = Join-ProcessArguments -Arguments $Arguments
 
     $process = [System.Diagnostics.Process]::Start($startInfo)
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
     if ($null -ne $StandardInput) {
         $process.StandardInput.Write($StandardInput)
         $process.StandardInput.Close()
     }
 
-    $stdout = $process.StandardOutput.ReadToEnd()
-    $stderr = $process.StandardError.ReadToEnd()
     $process.WaitForExit()
+    $stdout = $stdoutTask.GetAwaiter().GetResult()
+    $stderr = $stderrTask.GetAwaiter().GetResult()
     $exitCode = $process.ExitCode
 
     if ($exitCode -ne $ExpectedExitCode) {
@@ -492,6 +494,61 @@ try {
     Assert-Equal -Name 'di-impact command' -Actual $diImpactJson.command -Expected 'di-impact'
     Assert-Equal -Name 'di-impact has consumer' -Actual (@($diImpactJson.consumers.items | Where-Object { $_.consumerType.name -eq 'WidgetService' }).Count -ge 1) -Expected $true
 
+    $applicationDomainFixture = 'tests/fixtures/ApplicationDomainFixture/ApplicationDomainFixture.csproj'
+    $routeMap = Invoke-Navlyn `
+        -Name 'route-map fixture' `
+        -Arguments @('route-map', '--workspace', $applicationDomainFixture, '--route-limit', '20', '--evidence-limit', '1', '--profile', 'evidence') `
+        -ExpectedExitCode 0
+
+    Assert-Empty -Name 'route-map stderr' -Text $routeMap.Stderr
+    $routeMapJson = $routeMap.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'route-map command' -Actual $routeMapJson.command -Expected 'route-map'
+    Assert-Equal -Name 'route-map has controller route' -Actual (@($routeMapJson.routes.items | Where-Object { $_.endpointKind -eq 'controller-action' -and $_.normalizedRoutePattern -eq '/orders/{id}' }).Count -ge 1) -Expected $true
+    Assert-Equal -Name 'route-map has minimal route' -Actual (@($routeMapJson.routes.items | Where-Object { $_.endpointKind -eq 'minimal-api' -and $_.normalizedRoutePattern -eq '/orders' }).Count -ge 1) -Expected $true
+
+    $optionsGraph = Invoke-Navlyn `
+        -Name 'options-graph fixture' `
+        -Arguments @('options-graph', '--workspace', $applicationDomainFixture, '--query', 'PaymentOptions', '--option-limit', '10', '--consumer-limit', '10', '--binding-limit', '10', '--evidence-limit', '1', '--profile', 'evidence') `
+        -ExpectedExitCode 0
+
+    Assert-Empty -Name 'options-graph stderr' -Text $optionsGraph.Stderr
+    $optionsGraphJson = $optionsGraph.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'options-graph command' -Actual $optionsGraphJson.command -Expected 'options-graph'
+    Assert-Equal -Name 'options-graph has binding' -Actual (@($optionsGraphJson.bindings.items | Where-Object { $_.configurationKey -eq 'Payments' }).Count -ge 1) -Expected $true
+    Assert-Equal -Name 'options-graph has consumer' -Actual (@($optionsGraphJson.consumers.items | Where-Object { $_.consumerType.name -eq 'PaymentService' }).Count -ge 1) -Expected $true
+
+    $whereHandled = Invoke-Navlyn `
+        -Name 'where-handled fixture' `
+        -Arguments @('where-handled', '--workspace', $applicationDomainFixture, '--query', 'CreateOrderCommand', '--assume-kind', 'NamedType', '--handler-limit', '10', '--evidence-limit', '1', '--profile', 'evidence') `
+        -ExpectedExitCode 0
+
+    Assert-Empty -Name 'where-handled stderr' -Text $whereHandled.Stderr
+    $whereHandledJson = $whereHandled.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'where-handled command' -Actual $whereHandledJson.command -Expected 'where-handled'
+    Assert-Equal -Name 'where-handled has handler' -Actual (@($whereHandledJson.handlers.items | Where-Object { $_.handlerType.name -eq 'CreateOrderHandler' }).Count -ge 1) -Expected $true
+
+    $efModel = Invoke-Navlyn `
+        -Name 'ef-model fixture' `
+        -Arguments @('ef-model', '--workspace', $applicationDomainFixture, '--entity-limit', '20', '--query-site-limit', '20', '--evidence-limit', '1', '--profile', 'evidence') `
+        -ExpectedExitCode 0
+
+    Assert-Empty -Name 'ef-model stderr' -Text $efModel.Stderr
+    $efModelJson = $efModel.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'ef-model command' -Actual $efModelJson.command -Expected 'ef-model'
+    Assert-Equal -Name 'ef-model has dbcontext' -Actual (@($efModelJson.dbContexts.items | Where-Object { $_.type.name -eq 'OrdersDbContext' }).Count -ge 1) -Expected $true
+    Assert-Equal -Name 'ef-model has query site' -Actual (@($efModelJson.querySites.items | Where-Object { $_.entityType.name -eq 'Order' }).Count -ge 1) -Expected $true
+
+    $packageUsage = Invoke-Navlyn `
+        -Name 'package-usage fixture' `
+        -Arguments @('package-usage', '--workspace', $applicationDomainFixture, '--package', 'Microsoft.Extensions.Options', '--namespace', 'Microsoft.Extensions.Options', '--usage-limit', '20', '--reference-limit', '20', '--profile', 'evidence') `
+        -ExpectedExitCode 0
+
+    Assert-Empty -Name 'package-usage stderr' -Text $packageUsage.Stderr
+    $packageUsageJson = $packageUsage.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'package-usage command' -Actual $packageUsageJson.command -Expected 'package-usage'
+    Assert-Equal -Name 'package-usage has reference' -Actual (@($packageUsageJson.packageReferences.items | Where-Object { $_.name -eq 'Microsoft.Extensions.Options' }).Count -ge 1) -Expected $true
+    Assert-Equal -Name 'package-usage has using' -Actual (@($packageUsageJson.usages.items | Where-Object { $_.usageKind -eq 'using-directive' }).Count -ge 1) -Expected $true
+
     $reviewDiffInvalid = Invoke-Navlyn `
         -Name 'review-diff head without base' `
         -Arguments @('review-diff', '--workspace', 'navlyn.slnx', '--head', 'HEAD') `
@@ -513,6 +570,17 @@ try {
     Assert-Equal -Name 'context-pack query selected' -Actual $contextPackQueryJson.selection.selectedCandidate.name -Expected 'CheckCommand'
     Assert-Equal -Name 'context-pack query budget estimator' -Actual $contextPackQueryJson.budget.estimator -Expected 'chars-div-4-v1'
     Assert-Equal -Name 'context-pack query item limit' -Actual $contextPackQueryJson.limits.itemLimit -Expected 5
+
+    $contextPackChangeKind = Invoke-Navlyn `
+        -Name 'context-pack change kind compact' `
+        -Arguments @('context-pack', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--goal', 'modify', '--change-kind', 'signature', '--profile', 'compact', '--budget-tokens', '2000', '--item-limit', '5') `
+        -ExpectedExitCode 0
+
+    Assert-Empty -Name 'context-pack change kind stderr' -Text $contextPackChangeKind.Stderr
+    $contextPackChangeKindJson = $contextPackChangeKind.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'context-pack change kind top-level' -Actual $contextPackChangeKindJson.changeKind -Expected 'signature'
+    Assert-Equal -Name 'context-pack change kind config' -Actual $contextPackChangeKindJson.configuration.changeKind -Expected 'signature'
+    Assert-Equal -Name 'context-pack change kind option' -Actual $contextPackChangeKindJson.configuration.options.changeKind -Expected 'signature'
 
     $contextPackDiff = Invoke-Navlyn `
         -Name 'context-pack diff mode' `
@@ -860,6 +928,35 @@ try {
     Assert-Equal -Name 'batch di-impact command' -Actual @($expandedBatchJson.results)[7].result.command -Expected 'di-impact'
     Assert-Equal -Name 'batch di-impact consumer limit' -Actual @($expandedBatchJson.results)[7].result.limits.consumerLimit -Expected 5
 
+    $domainBatchInput = @'
+{
+  "requests": [
+    { "id": "routes", "command": "route-map", "routeLimit": 10 },
+    { "id": "options", "command": "options-graph", "query": "PaymentOptions" },
+    { "id": "messages", "command": "where-handled", "query": "CreateOrderCommand", "assumeKind": "NamedType" },
+    { "id": "ef", "command": "ef-model", "entityLimit": 20, "querySiteLimit": 20 },
+    { "id": "pkg", "command": "package-usage", "package": "Microsoft.Extensions.Options", "namespaces": ["Microsoft.Extensions.Options"] }
+  ]
+}
+'@
+
+    $domainBatch = Invoke-Navlyn `
+        -Name 'batch application domain commands' `
+        -Arguments @('batch', '--workspace', $applicationDomainFixture) `
+        -ExpectedExitCode 0 `
+        -StandardInput $domainBatchInput
+
+    Assert-Empty -Name 'batch application domain stderr' -Text $domainBatch.Stderr
+    $domainBatchJson = $domainBatch.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'batch application domain request count' -Actual $domainBatchJson.totalRequests -Expected 5
+    Assert-Equal -Name 'batch application domain succeeded count' -Actual $domainBatchJson.succeededRequests -Expected 5
+    Assert-Equal -Name 'batch application domain route command' -Actual @($domainBatchJson.results)[0].result.command -Expected 'route-map'
+    Assert-Equal -Name 'batch application domain route count' -Actual (@($domainBatchJson.results)[0].result.routes.totalItems -ge 1) -Expected $true
+    Assert-Equal -Name 'batch application domain options command' -Actual @($domainBatchJson.results)[1].result.command -Expected 'options-graph'
+    Assert-Equal -Name 'batch application domain handler command' -Actual @($domainBatchJson.results)[2].result.command -Expected 'where-handled'
+    Assert-Equal -Name 'batch application domain ef command' -Actual @($domainBatchJson.results)[3].result.command -Expected 'ef-model'
+    Assert-Equal -Name 'batch application domain package command' -Actual @($domainBatchJson.results)[4].result.command -Expected 'package-usage'
+
     $batchInvalidProfileInput = @'
 {
   "requests": [
@@ -1114,6 +1211,35 @@ try {
     $symbolInfoJson = $symbolInfo.Stdout | ConvertFrom-Json
     Assert-Equal -Name 'symbol-info symbol name' -Actual $symbolInfoJson.symbol.name -Expected 'CheckCommand'
     Assert-Equal -Name 'symbol-info invocation target' -Actual $symbolInfoJson.invocation.target.displayName -Expected 'Navlyn.Cli.Commands.CheckCommand.Create()'
+
+    $scopeAt = Invoke-Navlyn `
+        -Name 'scope-at source position' `
+        -Arguments @('scope-at', '--workspace', 'navlyn.slnx', '--file', 'navlyn/Cli/NavlynCli.cs', '--line', '48', '--column', '37') `
+        -ExpectedExitCode 0
+
+    $scopeAtJson = $scopeAt.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'scope-at containing symbol' -Actual $scopeAtJson.containingSymbol.name -Expected 'CreateRootCommand'
+    Assert-Equal -Name 'scope-at project context' -Actual $scopeAtJson.projectContext.name -Expected 'navlyn'
+    Assert-Equal -Name 'scope-at innermost scope' -Actual @($scopeAtJson.scopes)[-1].kind -Expected 'Member'
+
+    $symbolSource = Invoke-Navlyn `
+        -Name 'symbol-source declaration' `
+        -Arguments @('symbol-source', '--workspace', 'navlyn.slnx', '--file', 'navlyn/Cli/Commands/CheckCommand.cs', '--line', '6', '--column', '23', '--view', 'declaration', '--max-lines', '1') `
+        -ExpectedExitCode 0
+
+    $symbolSourceJson = $symbolSource.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'symbol-source symbol name' -Actual $symbolSourceJson.symbol.name -Expected 'CheckCommand'
+    Assert-Equal -Name 'symbol-source view' -Actual $symbolSourceJson.view -Expected 'declaration'
+    Assert-Equal -Name 'symbol-source truncated' -Actual @($symbolSourceJson.slices)[0].truncated -Expected $true
+
+    $signature = Invoke-Navlyn `
+        -Name 'signature method declaration' `
+        -Arguments @('signature', '--workspace', 'navlyn.slnx', '--file', 'navlyn/Cli/Commands/CheckCommand.cs', '--line', '8', '--column', '27') `
+        -ExpectedExitCode 0
+
+    $signatureJson = $signature.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'signature symbol name' -Actual $signatureJson.symbol.name -Expected 'Create'
+    Assert-Equal -Name 'signature accessibility' -Actual $signatureJson.apiShape.accessibility -Expected 'Public'
 
     $typeHierarchy = Invoke-Navlyn `
         -Name 'type-hierarchy non-derived type' `

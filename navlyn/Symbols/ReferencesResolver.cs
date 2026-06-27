@@ -39,6 +39,7 @@ internal sealed class ReferencesResolver
             SymbolReferenceLocation? location = await CreateLocationAsync(
                 solution,
                 referenceLocation.Location,
+                resolution.Symbol,
                 excludeGenerated,
                 cancellationToken);
 
@@ -72,6 +73,7 @@ internal sealed class ReferencesResolver
     private static async Task<SymbolReferenceLocation?> CreateLocationAsync(
         Solution solution,
         Location location,
+        ISymbol selectedSymbol,
         bool excludeGenerated,
         CancellationToken cancellationToken)
     {
@@ -82,14 +84,23 @@ internal sealed class ReferencesResolver
         }
 
         ReferencesContainingSymbol? containingSymbol = null;
+        string? projectName = null;
+        string? projectKind = null;
+        string usageKind = "read";
         Document? document = solution.GetDocument(location.SourceTree);
         if (document is not null)
         {
+            projectName = document.Project.Name;
+            projectKind = ReferenceUsageClassifier.ClassifyProject(document.Project.Name, document.Project.FilePath);
             SemanticModel? semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-            ISymbol? symbol = semanticModel?.GetEnclosingSymbol(location.SourceSpan.Start, cancellationToken);
-            if (symbol is not null)
+            if (semanticModel is not null)
             {
-                containingSymbol = CreateContainingSymbol(symbol, document.Project.Name, excludeGenerated);
+                usageKind = ReferenceUsageClassifier.Classify(semanticModel, location, selectedSymbol, cancellationToken);
+                ISymbol? symbol = semanticModel.GetEnclosingSymbol(location.SourceSpan.Start, cancellationToken);
+                if (symbol is not null)
+                {
+                    containingSymbol = CreateContainingSymbol(symbol, document.Project.Name, excludeGenerated);
+                }
             }
         }
 
@@ -99,6 +110,9 @@ internal sealed class ReferencesResolver
             Column: sourceLocation.Column,
             EndLine: sourceLocation.EndLine,
             EndColumn: sourceLocation.EndColumn,
+            UsageKind: usageKind,
+            ProjectName: projectName,
+            ProjectKind: projectKind ?? "unknown",
             ContainingSymbol: containingSymbol);
     }
 
@@ -158,6 +172,9 @@ internal sealed record SymbolReferenceLocation(
     int Column,
     int EndLine,
     int EndColumn,
+    string UsageKind,
+    string? ProjectName,
+    string ProjectKind,
     ReferencesContainingSymbol? ContainingSymbol);
 
 internal sealed record ReferencesContainingSymbol(

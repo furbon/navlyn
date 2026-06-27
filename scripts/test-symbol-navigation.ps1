@@ -2213,6 +2213,31 @@ try {
             (New-ExpectedDefinition -LineContains 'string formatted = widget.Format(3);' -Target 'Format')
         )
 
+    $usageQuery = Get-SourcePosition `
+        -LineContains 'string formatted = widget.Format(3);' `
+        -Target 'Format'
+    $usageResult = Invoke-Navlyn `
+        -Name 'references usage kind grouping' `
+        -Arguments @(
+            'references',
+            '--workspace',
+            $FixtureProjectPath,
+            '--file',
+            $FixtureSourcePath,
+            '--line',
+            [string]$usageQuery.Line,
+            '--column',
+            [string]$usageQuery.Column,
+            '--usage-kind',
+            'invoke',
+            '--group-by',
+            'usage-kind') `
+        -ExpectedExitCode 0
+    $usageJson = $usageResult.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'references usage kind count' -Actual @($usageJson.references).Count -Expected 1
+    Assert-Equal -Name 'references usage kind value' -Actual @($usageJson.references)[0].usageKind -Expected 'invoke'
+    Assert-Equal -Name 'references usage kind group' -Actual @($usageJson.groups)[0].key -Expected 'invoke'
+
     Assert-References `
         -Name 'references property reference' `
         -QueryLineContains 'return $"{Name}:{count}";' `
@@ -2670,6 +2695,79 @@ try {
 
     $inferredLocalJson = $inferredLocalInfo.Stdout | ConvertFrom-Json
     Assert-Equal -Name 'symbol-info inferred local expression type' -Actual $inferredLocalJson.expression.type.name -Expected 'SymbolNavigationFixture.Widget'
+
+    $localFunctionPosition = Get-SourcePosition `
+        -LineContains 'return value;' `
+        -Target 'value'
+
+    $scopeAt = Invoke-Navlyn `
+        -Name 'scope-at local function' `
+        -Arguments @(
+            'scope-at',
+            '--workspace',
+            $FixtureProjectPath,
+            '--file',
+            $FixtureSourcePath,
+            '--line',
+            [string]$localFunctionPosition.Line,
+            '--column',
+            [string]$localFunctionPosition.Column) `
+        -ExpectedExitCode 0
+
+    $scopeAtJson = $scopeAt.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'scope-at containing symbol' -Actual $scopeAtJson.containingSymbol.name -Expected 'BuildLocal'
+    Assert-Equal -Name 'scope-at innermost scope' -Actual @($scopeAtJson.scopes)[-1].kind -Expected 'LocalFunction'
+    Assert-Equal -Name 'scope-at project context' -Actual $scopeAtJson.projectContext.name -Expected 'SymbolNavigationFixture'
+
+    $interfaceSourcePosition = Get-SourcePosition `
+        -LineContains 'public interface IWidgetFormatter' `
+        -Target 'IWidgetFormatter'
+
+    $symbolSource = Invoke-Navlyn `
+        -Name 'symbol-source declaration' `
+        -Arguments @(
+            'symbol-source',
+            '--workspace',
+            $FixtureProjectPath,
+            '--file',
+            $FixtureSourcePath,
+            '--line',
+            [string]$interfaceSourcePosition.Line,
+            '--column',
+            [string]$interfaceSourcePosition.Column,
+            '--view',
+            'declaration',
+            '--max-lines',
+            '2') `
+        -ExpectedExitCode 0
+
+    $symbolSourceJson = $symbolSource.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'symbol-source symbol name' -Actual $symbolSourceJson.symbol.name -Expected 'IWidgetFormatter'
+    Assert-Equal -Name 'symbol-source slice kind' -Actual @($symbolSourceJson.slices)[0].textKind -Expected 'declaration'
+    Assert-Equal -Name 'symbol-source truncated' -Actual @($symbolSourceJson.slices)[0].truncated -Expected $true
+
+    $echoPosition = Get-SourcePosition `
+        -LineContains 'public T Echo<T>(T value)' `
+        -Target 'Echo'
+
+    $signature = Invoke-Navlyn `
+        -Name 'signature generic method' `
+        -Arguments @(
+            'signature',
+            '--workspace',
+            $FixtureProjectPath,
+            '--file',
+            $FixtureSourcePath,
+            '--line',
+            [string]$echoPosition.Line,
+            '--column',
+            [string]$echoPosition.Column) `
+        -ExpectedExitCode 0
+
+    $signatureJson = $signature.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'signature symbol name' -Actual $signatureJson.symbol.name -Expected 'Echo'
+    Assert-Equal -Name 'signature type parameter' -Actual @($signatureJson.apiShape.typeParameters)[0] -Expected 'T'
+    Assert-Equal -Name 'signature parameter name' -Actual @($signatureJson.apiShape.parameters)[0].name -Expected 'value'
 
     $outline = Invoke-Navlyn `
         -Name 'outline fixture source' `

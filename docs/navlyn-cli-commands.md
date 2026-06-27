@@ -8,13 +8,14 @@ Navlyn commands are grouped by investigation style:
 
 | Family | Commands | Purpose |
 | --- | --- | --- |
-| Workspace facts | `check`, `overview`, `repo-graph`, `diagnostics` | Load workspaces and report deterministic repository, project, package, and compiler facts. |
+| Workspace facts | `check`, `overview`, `repo-graph`, `diagnostics`, `symbol-diagnostics`, `diagnostic-pack` | Load workspaces and report deterministic repository, project, package, and compiler facts. |
 | Fuzzy investigations | `find`, `where-used`, `about`, `related`, `impact`, `entrypoints` | Resolve approximate symbol intent into candidates, selected-symbol summaries, related files, impact, and entrypoint chains. |
 | Diff and review | `changed-symbols`, `impact-diff`, `diagnostics-diff`, `review-diff`, `review-pack` | Produce evidence-first facts for Git diffs and review workflows. |
 | Context and batching | `context-pack`, `batch` | Build bounded agent reading material and run multiple machine-readable requests through one workspace load. |
 | Public API and tests | `public-api-diff`, `tests-for-symbol`, `tests-for-diff` | Compare source-level public/protected API surface and discover related test candidates. |
 | Framework and DI | `framework-entrypoints`, `di-graph`, `where-registered`, `di-impact` | Report framework-aware entrypoints and source-level Microsoft.Extensions.DependencyInjection facts. |
-| Source navigation primitives | `symbols`, `symbols-in`, `outline`, `symbol-at`, `symbol-info`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, `calls` | Return exact Roslyn-backed source-position and symbol navigation facts. |
+| .NET application domains | `route-map`, `route-impact`, `options-graph`, `config-impact`, `where-handled`, `message-flow`, `ef-model`, `entity-impact`, `package-usage`, `package-impact` | Report source-level ASP.NET Core route/auth, options/configuration, MediatR, EF Core, and package usage facts. |
+| Source navigation primitives | `symbols`, `symbols-in`, `outline`, `symbol-at`, `symbol-info`, `scope-at`, `symbol-source`, `signature`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, `calls` | Return exact Roslyn-backed source-position and symbol navigation facts. |
 
 ## General Contract
 
@@ -27,10 +28,11 @@ Navlyn commands are grouped by investigation style:
 - Paths are repository-relative when possible and use `/` separators in JSON output.
 - Usage errors return exit code `2`.
 - Runtime or workspace load failures return exit code `1`.
-- Source-position commands resolve one symbol at the requested file, line, and column. Use exploratory commands such as `symbols-in`, not `definition` or `references`, for line/range-wide symbol discovery.
+- Source-position commands resolve one symbol at the requested file, line, and column. Commands built on the source-position input model also accept `--candidate-id` where documented; use exactly one input mode: `--candidate-id` or `--file --line --column`. Use exploratory commands such as `symbols-in`, not `definition` or `references`, for line/range-wide symbol discovery.
 - Property and event accessor method positions are normalized to their associated source property or event for navigation output.
 - Source-backed result locations keep the existing `path`, `line`, and `column` fields and include additive `endLine` and `endColumn` fields where Roslyn exposes a valid source span. `line` / `column` are 1-based inclusive start positions. `endLine` / `endColumn` are 1-based exclusive end positions.
-- Source-position command top-level `file`, `line`, and `column` fields report the requested input point. Result locations and symbol-shaped source locations carry spans.
+- Source-position command top-level `file`, `line`, and `column` fields report the requested input point, or the effective resolved point when `--candidate-id` is used. Result locations and symbol-shaped source locations carry spans.
+- Source-position command results include additive `selectionInput` when `--candidate-id` is used.
 - Symbol-shaped results keep the existing `name`, `kind`, `container`, `path`, `line`, and `column` fields where applicable, may include additive `endLine` / `endColumn`, and may include an additive `facts` object for richer agent decisions.
 - Source-navigation commands keep source locations as the default result surface. Commands that support metadata reporting require explicit `--include-metadata` / `includeMetadata`.
 - Metadata-only symbols have no source span and use null source location fields such as `path`, `line`, `column`, `endLine`, and `endColumn` where those fields are present.
@@ -46,7 +48,7 @@ High-level workflow commands support `--profile compact|evidence|full`. The defa
 - `evidence` keeps summary and evidence-first sections for review, CI, and MCP callers while trimming snippet text and deep arrays.
 - `compact` keeps metadata, summary counts, warnings, next actions, and small highlights for output-budgeted agent scans.
 
-Profiled workflow output uses `schemaVersion: "navlyn.workflow.v1"`. The supported direct commands are `repo-graph`, `changed-symbols`, `impact-diff`, `diagnostics-diff`, `review-diff`, `review-pack`, `context-pack`, `public-api-diff`, `tests-for-symbol`, `tests-for-diff`, `framework-entrypoints`, `di-graph`, `where-registered`, and `di-impact`.
+Profiled workflow output uses `schemaVersion: "navlyn.workflow.v1"`. The supported direct commands are `repo-graph`, `changed-symbols`, `impact-diff`, `diagnostics-diff`, `review-diff`, `review-pack`, `context-pack`, `public-api-diff`, `tests-for-symbol`, `tests-for-diff`, `framework-entrypoints`, `di-graph`, `where-registered`, `di-impact`, `route-map`, `route-impact`, `options-graph`, `config-impact`, `where-handled`, `message-flow`, `ef-model`, `entity-impact`, `package-usage`, and `package-impact`.
 
 ```powershell
 dotnet run --no-launch-profile --project navlyn -- review-diff --workspace navlyn.slnx --profile evidence
@@ -109,7 +111,7 @@ Common options:
 - `--assume-kind <kind>`: optional repeated Roslyn symbol kind used for ranking.
 - `--match smart|exact|contains|regex`: defaults to `smart`.
 - `--case-sensitive`: makes name matching case-sensitive where applicable.
-- `--candidate-id <id>`: selects a candidate returned by a previous fuzzy command. Supported by `where-used`, `about`, `related`, `impact`, `entrypoints`, `context-pack --query`, `where-registered`, and `di-impact`; not supported by `find`.
+- `--candidate-id <id>`: selects a candidate returned by a previous fuzzy command. Supported by fuzzy workflows such as `where-used`, `about`, `related`, `impact`, `entrypoints`, and `context-pack`; exact source-navigation commands such as `symbol-at`, `symbol-info`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, and `calls`; test/DI/application-domain commands such as `tests-for-symbol`, `where-registered`, `di-impact`, `where-handled`, `message-flow`, and `entity-impact`; not supported by `find`.
 - `--candidate-policy fail|select|group`: controls ambiguous query handling. Defaults preserve existing behavior: `group` for `find` and `where-used`, `fail` for other selected-candidate workflows.
 - `--min-confidence high|medium|low`: minimum confidence required before returning selected-candidate facts. Defaults to `low` for `find` and `medium` for selected-candidate workflows.
 - `--explain-selection`: adds structured selection explanation.
@@ -131,11 +133,13 @@ Common output fields:
 - `selectionInput`: `query` or `candidateId`.
 - `selectionExplanation`: emitted only with `--explain-selection`.
 
-Fuzzy candidates and fuzzy source locations use the same source span convention as direct commands. `nextActions` remain command-invocation hints and keep point-style `file`, `line`, and `column` inputs.
+Fuzzy candidates and fuzzy source locations use the same source span convention as direct commands. `nextActions` remain command-invocation hints and keep point-style `file`, `line`, and `column` inputs. When a selected candidate has a `candidateId`, `nextActions` may also include additive `candidateId`, `mcpTool`, and `arguments` fields so MCP callers can invoke the recommended tool directly without re-running fuzzy selection.
 
 Fuzzy selection rules prefer exact case-sensitive matches, then exact case-insensitive matches, then contains and normalized-name matches. Multiple exact matches are reported as `ambiguous`. A single exact match with weaker alternatives is selected with `medium` confidence. Heuristic-only matches are selected only when ranking produces one dominant candidate.
 
 Candidate IDs are opaque deterministic handles for current source declarations. They have the form `sym:v1:<sha256-prefix>` and are paired with a human-readable `selector` containing kind, name, fully qualified name, documentation comment id, project, target framework, path, and source span. Source edits that move or change a declaration can change its candidate id. Partial declarations are declaration-specific, and multi-targeted projects can produce different ids per target framework.
+
+When a source-position command is invoked with `--candidate-id`, Navlyn re-resolves that declaration in the current workspace and then runs the same source-position resolver at the candidate declaration point. Malformed candidate ids produce `NAVLYN1701`; stale or filtered-out ids produce `NAVLYN1702`; duplicate ids in the current workspace produce `NAVLYN1703`. These are usage errors with no stdout output.
 
 When `--candidate-id` is used, `--query`, `--assume-kind`, `--match`, and `--case-sensitive` cannot be combined with it. Invalid or missing candidate ids return a usage error with no stdout.
 
@@ -159,6 +163,8 @@ dotnet run --no-launch-profile --project navlyn -- where-used --workspace navlyn
 
 Additional options:
 
+- `--usage-kind <kind>`: filters references by usage kind. Can be specified more than once or as comma-separated values. Supported values are `read`, `write`, `invoke`, `construct`, `inherit`, `implement`, `override`, `attribute`, `nameof`, and `typeof`.
+- `--group-by <group>`: adds grouped reference summaries. Can be specified more than once or as comma-separated values. Supported values are `file`, `project`, `containing-symbol`, `usage-kind`, and `test-vs-production`.
 - `--include-snippets`: adds bounded source snippets to returned locations and file summaries.
 - `--snippet-lines <number>`: context lines before and after the matched line. Defaults to `1`.
 
@@ -166,8 +172,10 @@ Selected-candidate output adds:
 
 - `totalMatches`: reference count before `--limit`.
 - `limit` and `truncated`: applied reference limit and whether references were omitted.
-- `references`: limited source reference locations.
-- `files`: file summaries with `referenceCount`, `firstLine`, and reason codes.
+- `references`: limited source reference locations with additive `usageKind`.
+- `files`: file summaries with `referenceCount`, `firstLine`, reason codes, and additive `usageKindCounts`.
+- `usageKindCounts`: selected-candidate usage kind counts after filters and before `--limit`.
+- `groups`: emitted when `--group-by` is provided.
 
 Ambiguous output omits `selectedCandidate` and may include `candidateResults`, with per-candidate file summaries instead of merged references.
 
@@ -667,9 +675,205 @@ Additional options:
 
 Output includes `registrations`, `constructorDependencies`, `consumers`, and `risks`. Reported risks include `multiple-registrations`, `captive-dependency`, and `unresolved-service-candidate`.
 
+## .NET Application Domain Commands
+
+Application domain commands return source-level facts for common .NET application patterns. They do not execute the app, inspect runtime route tables, evaluate authorization policies, read secret values, build an EF runtime model, run migrations, or prove package binary compatibility.
+
+Common options:
+
+- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--project <project>`: optional repeated project context filter.
+- `--exclude-generated`.
+- `--include-snippets`.
+- `--snippet-lines <number>`: defaults to `1`.
+- `--profile compact|evidence|full`.
+
+Common output includes `workspace`, `kind`, `command`, optional `projects`, `limits`, bounded sections with `totalItems`, `limit`, `truncated`, `items`, top-level `truncated`, `warnings`, and `nextActions`. Domain facts include source spans, project facts, `confidence`, `reasonCodes`, and evidence. Empty source-level results return successful JSON with warnings such as `no-routes-found`, `no-options-found`, `no-message-handlers-found`, `no-ef-model-facts-found`, or `no-package-usage-found`.
+
+### `route-map`
+
+Reports source-level ASP.NET Core controller action and Minimal API route/auth facts.
+
+```powershell
+dotnet run --no-launch-profile --project navlyn -- route-map --workspace src/Web/Web.csproj
+dotnet run --no-launch-profile --project navlyn -- route-map --workspace src/Web/Web.csproj --route orders --auth required
+```
+
+Additional options:
+
+- `--route <fragment>`: optional repeated route pattern fragment filter.
+- `--endpoint-kind <kind>`: repeated or comma-separated `controller-action`, `minimal-api`, or `any`.
+- `--auth any|required|anonymous|unknown`: defaults to `any`.
+- `--route-limit <number>`: defaults to `100`.
+- `--evidence-limit <number>`: defaults to `5`.
+
+Output includes a `routes` section. Route items include `endpointKind`, `httpMethods`, `routePattern`, `normalizedRoutePattern`, `handler`, `auth`, project/source span, `confidence`, `reasonCodes`, and evidence. Auth facts are source metadata from attributes or visible Minimal API calls such as `RequireAuthorization` / `AllowAnonymous`; they are not runtime authorization proof.
+
+### `route-impact`
+
+Reports route-map facts for routes matching one pattern fragment.
+
+```powershell
+dotnet run --no-launch-profile --project navlyn -- route-impact --workspace src/Web/Web.csproj --route /orders
+```
+
+Required options:
+
+- `--route <fragment>`.
+
+Additional options match `route-map` limits and snippet/generated options. Output includes the matched `routes` section.
+
+### `options-graph`
+
+Reports source-level options/configuration facts.
+
+```powershell
+dotnet run --no-launch-profile --project navlyn -- options-graph --workspace src/App/App.csproj
+dotnet run --no-launch-profile --project navlyn -- options-graph --workspace src/App/App.csproj --query PaymentOptions
+```
+
+Additional options:
+
+- `--query <type-or-key-fragment>`: optional option type or configuration key filter.
+- `--option-limit <number>`: defaults to `100`.
+- `--consumer-limit <number>`: defaults to `100`.
+- `--binding-limit <number>`: defaults to `100`.
+- `--evidence-limit <number>`: defaults to `5`.
+
+Output includes `options`, `bindings`, `consumers`, and `validations`. Supported source patterns include visible `Configure<TOptions>`, `AddOptions<TOptions>`, `Bind`, `GetSection("...")`, `Validate*` calls, and constructor or primary-constructor consumers of `IOptions<T>`, `IOptionsSnapshot<T>`, and `IOptionsMonitor<T>`. Navlyn reports source keys and types only; it does not read configuration values.
+
+### `config-impact`
+
+Reports options/configuration facts filtered by a required query.
+
+```powershell
+dotnet run --no-launch-profile --project navlyn -- config-impact --workspace src/App/App.csproj --query Payments
+```
+
+Required options:
+
+- `--query <type-or-key-fragment>`.
+
+Limits and output sections match `options-graph`.
+
+### `where-handled`
+
+Finds source-level MediatR handlers for a selected request or notification type.
+
+```powershell
+dotnet run --no-launch-profile --project navlyn -- where-handled --workspace src/App/App.csproj --query CreateOrderCommand --assume-kind NamedType
+dotnet run --no-launch-profile --project navlyn -- where-handled --workspace src/App/App.csproj --candidate-id sym:v1:...
+dotnet run --no-launch-profile --project navlyn -- where-handled --workspace src/App/App.csproj --file src/App/CreateOrderCommand.cs --line 6 --column 22
+```
+
+Input modes:
+
+- `--query <text>`
+- `--candidate-id <id>`
+- `--file <path> --line <number> --column <number>`
+
+Exactly one input mode is required. Fuzzy selection options match `where-registered`.
+
+Additional options:
+
+- `--candidate-limit <number>`: defaults to `20`.
+- `--handler-limit <number>`: defaults to `100`.
+- `--evidence-limit <number>`: defaults to `5`.
+
+Output includes `selectionInput`, optional fuzzy `selection`, `subject`, `handlers`, and an empty `callSites` section. Handler facts cover `IRequestHandler<TRequest,TResponse>`, `IRequestHandler<TRequest>`, and `INotificationHandler<TNotification>` when visible in source.
+
+### `message-flow`
+
+Reports bounded MediatR handler and `Send` / `Publish` call-site facts for a selected request or notification type.
+
+```powershell
+dotnet run --no-launch-profile --project navlyn -- message-flow --workspace src/App/App.csproj --query CreateOrderCommand --assume-kind NamedType
+```
+
+Input modes and fuzzy selection options match `where-handled`.
+
+Additional options:
+
+- `--candidate-limit <number>`: defaults to `20`.
+- `--handler-limit <number>`: defaults to `100`.
+- `--call-site-limit <number>`: defaults to `100`.
+- `--evidence-limit <number>`: defaults to `5`.
+
+Output includes `handlers` and `callSites`. Call-site facts are source-level and currently require Roslyn to resolve a direct message type from the `Send` or `Publish` argument.
+
+### `ef-model`
+
+Reports source-level EF Core model facts.
+
+```powershell
+dotnet run --no-launch-profile --project navlyn -- ef-model --workspace src/App/App.csproj
+dotnet run --no-launch-profile --project navlyn -- ef-model --workspace src/App/App.csproj --entity Order
+```
+
+Additional options:
+
+- `--entity <fragment>`: optional entity type filter.
+- `--dbcontext <fragment>`: optional DbContext type filter.
+- `--entity-limit <number>`: defaults to `200`.
+- `--query-site-limit <number>`: defaults to `200`.
+- `--evidence-limit <number>`: defaults to `5`.
+
+Output includes `dbContexts`, `entities`, `dbSets`, `configurations`, and `querySites`. Supported source patterns include types inheriting `DbContext`, `DbSet<TEntity>` properties, `IEntityTypeConfiguration<TEntity>`, and visible LINQ/query calls on `DbSet` / queryable entity expressions. This is not an EF runtime model or migration diff.
+
+### `entity-impact`
+
+Reports EF source facts for a selected entity type.
+
+```powershell
+dotnet run --no-launch-profile --project navlyn -- entity-impact --workspace src/App/App.csproj --query Order --assume-kind NamedType
+```
+
+Input modes and fuzzy selection options match `where-handled`.
+
+Additional options:
+
+- `--candidate-limit <number>`: defaults to `20`.
+- `--entity-limit <number>`: defaults to `200`.
+- `--query-site-limit <number>`: defaults to `200`.
+- `--evidence-limit <number>`: defaults to `5`.
+
+Output includes matching `dbSets`, `configurations`, and `querySites`.
+
+### `package-usage`
+
+Reports source-level package reference and usage facts.
+
+```powershell
+dotnet run --no-launch-profile --project navlyn -- package-usage --workspace navlyn.slnx --package Microsoft.CodeAnalysis.CSharp.Workspaces
+dotnet run --no-launch-profile --project navlyn -- package-usage --workspace src/App/App.csproj --package Microsoft.EntityFrameworkCore --namespace Microsoft.EntityFrameworkCore
+```
+
+Required options:
+
+- `--package <id>`.
+
+Additional options:
+
+- `--namespace <namespace-fragment>`: optional repeated namespace hint for source usage attribution.
+- `--usage-limit <number>`: defaults to `200`.
+- `--reference-limit <number>`: defaults to `100`.
+- `--include-tests`: defaults to true.
+
+Output includes `packageReferences` from project files and `usages` from source namespace/symbol matches. Without namespace hints, Navlyn uses a conservative package-id namespace guess with lower confidence. Package usage is source-level evidence, not package API compatibility proof.
+
+### `package-impact`
+
+Reports the same package reference and source usage facts as `package-usage`, positioned for package change/upgrade impact investigation.
+
+```powershell
+dotnet run --no-launch-profile --project navlyn -- package-impact --workspace src/App/App.csproj --package Microsoft.EntityFrameworkCore --namespace Microsoft.EntityFrameworkCore
+```
+
+Required and optional options match `package-usage`.
+
 ## Context Pack Command
 
-`context-pack` creates a bounded facts pack for agent investigations. It has two explicit input modes:
+`context-pack` creates a bounded facts pack for agent investigations. It has three explicit input modes:
 
 - Query mode: `--query <text>`
 - Candidate mode: `--candidate-id <id>`
@@ -683,6 +887,7 @@ Common options:
 - `--project <project>`: optional repeated project context filter.
 - `--exclude-generated`: excludes generated declarations, diagnostics, and snippets where applicable.
 - `--goal review|modify|understand`: ranking profile. Defaults to `understand` in query mode and `review` in diff mode.
+- `--change-kind behavior|signature|rename|constructor|nullability|async|public-api|di-registration|endpoint`: optional ranking hint, primarily for `--goal modify`.
 - `--budget-tokens <number>`: approximate material budget. Defaults to `8000`.
 - `--item-limit <number>`: maximum ranked context items. Defaults to `80`.
 - `--snippet-policy none|signature|line|block`: defaults to `line`.
@@ -690,9 +895,9 @@ Common options:
 
 Budgeting uses the deterministic `chars-div-4-v1` estimator: `charLimit = budgetTokens * 4`, and estimated tokens are `Ceiling(chars / 4)`. The budget applies to ranked context material in `pack.items`, not every JSON punctuation character in the result envelope. When material is omitted, `pack.omitted` records the reason and a follow-up command.
 
-### `context-pack --query`
+### `context-pack --query` / `--candidate-id`
 
-Resolves a fuzzy symbol query and returns selected-symbol context.
+Resolves a fuzzy symbol query or a previous `candidateId` and returns selected-symbol context.
 
 ```powershell
 dotnet run --no-launch-profile --project navlyn -- context-pack --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType
@@ -754,6 +959,7 @@ Top-level shape:
   "command": "context-pack",
   "mode": "query",
   "goal": "understand",
+  "changeKind": "signature",
   "query": {},
   "selection": {},
   "budget": {
@@ -777,7 +983,7 @@ Top-level shape:
 }
 ```
 
-Invalid mode combinations such as missing both `--query` and `--diff`, combining them, or using diff options without `--diff` return exit code `2`, write diagnostics to stderr, and produce no stdout. `context-pack` is supported by `batch` with lower camel case payload fields such as `query`, `diff`, `goal`, `budgetTokens`, `itemLimit`, `snippetPolicy`, `candidateLimit`, `memberLimit`, `referenceLimit`, `fileLimit`, `symbolLimit`, and `impactLimit`.
+Invalid mode combinations such as missing all of `--query`, `--candidate-id`, and `--diff`, combining input modes, or using diff options without `--diff` return exit code `2`, write diagnostics to stderr, and produce no stdout. Invalid `--change-kind` values are rejected by the parser with exit code `2` and no stdout. `context-pack` is supported by `batch` with lower camel case payload fields such as `query`, `candidateId`, `diff`, `goal`, `changeKind`, `budgetTokens`, `itemLimit`, `snippetPolicy`, `candidateLimit`, `memberLimit`, `referenceLimit`, `relationLimit`, `fileLimit`, `diagnosticLimit`, `symbolLimit`, `impactLimit`, `relatedTestLimit`, `depth`, and `profile`.
 
 ## `check`
 
@@ -1029,7 +1235,7 @@ Input shape:
 Each request must include:
 
 - `id`: caller-provided correlation id. It must be unique enough for the caller's own workflow.
-- `command`: one of `overview`, `diagnostics`, `symbols`, `symbols-in`, `outline`, `symbol-at`, `symbol-info`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, `calls`, `find`, `where-used`, `about`, `related`, `impact`, `entrypoints`, `review-diff`, `review-pack`, `context-pack`, `repo-graph`, `public-api-diff`, `tests-for-symbol`, `tests-for-diff`, `framework-entrypoints`, `di-graph`, `where-registered`, or `di-impact`.
+- `command`: one of `overview`, `diagnostics`, `symbols`, `symbols-in`, `outline`, `symbol-at`, `symbol-info`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, `calls`, `find`, `where-used`, `about`, `related`, `impact`, `entrypoints`, `review-diff`, `review-pack`, `context-pack`, `repo-graph`, `public-api-diff`, `tests-for-symbol`, `tests-for-diff`, `framework-entrypoints`, `di-graph`, `where-registered`, `di-impact`, `route-map`, `route-impact`, `options-graph`, `config-impact`, `where-handled`, `message-flow`, `ef-model`, `entity-impact`, `package-usage`, or `package-impact`.
 
 Top-level `defaults.project` applies to requests that support project scoping. Requests may override it with `project`. `symbols` and `diagnostics` may also use `projects` for multiple project filters; do not specify both `project` and `projects` on the same request.
 Top-level `defaults.excludeGenerated` applies to requests that support generated-code filtering. Requests may override it with `excludeGenerated`.
@@ -1041,18 +1247,19 @@ Request options otherwise use the same names as the command JSON concepts:
 - `symbols`: required `query`; optional `match`, `caseSensitive`, `limit`, `kinds`, `namespaces`, `namespaceMatch`, `containers`, `containerMatch`, `accessibilities`, `project`, `projects`, `excludeGenerated`.
 - `symbols-in`: required `file`, `line`; optional `startColumn`, `endColumn`, `project`, `excludeGenerated`.
 - `outline`: required `file`; optional `project`, `excludeGenerated`.
-- `symbol-at`, `symbol-info`, `type-hierarchy`: required `file`, `line`, `column`; optional `project`, `excludeGenerated`.
-- `definition`: required `file`, `line`, `column`; optional `project`, `excludeGenerated`, `includeMetadata`.
-- `references`, `implementations`, `callers`: required `file`, `line`, `column`; optional `project`, `excludeGenerated`, `resultProject`, `resultProjects`, `resultPath`, `resultPaths`, `resultKind`, `resultKinds`, `limit`.
-- `calls`: required `file`, `line`, `column`; optional `project`, `excludeGenerated`, `resultProject`, `resultProjects`, `resultPath`, `resultPaths`, `resultKind`, `resultKinds`, `limit`, `includeMetadata`.
+- `symbol-at`, `symbol-info`, `type-hierarchy`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`.
+- `definition`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`, `includeMetadata`.
+- `references`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`, `resultProject`, `resultProjects`, `resultPath`, `resultPaths`, `resultKind`, `resultKinds`, `usageKind`, `usageKinds`, `groupBy`, `limit`.
+- `implementations`, `callers`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`, `resultProject`, `resultProjects`, `resultPath`, `resultPaths`, `resultKind`, `resultKinds`, `limit`.
+- `calls`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`, `resultProject`, `resultProjects`, `resultPath`, `resultPaths`, `resultKind`, `resultKinds`, `limit`, `includeMetadata`.
 - `find`: required `query`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `limit`, `candidatePolicy`, `minConfidence`, `explainSelection`.
-- `where-used`: required `query` or `candidateId`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `limit`, `includeSnippets`, `snippetLines`, `candidatePolicy`, `minConfidence`, `explainSelection`.
+- `where-used`: required `query` or `candidateId`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `limit`, `usageKind`, `usageKinds`, `groupBy`, `includeSnippets`, `snippetLines`, `candidatePolicy`, `minConfidence`, `explainSelection`.
 - `about`: required `query` or `candidateId`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `memberLimit`, `referenceLimit`, `relationLimit`, `includeSnippets`, `snippetLines`, `candidatePolicy`, `minConfidence`, `explainSelection`.
 - `related`, `impact`: required `query` or `candidateId`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `include`, `limit`, `depth`, `includeSnippets`, `snippetLines`, `candidatePolicy`, `minConfidence`, `explainSelection`.
 - `entrypoints`: required `query` or `candidateId`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `limit`, `depth`, `includeSnippets`, `snippetLines`, `candidatePolicy`, `minConfidence`, `explainSelection`.
 - `review-diff`: optional `base`, `head`, `staged`, `includeUnstaged`, `project`, `projects`, `excludeGenerated`, `symbolLimit`, `impactLimit`, `diagnosticLimit`, `relatedTestLimit`, `depth`, `includeSnippets`, `snippetLines`, `profile`.
 - `review-pack`: optional `pack`, `scope`, `base`, `head`, `staged`, `includeUnstaged`, `project`, `projects`, `excludeGenerated`, `findingLimit`, `evidenceLimit`, `symbolLimit`, `fileLimit`, `includeSnippets`, `snippetLines`, `architectureConfig`, `profile`.
-- `context-pack`: required `query`, `candidateId`, or `diff: true`; optional `base`, `head`, `staged`, `includeUnstaged`, `goal`, `budgetTokens`, `itemLimit`, `snippetPolicy`, `snippetLines`, `candidateLimit`, `memberLimit`, `referenceLimit`, `relationLimit`, `fileLimit`, `diagnosticLimit`, `symbolLimit`, `impactLimit`, `relatedTestLimit`, `depth`, `candidatePolicy`, `minConfidence`, `explainSelection`, `project`, `projects`, `excludeGenerated`, `profile`.
+- `context-pack`: required `query`, `candidateId`, or `diff: true`; optional `base`, `head`, `staged`, `includeUnstaged`, `goal`, `changeKind`, `budgetTokens`, `itemLimit`, `snippetPolicy`, `snippetLines`, `candidateLimit`, `memberLimit`, `referenceLimit`, `relationLimit`, `fileLimit`, `diagnosticLimit`, `symbolLimit`, `impactLimit`, `relatedTestLimit`, `depth`, `candidatePolicy`, `minConfidence`, `explainSelection`, `project`, `projects`, `excludeGenerated`, `profile`.
 - `repo-graph`: optional `project`, `projects`, `includePackages`, `includeMsbuildFiles`, `includePreprocessorSymbols`, `classification`, `relationshipLimit`, `profile`.
 - `public-api-diff`: required `base`; optional `head`, `project`, `projects`, `excludeGenerated`, `includeAdditions`, `includeAttributes`, `symbolLimit`, `changeLimit`, `profile`. Batch `public-api-diff` compares refs only and does not accept `staged` or `includeUnstaged`.
 - `tests-for-symbol`: required exactly one input mode: `query`, `candidateId`, or `file` with `line` and `column`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `candidatePolicy`, `minConfidence`, `explainSelection`, `project`, `projects`, `testProject`, `testProjects`, `excludeGenerated`, `candidateLimit`, `testLimit`, `referenceLimit`, `includeSnippets`, `snippetLines`, `profile`.
@@ -1061,8 +1268,17 @@ Request options otherwise use the same names as the command JSON concepts:
 - `di-graph`: optional `project`, `projects`, `registrationLimit`, `dependencyLimit`, `riskLimit`, `includeOptions`, `includeHostedServices`, `includeRisks`, `excludeGenerated`, `includeSnippets`, `snippetLines`, `profile`.
 - `where-registered`: required exactly one input mode: `query`, `candidateId`, or `file` with `line` and `column`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `candidatePolicy`, `minConfidence`, `explainSelection`, `project`, `projects`, `excludeGenerated`, `candidateLimit`, `registrationLimit`, `dependencyLimit`, `includeSnippets`, `snippetLines`, `profile`.
 - `di-impact`: required exactly one input mode: `query`, `candidateId`, or `file` with `line` and `column`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `candidatePolicy`, `minConfidence`, `explainSelection`, `project`, `projects`, `excludeGenerated`, `candidateLimit`, `registrationLimit`, `consumerLimit`, `dependencyLimit`, `riskLimit`, `depth`, `includeSnippets`, `snippetLines`, `profile`.
+- `route-map`: optional `project`, `projects`, `routes`, `endpointKinds`, `auth`, `excludeGenerated`, `routeLimit`, `evidenceLimit`, `includeSnippets`, `snippetLines`, `profile`.
+- `route-impact`: required `route`; optional `project`, `projects`, `excludeGenerated`, `routeLimit`, `evidenceLimit`, `includeSnippets`, `snippetLines`, `profile`.
+- `options-graph`: optional `query`, `project`, `projects`, `excludeGenerated`, `optionLimit`, `consumerLimit`, `bindingLimit`, `evidenceLimit`, `includeSnippets`, `snippetLines`, `profile`.
+- `config-impact`: required `query`; optional `project`, `projects`, `excludeGenerated`, `optionLimit`, `consumerLimit`, `bindingLimit`, `evidenceLimit`, `includeSnippets`, `snippetLines`, `profile`.
+- `where-handled`: required exactly one input mode: `query`, `candidateId`, or `file` with `line` and `column`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `candidatePolicy`, `minConfidence`, `explainSelection`, `project`, `projects`, `excludeGenerated`, `candidateLimit`, `handlerLimit`, `evidenceLimit`, `includeSnippets`, `snippetLines`, `profile`.
+- `message-flow`: required exactly one input mode: `query`, `candidateId`, or `file` with `line` and `column`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `candidatePolicy`, `minConfidence`, `explainSelection`, `project`, `projects`, `excludeGenerated`, `candidateLimit`, `handlerLimit`, `callSiteLimit`, `evidenceLimit`, `includeSnippets`, `snippetLines`, `profile`.
+- `ef-model`: optional `entity`, `dbcontext`, `project`, `projects`, `excludeGenerated`, `entityLimit`, `querySiteLimit`, `evidenceLimit`, `includeSnippets`, `snippetLines`, `profile`.
+- `entity-impact`: required exactly one input mode: `query`, `candidateId`, or `file` with `line` and `column`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `candidatePolicy`, `minConfidence`, `explainSelection`, `project`, `projects`, `excludeGenerated`, `candidateLimit`, `entityLimit`, `querySiteLimit`, `evidenceLimit`, `includeSnippets`, `snippetLines`, `profile`.
+- `package-usage` and `package-impact`: required `package`; optional `namespaces`, `project`, `projects`, `includeTests`, `excludeGenerated`, `usageLimit`, `referenceLimit`, `profile`.
 
-Only `review-diff` from the primitive diff workflow command set is supported in `batch`; `changed-symbols`, `impact-diff`, and `diagnostics-diff` remain direct CLI commands. Use `review-diff`, `review-pack`, `context-pack` with `diff: true`, `public-api-diff`, or `tests-for-diff` in `batch` for agent review workflows.
+Only `review-diff` from the primitive diff workflow command set is supported in `batch`; `changed-symbols`, `impact-diff`, `diagnostics-diff`, `scope-at`, `symbol-source`, `signature`, `symbol-diagnostics`, and `diagnostic-pack` remain direct CLI commands. Use `review-diff`, `review-pack`, `context-pack` with `diff: true`, `public-api-diff`, or `tests-for-diff` in `batch` for agent review workflows.
 
 Example agent investigation batch:
 
@@ -1328,9 +1544,7 @@ dotnet run --no-launch-profile --project navlyn -- symbol-at --workspace navlyn.
 Required options:
 
 - `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
-- `--file <path>`: C# source file in the workspace.
-- `--line <number>`: 1-based source line.
-- `--column <number>`: 1-based source column.
+- Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
 
@@ -1386,9 +1600,7 @@ dotnet run --no-launch-profile --project navlyn -- symbol-info --workspace navly
 Required options:
 
 - `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
-- `--file <path>`: C# source file in the workspace.
-- `--line <number>`: 1-based source line.
-- `--column <number>`: 1-based source column.
+- Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
 
@@ -1429,6 +1641,276 @@ Result shape:
 
 When applicable, `symbol-info` may include `invocation`, `attribute`, `return`, and `lambda` objects. Invocation and object-creation entries include selected target facts and argument-to-parameter mapping, including target-typed `new` when Roslyn exposes the constructed type. Attribute entries distinguish attribute type from attribute constructor. Return entries distinguish declared return type from expression and converted types. Lambda entries include target type and inferred return type where Roslyn exposes them. Nullable flow-state is not reported.
 
+## `scope-at`
+
+Returns enclosing C# scope facts for a source position. Unlike `symbol-at`, this command is useful on positions inside a member body because it reports the surrounding namespace, type, member, local function, lambda, or top-level statement stack.
+
+```powershell
+dotnet run --no-launch-profile --project navlyn -- scope-at --workspace navlyn.slnx --file navlyn/Cli/NavlynCli.cs --line 31 --column 37
+```
+
+Required options:
+
+- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
+
+Optional options:
+
+- `--project <project>`: resolves the source file in the context of an exact project name or repository-relative `.csproj` path.
+- `--exclude-generated`: rejects generated input files.
+
+Result shape:
+
+```json
+{
+  "file": "navlyn/Cli/NavlynCli.cs",
+  "line": 31,
+  "column": 37,
+  "projectContext": {
+    "name": "navlyn",
+    "path": "navlyn/navlyn.csproj",
+    "targetFramework": "net10.0",
+    "languageVersion": "CSharp14",
+    "preprocessorSymbols": []
+  },
+  "scopes": [
+    {
+      "kind": "Type",
+      "syntaxKind": "ClassDeclaration",
+      "path": "navlyn/Cli/NavlynCli.cs",
+      "line": 7,
+      "column": 1,
+      "endLine": 72,
+      "endColumn": 2,
+      "symbol": {}
+    },
+    {
+      "kind": "Member",
+      "syntaxKind": "MethodDeclaration",
+      "path": "navlyn/Cli/NavlynCli.cs",
+      "line": 28,
+      "column": 5,
+      "endLine": 70,
+      "endColumn": 6,
+      "symbol": {}
+    }
+  ],
+  "containingSymbol": {}
+}
+```
+
+Scopes are ordered outer-to-inner. `scope-at` reports source-level syntax/semantic context only; preprocessor inactive text may have no useful scope.
+
+## `symbol-source`
+
+Returns bounded source slices for the selected C# symbol. This is for reading a selected declaration safely; it is not an arbitrary file-range dump.
+
+```powershell
+dotnet run --no-launch-profile --project navlyn -- symbol-source --workspace navlyn.slnx --candidate-id sym:v1:... --view declaration
+```
+
+Required options:
+
+- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
+
+Optional options:
+
+- `--view signature|declaration|body|members|xml-doc|attributes`: defaults to `declaration`.
+- `--max-lines <number>`: maximum source lines per slice. Defaults to `80`.
+- `--budget-tokens <number>`: approximate character budget per slice using `tokens * 4`. Defaults to `4000`.
+- `--project <project>`.
+- `--exclude-generated`.
+
+Result shape:
+
+```json
+{
+  "file": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+  "line": 50,
+  "column": 19,
+  "view": "declaration",
+  "limits": {
+    "maxLines": 80,
+    "budgetTokens": 4000
+  },
+  "symbol": {},
+  "slices": [
+    {
+      "textKind": "declaration",
+      "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+      "startLine": 50,
+      "startColumn": 1,
+      "endLine": 53,
+      "endColumn": 2,
+      "lines": [],
+      "truncated": false
+    }
+  ],
+  "truncated": false,
+  "warnings": []
+}
+```
+
+Metadata-only symbols return an empty `slices` array with `metadata-only-symbol` in `warnings`. Partial symbols can return multiple slices ordered by path and source position. `members` returns member declaration slices for type declarations.
+
+## `signature`
+
+Returns API-shape facts for one selected C# symbol.
+
+```powershell
+dotnet run --no-launch-profile --project navlyn -- signature --workspace navlyn.slnx --file navlyn/Cli/Commands/CheckCommand.cs --line 8 --column 27
+```
+
+Required options:
+
+- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
+
+Optional options:
+
+- `--project <project>`.
+- `--exclude-generated`.
+
+Result shape:
+
+```json
+{
+  "file": "navlyn/Cli/Commands/CheckCommand.cs",
+  "line": 8,
+  "column": 27,
+  "symbol": {
+    "name": "Create",
+    "kind": "Method",
+    "facts": {}
+  },
+  "apiShape": {
+    "displayName": "Navlyn.Cli.Commands.CheckCommand.Create()",
+    "documentationCommentId": "M:Navlyn.Cli.Commands.CheckCommand.Create",
+    "accessibility": "Public",
+    "modifiers": ["public", "static"],
+    "typeParameters": null,
+    "genericConstraints": null,
+    "parameters": [],
+    "returnType": {},
+    "attributes": [],
+    "overriddenSymbol": null,
+    "implementedSymbols": null,
+    "declarationCount": 1,
+    "isPartial": false,
+    "declarations": []
+  }
+}
+```
+
+`signature` complements `about`: it focuses on the selected symbol's current API shape instead of references, related files, and relation summaries.
+
+## `symbol-diagnostics`
+
+Returns compiler diagnostics whose source span intersects the selected symbol declaration span.
+
+```powershell
+dotnet run --no-launch-profile --project navlyn -- symbol-diagnostics --workspace tests/fixtures/DiagnosticFixture/DiagnosticFixture.csproj --file tests/fixtures/DiagnosticFixture/BrokenCode.cs --line 5 --column 24 --limit 10
+```
+
+Required options:
+
+- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
+
+Optional options:
+
+- `--severity Hidden|Info|Warning|Error`: can be specified more than once.
+- `--id <id>`: can be specified more than once.
+- `--limit <number>`.
+- `--project <project>`.
+- `--exclude-generated`.
+
+Result shape:
+
+```json
+{
+  "file": "tests/fixtures/DiagnosticFixture/BrokenCode.cs",
+  "line": 5,
+  "column": 24,
+  "symbol": {},
+  "filters": {
+    "severities": [],
+    "ids": [],
+    "limit": 10
+  },
+  "totalDiagnostics": 1,
+  "truncated": false,
+  "diagnostics": [
+    {
+      "project": {},
+      "severity": "Error",
+      "id": "CS0246",
+      "message": "...",
+      "path": "tests/fixtures/DiagnosticFixture/BrokenCode.cs",
+      "line": 5,
+      "column": 12,
+      "endLine": 5,
+      "endColumn": 23,
+      "reasonCodes": ["diagnostic-intersects-symbol-span"]
+    }
+  ]
+}
+```
+
+This is source-span scoped, not a guarantee that every diagnostic causally related to the symbol is included.
+
+## `diagnostic-pack`
+
+Creates a bounded facts pack around compiler diagnostics. It can start from a diagnostic id or a diagnostic source position.
+
+```powershell
+dotnet run --no-launch-profile --project navlyn -- diagnostic-pack --workspace tests/fixtures/DiagnosticFixture/DiagnosticFixture.csproj --id CS0246 --limit 5
+dotnet run --no-launch-profile --project navlyn -- diagnostic-pack --workspace tests/fixtures/DiagnosticFixture/DiagnosticFixture.csproj --file tests/fixtures/DiagnosticFixture/BrokenCode.cs --line 5 --column 12
+```
+
+Input modes:
+
+- `--id <id>`: exact diagnostic id mode.
+- `--file <path> --line <number> --column <number>`: source-position mode.
+
+Exactly one input mode is required.
+
+Optional options:
+
+- `--project <project>`: optional repeated project filter.
+- `--exclude-generated`.
+- `--severity Hidden|Info|Warning|Error`: can be specified more than once.
+- `--limit <number>`: defaults to `20`.
+- `--budget-tokens <number>`: source context budget for representative context. Defaults to `3000`.
+
+Result shape:
+
+```json
+{
+  "workspace": "tests/fixtures/DiagnosticFixture/DiagnosticFixture.csproj",
+  "kind": "project",
+  "input": {
+    "mode": "id",
+    "id": "CS0246"
+  },
+  "filters": {},
+  "totalDiagnostics": 2,
+  "truncated": false,
+  "diagnostics": [],
+  "context": {
+    "scope": {},
+    "signature": {},
+    "source": {},
+    "warnings": []
+  },
+  "warnings": [],
+  "nextActions": []
+}
+```
+
+`context` is built from the first source-backed matching diagnostic. If no diagnostics match, the command exits successfully with `totalDiagnostics: 0`, empty diagnostics, and `no-diagnostics-matched` in `warnings`. The pack is facts-only and does not generate fix suggestions.
+
 ## `implementations`
 
 Finds source implementations for the C# symbol at a source position. The covered source cases include interface types, interface members, explicit interface implementations, generic interface member implementations, and abstract or virtual method overrides. Non-applicable symbols return an empty `implementations` array.
@@ -1440,9 +1922,7 @@ dotnet run --no-launch-profile --project navlyn -- implementations --workspace t
 Required options:
 
 - `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
-- `--file <path>`: C# source file in the workspace.
-- `--line <number>`: 1-based source line.
-- `--column <number>`: 1-based source column.
+- Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
 
@@ -1507,9 +1987,7 @@ dotnet run --no-launch-profile --project navlyn -- type-hierarchy --workspace te
 Required options:
 
 - `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
-- `--file <path>`: C# source file in the workspace.
-- `--line <number>`: 1-based source line.
-- `--column <number>`: 1-based source column.
+- Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
 
@@ -1562,9 +2040,7 @@ dotnet run --no-launch-profile --project navlyn -- callers --workspace navlyn.sl
 Required options:
 
 - `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
-- `--file <path>`: C# source file in the workspace.
-- `--line <number>`: 1-based source line.
-- `--column <number>`: 1-based source column.
+- Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
 
@@ -1645,9 +2121,7 @@ dotnet run --no-launch-profile --project navlyn -- calls --workspace navlyn.slnx
 Required options:
 
 - `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
-- `--file <path>`: C# source file in the workspace.
-- `--line <number>`: 1-based source line.
-- `--column <number>`: 1-based source column.
+- Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
 
@@ -1730,9 +2204,7 @@ dotnet run --no-launch-profile --project navlyn -- definition --workspace navlyn
 Required options:
 
 - `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
-- `--file <path>`: C# source file in the workspace.
-- `--line <number>`: 1-based source line.
-- `--column <number>`: 1-based source column.
+- Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
 
@@ -1798,9 +2270,7 @@ dotnet run --no-launch-profile --project navlyn -- references --workspace navlyn
 Required options:
 
 - `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
-- `--file <path>`: C# source file in the workspace.
-- `--line <number>`: 1-based source line.
-- `--column <number>`: 1-based source column.
+- Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
 
@@ -1809,6 +2279,8 @@ Optional options:
 - `--result-project <project>`: filters result-side reference locations by project. This is separate from input `--project`.
 - `--result-path <path-fragment>`: filters result-side reference paths by repository-relative path fragment. Can be specified more than once.
 - `--result-kind <kind>`: filters by the referenced symbol kind. Can be specified more than once.
+- `--usage-kind <kind>`: filters by source-level usage kind. Can be specified more than once or as comma-separated values. Supported values are `read`, `write`, `invoke`, `construct`, `inherit`, `implement`, `override`, `attribute`, `nameof`, and `typeof`.
+- `--group-by <group>`: adds grouped summaries. Can be specified more than once or as comma-separated values. Supported values are `file`, `project`, `containing-symbol`, `usage-kind`, and `test-vs-production`.
 - `--limit <number>`: limits the number of reference locations returned. `totalMatches` reports the location count before truncation.
 
 Result shape:
@@ -1820,6 +2292,12 @@ Result shape:
   "column": 37,
   "limit": 10,
   "totalMatches": 1,
+  "usageKindCounts": [
+    {
+      "usageKind": "construct",
+      "count": 1
+    }
+  ],
   "project": {
     "filter": "navlyn",
     "name": "navlyn",
@@ -1837,6 +2315,7 @@ Result shape:
       "column": 37,
       "endLine": 31,
       "endColumn": 49,
+      "usageKind": "construct",
       "containingSymbol": {
         "name": "CreateRootCommand",
         "kind": "Method",
@@ -1855,6 +2334,7 @@ Result shape:
 
 Symbols with no source references return an empty `references` array. Reference output is ordered deterministically by path, line, column, endLine, and endColumn.
 Each source reference includes additive semantic `containingSymbol` context when Roslyn can resolve the enclosing source symbol.
+Each source reference includes additive `usageKind`. Usage kind is a bounded source-level classification, not flow-sensitive runtime proof. `totalMatches` and `usageKindCounts` are computed after result and usage-kind filters and before `--limit`. `groups` is emitted only when `--group-by` is provided and contains deterministic count summaries with a first reference location.
 Accessor keyword positions resolve references for the associated source property or event.
 `project` is emitted only when `--project` is provided.
 `excludeGenerated` is emitted only when `--exclude-generated` is provided.

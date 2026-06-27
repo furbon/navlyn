@@ -22,7 +22,8 @@ internal sealed record ContextPackOptions(
     int ImpactLimit,
     int DiffDiagnosticLimit,
     int RelatedTestLimit,
-    int Depth);
+    int Depth,
+    string? ChangeKind = null);
 
 internal sealed record ContextPackResult(
     string Workspace,
@@ -30,6 +31,8 @@ internal sealed record ContextPackResult(
     string Command,
     string Mode,
     string Goal,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? ChangeKind,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     object? Projects,
     bool ExcludeGenerated,
@@ -214,7 +217,13 @@ internal sealed record ContextPackNextAction(
     int? Line,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     int? Column,
-    string Reason);
+    string Reason,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? CandidateId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? McpTool = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyDictionary<string, object?>? Arguments = null);
 
 internal sealed record ContextPackMaterial(
     ContextPackItem Item,

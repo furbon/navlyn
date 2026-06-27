@@ -87,7 +87,21 @@ internal static partial class BatchCommand
         int Column,
         Project? Project,
         ProjectFilterOutput? ProjectFilter,
-        bool ExcludeGenerated);
+        bool ExcludeGenerated,
+        CandidateSelectionInput? SelectionInput);
+
+    private sealed record SourcePositionBatchResolution(SourcePositionBatchOptions? Options, BatchError? Error)
+    {
+        public static SourcePositionBatchResolution Succeeded(SourcePositionBatchOptions options)
+        {
+            return new SourcePositionBatchResolution(options, Error: null);
+        }
+
+        public static SourcePositionBatchResolution Failed(BatchError error)
+        {
+            return new SourcePositionBatchResolution(Options: null, error);
+        }
+    }
 
     private sealed record NavigationResultBatchOptions(
         NavigationResultFilter Filter,
@@ -254,6 +268,8 @@ internal static partial class BatchCommand
         int Column,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         ProjectFilterOutput? Project,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        CandidateSelectionInput? SelectionInput,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         bool ExcludeGenerated,
         SymbolAtSymbolResult Symbol);
@@ -275,6 +291,8 @@ internal static partial class BatchCommand
         int Column,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         ProjectFilterOutput? Project,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        CandidateSelectionInput? SelectionInput,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         bool ExcludeGenerated,
         SymbolInfoSymbol Symbol,
@@ -316,6 +334,8 @@ internal static partial class BatchCommand
         int Column,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         ProjectFilterOutput? Project,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        CandidateSelectionInput? SelectionInput,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         bool ExcludeGenerated,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
@@ -330,17 +350,26 @@ internal static partial class BatchCommand
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         ProjectFilterOutput? Project,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        CandidateSelectionInput? SelectionInput,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         IReadOnlyList<ProjectFilterOutput>? ResultProjects,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         IReadOnlyList<string>? ResultPaths,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         IReadOnlyList<string>? ResultKinds,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        IReadOnlyList<string>? UsageKinds,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        IReadOnlyList<string>? GroupBy,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         bool ExcludeGenerated,
         int? Limit,
         int TotalMatches,
+        IReadOnlyList<ReferenceUsageCount> UsageKindCounts,
         SourceSymbolResult Symbol,
-        IReadOnlyList<ReferenceLocationResult> References);
+        IReadOnlyList<ReferenceLocationResult> References,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        IReadOnlyList<ReferenceUsageGroup>? Groups);
 
     private sealed record ImplementationsResult(
         string File,
@@ -348,6 +377,8 @@ internal static partial class BatchCommand
         int Column,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         ProjectFilterOutput? Project,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        CandidateSelectionInput? SelectionInput,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         IReadOnlyList<ProjectFilterOutput>? ResultProjects,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -367,6 +398,8 @@ internal static partial class BatchCommand
         int Column,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         ProjectFilterOutput? Project,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        CandidateSelectionInput? SelectionInput,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         bool ExcludeGenerated,
         HierarchySymbol Symbol,
@@ -384,6 +417,8 @@ internal static partial class BatchCommand
         int Column,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         ProjectFilterOutput? Project,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        CandidateSelectionInput? SelectionInput,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         IReadOnlyList<ProjectFilterOutput>? ResultProjects,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -403,6 +438,8 @@ internal static partial class BatchCommand
         int Column,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         ProjectFilterOutput? Project,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        CandidateSelectionInput? SelectionInput,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         IReadOnlyList<ProjectFilterOutput>? ResultProjects,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -439,6 +476,7 @@ internal static partial class BatchCommand
         int Column,
         int EndLine,
         int EndColumn,
+        string UsageKind,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         SourceSymbolLocationResult? ContainingSymbol);
 

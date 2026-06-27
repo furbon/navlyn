@@ -102,10 +102,28 @@ internal sealed record NavlynMcpServerOptions(
             return false;
         }
 
-        string fullWorkspace = Path.GetFullPath(workspace);
-        string effectiveWorkingDirectory = string.IsNullOrWhiteSpace(workingDirectory)
-            ? FindRepositoryRoot(Path.GetDirectoryName(fullWorkspace) ?? Directory.GetCurrentDirectory()) ?? Directory.GetCurrentDirectory()
-            : Path.GetFullPath(workingDirectory);
+        bool autoWorkspace = string.Equals(workspace.Trim(), "auto", StringComparison.Ordinal);
+        string effectiveWorkingDirectory;
+        string fullWorkspace;
+        if (autoWorkspace)
+        {
+            effectiveWorkingDirectory = string.IsNullOrWhiteSpace(workingDirectory)
+                ? FindRepositoryRoot(Directory.GetCurrentDirectory()) ?? Directory.GetCurrentDirectory()
+                : Path.GetFullPath(workingDirectory);
+            if (!TryResolveAutoWorkspace(effectiveWorkingDirectory, out fullWorkspace, out error))
+            {
+                options = CreateEmpty();
+                return false;
+            }
+        }
+        else
+        {
+            fullWorkspace = Path.GetFullPath(workspace);
+            effectiveWorkingDirectory = string.IsNullOrWhiteSpace(workingDirectory)
+                ? FindRepositoryRoot(Path.GetDirectoryName(fullWorkspace) ?? Directory.GetCurrentDirectory()) ?? Directory.GetCurrentDirectory()
+                : Path.GetFullPath(workingDirectory);
+        }
+
         string workspaceArgument = File.Exists(fullWorkspace) || Directory.Exists(Path.GetDirectoryName(fullWorkspace))
             ? Path.GetRelativePath(effectiveWorkingDirectory, fullWorkspace)
             : workspace;
@@ -125,10 +143,10 @@ internal sealed record NavlynMcpServerOptions(
     public static string GetUsage()
     {
         StringBuilder builder = new();
-        builder.AppendLine("Usage: navlyn-mcp --workspace <path> [options]");
+        builder.AppendLine("Usage: navlyn-mcp --workspace <path|auto> [options]");
         builder.AppendLine();
         builder.AppendLine("Options:");
-        builder.AppendLine("  --workspace <path>             Required .slnx, .sln, or .csproj path.");
+        builder.AppendLine("  --workspace <path|auto>        Required .slnx, .sln, or .csproj path, or auto to discover one.");
         builder.AppendLine("  --navlyn-executable <command>  Navlyn CLI command or executable. Defaults to navlyn.");
         builder.AppendLine("  --navlyn-arg <arg>             Prefix argument for local dev, repeatable.");
         builder.AppendLine("  --working-directory <path>     Child process working directory.");
@@ -198,6 +216,71 @@ internal sealed record NavlynMcpServerOptions(
         }
 
         return null;
+    }
+
+    private static bool TryResolveAutoWorkspace(
+        string searchDirectory,
+        out string workspace,
+        out string? error)
+    {
+        workspace = "";
+        if (!Directory.Exists(searchDirectory))
+        {
+            error = $"--workspace auto search directory does not exist: {searchDirectory}.";
+            return false;
+        }
+
+        IReadOnlyList<string> candidates = FindWorkspaceCandidates(searchDirectory);
+        if (candidates.Count == 0)
+        {
+            error = $"--workspace auto could not find a .slnx, .sln, or .csproj in {searchDirectory}.";
+            return false;
+        }
+
+        int bestRank = candidates.Min(GetWorkspaceCandidateRank);
+        IReadOnlyList<string> bestCandidates = [.. candidates.Where(candidate => GetWorkspaceCandidateRank(candidate) == bestRank)];
+        if (bestCandidates.Count > 1)
+        {
+            string candidateList = string.Join(", ", bestCandidates.Select(candidate => Path.GetRelativePath(searchDirectory, candidate).Replace('\\', '/')));
+            error = $"--workspace auto found multiple workspace candidates: {candidateList}. Pass --workspace explicitly.";
+            return false;
+        }
+
+        workspace = bestCandidates[0];
+        error = null;
+        return true;
+    }
+
+    private static IReadOnlyList<string> FindWorkspaceCandidates(string searchDirectory)
+    {
+        return [.. Directory.EnumerateFiles(searchDirectory, "*", SearchOption.TopDirectoryOnly)
+            .Where(IsWorkspaceCandidate)
+            .OrderBy(GetWorkspaceCandidateRank)
+            .ThenBy(path => Path.GetRelativePath(searchDirectory, path), StringComparer.OrdinalIgnoreCase)];
+    }
+
+    private static bool IsWorkspaceCandidate(string path)
+    {
+        string extension = Path.GetExtension(path);
+        return extension.Equals(".slnx", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".sln", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".csproj", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int GetWorkspaceCandidateRank(string path)
+    {
+        string extension = Path.GetExtension(path);
+        if (extension.Equals(".slnx", StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
+        if (extension.Equals(".sln", StringComparison.OrdinalIgnoreCase))
+        {
+            return 1;
+        }
+
+        return 2;
     }
 
     private static NavlynMcpServerOptions CreateEmpty()

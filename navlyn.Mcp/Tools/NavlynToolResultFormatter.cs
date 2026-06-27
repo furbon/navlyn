@@ -13,7 +13,7 @@ internal static class NavlynToolResultFormatter
 
     public static CallToolResult ToCallToolResult(NavlynToolResult result)
     {
-        string json = JsonSerializer.Serialize(result, JsonOptions);
+        string json = ToJson(result);
         using JsonDocument document = JsonDocument.Parse(json);
         return new CallToolResult
         {
@@ -27,5 +27,10 @@ internal static class NavlynToolResultFormatter
                 }
             ]
         };
+    }
+
+    public static string ToJson(NavlynToolResult result)
+    {
+        return JsonSerializer.Serialize(result, JsonOptions);
     }
 }

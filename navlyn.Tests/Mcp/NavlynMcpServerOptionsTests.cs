@@ -52,6 +52,81 @@ public sealed class NavlynMcpServerOptionsTests
     }
 
     [Fact]
+    public void TryParse_WorkspaceAuto_SelectsSingleTopLevelSlnx()
+    {
+        using TemporaryDirectory temp = TemporaryDirectory.Create();
+        string workspace = Path.Combine(temp.Path, "sample.slnx");
+        File.WriteAllText(workspace, "");
+
+        bool valid = NavlynMcpServerOptions.TryParse(
+            ["--workspace", "auto", "--working-directory", temp.Path],
+            out NavlynMcpServerOptions options,
+            out string? error,
+            out bool showHelp);
+
+        Assert.True(valid);
+        Assert.Null(error);
+        Assert.False(showHelp);
+        Assert.Equal(workspace, options.Workspace);
+        Assert.Equal("sample.slnx", options.WorkspaceArgument);
+        Assert.Equal(temp.Path, options.WorkingDirectory);
+    }
+
+    [Fact]
+    public void TryParse_WorkspaceAuto_PrefersSingleSlnxOverCsproj()
+    {
+        using TemporaryDirectory temp = TemporaryDirectory.Create();
+        string workspace = Path.Combine(temp.Path, "sample.slnx");
+        File.WriteAllText(workspace, "");
+        File.WriteAllText(Path.Combine(temp.Path, "sample.csproj"), "");
+
+        bool valid = NavlynMcpServerOptions.TryParse(
+            ["--workspace", "auto", "--working-directory", temp.Path],
+            out NavlynMcpServerOptions options,
+            out string? error,
+            out _);
+
+        Assert.True(valid);
+        Assert.Null(error);
+        Assert.Equal(workspace, options.Workspace);
+        Assert.Equal("sample.slnx", options.WorkspaceArgument);
+    }
+
+    [Fact]
+    public void TryParse_WorkspaceAuto_NoCandidatesReturnsUsageError()
+    {
+        using TemporaryDirectory temp = TemporaryDirectory.Create();
+
+        bool valid = NavlynMcpServerOptions.TryParse(
+            ["--workspace", "auto", "--working-directory", temp.Path],
+            out _,
+            out string? error,
+            out bool showHelp);
+
+        Assert.False(valid);
+        Assert.Contains("--workspace auto could not find", error);
+        Assert.False(showHelp);
+    }
+
+    [Fact]
+    public void TryParse_WorkspaceAuto_MultipleBestCandidatesReturnsUsageError()
+    {
+        using TemporaryDirectory temp = TemporaryDirectory.Create();
+        File.WriteAllText(Path.Combine(temp.Path, "a.slnx"), "");
+        File.WriteAllText(Path.Combine(temp.Path, "b.slnx"), "");
+
+        bool valid = NavlynMcpServerOptions.TryParse(
+            ["--workspace", "auto", "--working-directory", temp.Path],
+            out _,
+            out string? error,
+            out _);
+
+        Assert.False(valid);
+        Assert.Contains("a.slnx, b.slnx", error);
+        Assert.Contains("Pass --workspace explicitly.", error);
+    }
+
+    [Fact]
     public void TryParse_MissingWorkspace_ReturnsUsageError()
     {
         bool valid = NavlynMcpServerOptions.TryParse(
@@ -79,5 +154,30 @@ public sealed class NavlynMcpServerOptionsTests
         }
 
         throw new InvalidOperationException("Could not find repository root.");
+    }
+
+    private sealed class TemporaryDirectory : IDisposable
+    {
+        private TemporaryDirectory(string path)
+        {
+            Path = path;
+        }
+
+        public string Path { get; }
+
+        public static TemporaryDirectory Create()
+        {
+            string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "navlyn-mcp-options-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(path);
+            return new TemporaryDirectory(path);
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Path))
+            {
+                Directory.Delete(Path, recursive: true);
+            }
+        }
     }
 }

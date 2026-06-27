@@ -51,6 +51,7 @@ internal static class DefinitionCommand
             Line: resolution.Line,
             Column: resolution.Column,
             Project: options.ProjectFilter is null ? null : ProjectFilterOutput.FromAppliedFilter(options.ProjectFilter),
+            SelectionInput: options.SelectionInput,
             ExcludeGenerated: options.ExcludeGenerated,
             IncludeMetadata: includeMetadata,
             Symbol: new DefinitionSymbolResult(
@@ -74,6 +75,8 @@ internal static class DefinitionCommand
         int Column,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         ProjectFilterOutput? Project,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        CandidateSelectionInput? SelectionInput,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         bool ExcludeGenerated,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]

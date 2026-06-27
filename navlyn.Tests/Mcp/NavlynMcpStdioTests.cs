@@ -52,7 +52,20 @@ public sealed class NavlynMcpStdioTests
         IList<McpClientTool> tools = await client.ListToolsAsync(cancellationToken: timeout.Token);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.WorkspaceSummaryTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.FindSymbolTool);
+        Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.ExactNavigationTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.BatchTool);
+        McpClientTool workspaceTool = Assert.Single(tools, tool => tool.Name == NavlynMcpTools.WorkspaceSummaryTool);
+        Assert.NotNull(workspaceTool.ReturnJsonSchema);
+
+        IList<McpClientResource> resources = await client.ListResourcesAsync(cancellationToken: timeout.Token);
+        Assert.Contains(resources, resource => resource.Uri == "navlyn://workspace/summary");
+
+        IList<McpClientResourceTemplate> resourceTemplates = await client.ListResourceTemplatesAsync(cancellationToken: timeout.Token);
+        Assert.Contains(resourceTemplates, resource => resource.UriTemplate == "navlyn://symbol/{candidateId}");
+
+        IList<McpClientPrompt> prompts = await client.ListPromptsAsync(cancellationToken: timeout.Token);
+        Assert.Contains(prompts, prompt => prompt.Name == "navlyn_understand_symbol");
+        Assert.Contains(prompts, prompt => prompt.Name == "navlyn_prepare_edit");
 
         CallToolResult result = await client.CallToolAsync(
             NavlynMcpTools.WorkspaceSummaryTool,
@@ -69,6 +82,23 @@ public sealed class NavlynMcpStdioTests
         Assert.True(structured.GetProperty("ok").GetBoolean());
         Assert.Equal(NavlynMcpTools.WorkspaceSummaryTool, structured.GetProperty("tool").GetString());
         Assert.Equal("repo-graph", structured.GetProperty("result").GetProperty("command").GetString());
+
+        ReadResourceResult resourceResult = await client.ReadResourceAsync("navlyn://workspace/summary", cancellationToken: timeout.Token);
+        Assert.NotEmpty(resourceResult.Contents);
+        TextResourceContents resourceText = Assert.IsType<TextResourceContents>(resourceResult.Contents[0]);
+        using JsonDocument resourceJson = JsonDocument.Parse(resourceText.Text);
+        Assert.True(resourceJson.RootElement.GetProperty("ok").GetBoolean());
+        Assert.Equal("repo-graph", resourceJson.RootElement.GetProperty("result").GetProperty("command").GetString());
+
+        GetPromptResult promptResult = await client.GetPromptAsync(
+            "navlyn_prepare_edit",
+            new Dictionary<string, object?>
+            {
+                ["query"] = "CheckCommand",
+                ["changeKind"] = "behavior"
+            },
+            cancellationToken: timeout.Token);
+        Assert.NotEmpty(promptResult.Messages);
 
         CallToolResult errorResult = await client.CallToolAsync(
             NavlynMcpTools.FindSymbolTool,

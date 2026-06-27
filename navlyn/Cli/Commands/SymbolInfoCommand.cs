@@ -42,6 +42,7 @@ internal static class SymbolInfoCommand
             Line: resolution.Line,
             Column: resolution.Column,
             Project: options.ProjectFilter is null ? null : ProjectFilterOutput.FromAppliedFilter(options.ProjectFilter),
+            SelectionInput: options.SelectionInput,
             ExcludeGenerated: options.ExcludeGenerated,
             Symbol: resolution.Symbol,
             Expression: resolution.Expression,
@@ -60,6 +61,8 @@ internal static class SymbolInfoCommand
         int Column,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         ProjectFilterOutput? Project,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        CandidateSelectionInput? SelectionInput,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         bool ExcludeGenerated,
         SymbolInfoSymbol Symbol,

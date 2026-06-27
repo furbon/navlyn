@@ -75,7 +75,11 @@ internal sealed class FuzzyDiscoveryResolver
                 CandidateResults: null,
                 Truncated: references.Truncated,
                 SelectionInput: envelope.SelectionInput,
-                SelectionExplanation: envelope.SelectionExplanation);
+                SelectionExplanation: envelope.SelectionExplanation,
+                UsageKinds: locationOptions.UsageKinds.Count == 0 ? null : locationOptions.UsageKinds,
+                GroupBy: locationOptions.GroupBy.Count == 0 ? null : locationOptions.GroupBy,
+                UsageKindCounts: references.UsageKindCounts,
+                Groups: references.Groups);
         }
 
         IReadOnlyList<FuzzyCandidateReferenceSummary>? candidateResults = resolution.Confidence == "ambiguous"
@@ -109,7 +113,9 @@ internal sealed class FuzzyDiscoveryResolver
             CandidateResults: candidateResults,
             Truncated: null,
             SelectionInput: envelope.SelectionInput,
-            SelectionExplanation: envelope.SelectionExplanation);
+            SelectionExplanation: envelope.SelectionExplanation,
+            UsageKinds: locationOptions.UsageKinds.Count == 0 ? null : locationOptions.UsageKinds,
+            GroupBy: locationOptions.GroupBy.Count == 0 ? null : locationOptions.GroupBy);
     }
 
     public async Task<FuzzyAboutResult> AboutAsync(
@@ -712,10 +718,55 @@ internal sealed class FuzzyDiscoveryResolver
         }
 
         return [
-            new FuzzyNextAction("definition", workspace, Query: null, File: candidate.Path, Line: candidate.Line, Column: candidate.Column, Reason: "inspect-selected-definition"),
-            new FuzzyNextAction("references", workspace, Query: null, File: candidate.Path, Line: candidate.Line, Column: candidate.Column, Reason: "inspect-selected-references"),
-            new FuzzyNextAction("about", workspace, Query: candidate.Name, File: null, Line: null, Column: null, Reason: "summarize-selected-symbol")
+            new FuzzyNextAction(
+                "definition",
+                workspace,
+                Query: null,
+                File: candidate.Path,
+                Line: candidate.Line,
+                Column: candidate.Column,
+                Reason: "inspect-selected-definition",
+                CandidateId: candidate.CandidateId,
+                McpTool: "navlyn_exact_navigation",
+                Arguments: CreateMcpArguments(("operation", "definition"), ("candidateId", candidate.CandidateId))),
+            new FuzzyNextAction(
+                "references",
+                workspace,
+                Query: null,
+                File: candidate.Path,
+                Line: candidate.Line,
+                Column: candidate.Column,
+                Reason: "inspect-selected-references",
+                CandidateId: candidate.CandidateId,
+                McpTool: "navlyn_exact_navigation",
+                Arguments: CreateMcpArguments(("operation", "references"), ("candidateId", candidate.CandidateId))),
+            new FuzzyNextAction(
+                "about",
+                workspace,
+                Query: candidate.Name,
+                File: null,
+                Line: null,
+                Column: null,
+                Reason: "summarize-selected-symbol",
+                CandidateId: candidate.CandidateId,
+                McpTool: "navlyn_about_symbol",
+                Arguments: CreateMcpArguments(("candidateId", candidate.CandidateId)))
         ];
+    }
+
+    private static IReadOnlyDictionary<string, object?>? CreateMcpArguments(
+        params (string Key, object? Value)[] values)
+    {
+        Dictionary<string, object?> arguments = [];
+        foreach ((string key, object? value) in values)
+        {
+            if (value is not null)
+            {
+                arguments[key] = value;
+            }
+        }
+
+        return arguments.Count == 0 ? null : arguments;
     }
 
     private static async Task<IReadOnlyList<FuzzyCandidateReferenceSummary>> ResolveCandidateReferenceSummariesAsync(
@@ -762,7 +813,10 @@ internal sealed class FuzzyDiscoveryResolver
             return new FuzzyReferenceSummary(0, options.Limit, false, [], []);
         }
 
-        IReadOnlyList<FuzzySourceLocation> references = [.. result.Resolution!.References
+        IReadOnlyList<SymbolReferenceLocation> filteredReferences = [.. result.Resolution!.References
+            .Where(reference => options.UsageKinds.Count == 0 || options.UsageKinds.Contains(reference.UsageKind, StringComparer.Ordinal))];
+
+        IReadOnlyList<FuzzySourceLocation> references = [.. filteredReferences
             .Take(options.Limit)
             .Select(reference => new FuzzySourceLocation(
                 Path: reference.Path,
@@ -784,15 +838,17 @@ internal sealed class FuzzyDiscoveryResolver
                         EndColumn: reference.ContainingSymbol.EndColumn),
                 Snippet: options.IncludeSnippets
                     ? FuzzySnippetReader.TryRead(reference.Path, reference.Line, options.SnippetLines)
-                    : null))];
+                    : null,
+                UsageKind: reference.UsageKind))];
 
-        IReadOnlyList<FuzzyReferenceFileSummary> files = [.. result.Resolution.References
+        IReadOnlyList<FuzzyReferenceFileSummary> files = [.. filteredReferences
             .GroupBy(reference => reference.Path)
             .Select(group => new FuzzyReferenceFileSummary(
                 Path: group.Key,
                 ReferenceCount: group.Count(),
                 FirstLine: group.Min(reference => reference.Line),
                 Reasons: ["references-selected-symbol"],
+                UsageKindCounts: ReferenceUsageTaxonomy.CreateCounts([.. group]),
                 Snippet: options.IncludeSnippets
                     ? FuzzySnippetReader.TryRead(group.Key, group.Min(reference => reference.Line), options.SnippetLines)
                     : null))
@@ -801,11 +857,13 @@ internal sealed class FuzzyDiscoveryResolver
             .Take(options.FileLimit)];
 
         return new FuzzyReferenceSummary(
-            result.Resolution.References.Count,
+            filteredReferences.Count,
             options.Limit,
-            result.Resolution.References.Count > references.Count,
+            filteredReferences.Count > references.Count,
             references,
-            files);
+            files,
+            UsageKindCounts: ReferenceUsageTaxonomy.CreateCounts(filteredReferences),
+            Groups: ReferenceUsageTaxonomy.CreateGroups(filteredReferences, options.GroupBy));
     }
 
     private static async Task<FuzzyMemberSummary?> ResolveMembersAsync(
@@ -1428,7 +1486,14 @@ internal sealed record FuzzyLocationOptions(
     int FileLimit,
     bool IncludeSnippets,
     int SnippetLines,
-    bool ExcludeGenerated = false);
+    bool ExcludeGenerated = false,
+    IReadOnlyList<string>? UsageKindFilters = null,
+    IReadOnlyList<string>? GroupByValues = null)
+{
+    public IReadOnlyList<string> UsageKinds { get; } = UsageKindFilters ?? [];
+
+    public IReadOnlyList<string> GroupBy { get; } = GroupByValues ?? [];
+}
 
 internal sealed record FuzzyAboutOptions(
     int MemberLimit,
@@ -1542,7 +1607,15 @@ internal sealed record FuzzyWhereUsedResult(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     FuzzySelectionInput? SelectionInput = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    FuzzySelectionExplanation? SelectionExplanation = null);
+    FuzzySelectionExplanation? SelectionExplanation = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<string>? UsageKinds = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<string>? GroupBy = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<ReferenceUsageCount>? UsageKindCounts = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<ReferenceUsageGroup>? Groups = null);
 
 internal sealed record FuzzyAboutResult(
     string Query,
@@ -1698,14 +1771,20 @@ internal sealed record FuzzySourceLocation(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     FuzzySymbolLocation? ContainingSymbol,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    FuzzySnippet? Snippet);
+    FuzzySnippet? Snippet,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? UsageKind = null);
 
 internal sealed record FuzzyReferenceSummary(
     int TotalMatches,
     int Limit,
     bool Truncated,
     IReadOnlyList<FuzzySourceLocation> References,
-    IReadOnlyList<FuzzyReferenceFileSummary> Files);
+    IReadOnlyList<FuzzyReferenceFileSummary> Files,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<ReferenceUsageCount>? UsageKindCounts = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<ReferenceUsageGroup>? Groups = null);
 
 internal sealed record FuzzyReferenceFileSummary(
     string Path,
@@ -1713,7 +1792,9 @@ internal sealed record FuzzyReferenceFileSummary(
     int FirstLine,
     IReadOnlyList<string> Reasons,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    FuzzySnippet? Snippet);
+    IReadOnlyList<ReferenceUsageCount>? UsageKindCounts = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    FuzzySnippet? Snippet = null);
 
 internal sealed record FuzzyCandidateReferenceSummary(
     FuzzySymbolCandidate Candidate,
@@ -1792,7 +1873,13 @@ internal sealed record FuzzyNextAction(
     int? Line,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     int? Column,
-    string Reason);
+    string Reason,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? CandidateId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? McpTool = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyDictionary<string, object?>? Arguments = null);
 
 internal sealed record FuzzySnippet(int StartLine, int EndLine, IReadOnlyList<string> Lines);
 

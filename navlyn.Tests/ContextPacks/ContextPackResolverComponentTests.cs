@@ -22,6 +22,7 @@ public sealed class ContextPackResolverComponentTests(ResolverComponentTestFixtu
         Assert.Equal("definition", first.Kind);
         Assert.Equal("selected-symbol-definition", Assert.Single(first.ReasonCodes));
         Assert.NotNull(first.Content);
+        Assert.Contains(result.NextActions, action => action.Command == "references" && action.McpTool == "navlyn_exact_navigation");
     }
 
     [Fact]
@@ -36,7 +37,34 @@ public sealed class ContextPackResolverComponentTests(ResolverComponentTestFixtu
         Assert.Contains(result.NextActions, action => action.Command == "find");
     }
 
-    private async Task<ContextPackResult> ResolveQueryAsync(string query, IReadOnlyList<string> assumeKinds)
+    [Fact]
+    public async Task ResolveQueryAsync_ChangeKindSignature_IsPreserved()
+    {
+        ContextPackResult result = await ResolveQueryAsync("EnemyManagerTools", ["NamedType"], changeKind: "signature");
+
+        Assert.Equal("signature", result.ChangeKind);
+        Assert.Equal("definition", result.Pack.Items[0].Kind);
+    }
+
+    [Fact]
+    public async Task ResolveQueryAsync_CandidateId_ReportsCandidateIdMode()
+    {
+        ContextPackResult queryResult = await ResolveQueryAsync("EnemyManagerTools", ["NamedType"]);
+        string? candidateId = queryResult.Selection!.SelectedCandidate!.CandidateId;
+        Assert.False(string.IsNullOrWhiteSpace(candidateId));
+
+        ContextPackResult result = await ResolveQueryAsync(candidateId!, [], candidateId: candidateId);
+
+        Assert.Equal("candidateId", result.Mode);
+        Assert.Equal("candidateId", result.Selection!.SelectionInput!.Mode);
+        Assert.Equal(candidateId, result.Selection.SelectionInput.CandidateId);
+    }
+
+    private async Task<ContextPackResult> ResolveQueryAsync(
+        string query,
+        IReadOnlyList<string> assumeKinds,
+        string? candidateId = null,
+        string? changeKind = null)
     {
         ContextPackOptions options = new(
             Goal: "understand",
@@ -54,7 +82,8 @@ public sealed class ContextPackResolverComponentTests(ResolverComponentTestFixtu
             ImpactLimit: 10,
             DiffDiagnosticLimit: 10,
             RelatedTestLimit: 10,
-            Depth: 2);
+            Depth: 2,
+            ChangeKind: changeKind);
 
         return await new ContextPackResolver().ResolveQueryAsync(
             fixture.FuzzyDiscoveryWorkspace,
@@ -64,7 +93,8 @@ public sealed class ContextPackResolverComponentTests(ResolverComponentTestFixtu
                 Match: "smart",
                 CaseSensitive: null,
                 ExcludeGenerated: true,
-                Limit: options.CandidateLimit),
+                Limit: options.CandidateLimit,
+                CandidateId: candidateId),
             fixture.FuzzyDiscoveryWorkspace.Solution.Projects.ToArray(),
             projectFilters: null,
             excludeGenerated: true,

@@ -28,4 +28,16 @@ internal sealed class NavlynMcpToolService(
             command.StandardInput,
             cancellationToken);
     }
+
+    public NavlynToolResult CreateInvalidArgumentResult(
+        string toolName,
+        string source,
+        string message)
+    {
+        return NavlynToolResult.Failed(
+            toolName,
+            new NavlynSourceCommand(source, []),
+            options.WorkspaceArgument,
+            new NavlynToolError("NAVLYN_MCP_INVALID_ARGUMENT", message));
+    }
 }

@@ -154,6 +154,15 @@ try {
     Assert-Equal -Name 'candidate roundtrip selected' -Actual $candidateRoundTripJson.selectedCandidate.name -Expected 'EnemyManagerTools'
     Assert-Equal -Name 'candidate roundtrip selection mode' -Actual $candidateRoundTripJson.selectionInput.mode -Expected 'candidateId'
 
+    $candidateDefinition = Invoke-Navlyn `
+        -Name 'definition candidate id roundtrip' `
+        -Arguments @('definition', '--workspace', $FixtureProject, '--candidate-id', $findUniqueJson.selectedCandidate.candidateId)
+    $candidateDefinitionJson = $candidateDefinition.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'candidate definition selection mode' -Actual $candidateDefinitionJson.selectionInput.mode -Expected 'candidateId'
+    Assert-Equal -Name 'candidate definition id' -Actual $candidateDefinitionJson.selectionInput.candidateId -Expected $findUniqueJson.selectedCandidate.candidateId
+    Assert-Equal -Name 'candidate definition symbol' -Actual $candidateDefinitionJson.symbol.name -Expected 'EnemyManagerTools'
+    Assert-Equal -Name 'candidate definition path' -Actual @($candidateDefinitionJson.definitions)[0].path -Expected 'tests/fixtures/FuzzyDiscoveryFixture/FixtureCode.cs'
+
     $findAmbiguous = Invoke-Navlyn `
         -Name 'find ambiguous exact' `
         -Arguments @('find', '--workspace', $FixtureProject, '--query', 'EnemyManager', '--assume-kind', 'NamedType')
@@ -216,6 +225,15 @@ try {
     Assert-Equal -Name 'where-used containing symbol' -Actual (@($whereUsedJson.references)[0].containingSymbol.kind -eq 'Method') -Expected $true
     Assert-Equal -Name 'where-used reference has span' -Actual (@($whereUsedJson.references)[0].endColumn -gt @($whereUsedJson.references)[0].column) -Expected $true
     Assert-Equal -Name 'where-used containing symbol has span' -Actual (@($whereUsedJson.references)[0].containingSymbol.endColumn -gt @($whereUsedJson.references)[0].containingSymbol.column) -Expected $true
+    Assert-Equal -Name 'where-used usage kind' -Actual (@($whereUsedJson.references)[0].usageKind) -Expected 'invoke'
+
+    $whereUsedGrouped = Invoke-Navlyn `
+        -Name 'where-used usage kind grouping' `
+        -Arguments @('where-used', '--workspace', $FixtureProject, '--query', 'Spawn', '--assume-kind', 'Method', '--limit', '5', '--usage-kind', 'invoke', '--group-by', 'usage-kind')
+    $whereUsedGroupedJson = $whereUsedGrouped.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'where-used grouped total matches' -Actual $whereUsedGroupedJson.totalMatches -Expected 2
+    Assert-Equal -Name 'where-used grouped usage count' -Actual @($whereUsedGroupedJson.usageKindCounts)[0].count -Expected 2
+    Assert-Equal -Name 'where-used grouped key' -Actual @($whereUsedGroupedJson.groups)[0].key -Expected 'invoke'
 
     $whereUsedSnippet = Invoke-Navlyn `
         -Name 'where-used snippets' `

@@ -47,6 +47,7 @@ internal sealed class ContextPackResolver
             Alternatives: about.Alternatives,
             SelectionInput: about.SelectionInput,
             SelectionExplanation: about.SelectionExplanation);
+        string mode = queryOptions.CandidateId is null ? "query" : "candidateId";
 
         if (about.SelectedCandidate is null)
         {
@@ -58,7 +59,7 @@ internal sealed class ContextPackResolver
 
             return CreateResult(
                 workspace,
-                mode: "query",
+                mode,
                 options,
                 projectFilters,
                 excludeGenerated,
@@ -128,12 +129,13 @@ internal sealed class ContextPackResolver
 
         IReadOnlyList<ContextPackItem> rankedItems = RankAndDeduplicate(
             CreateQueryItems(about, related, diagnostics, options),
-            options.Goal);
+            options.Goal,
+            options.ChangeKind);
         ContextPackBudgetResult budget = new ContextPackBudgeter().Apply(
             rankedItems,
             options.BudgetTokens,
             options.ItemLimit,
-            CreateQueryOmittedNextAction(workspace.DisplayPath, about.SelectedCandidate.Name));
+            CreateQueryOmittedNextAction(workspace.DisplayPath, about.SelectedCandidate));
 
         ContextPack pack = new(
             Root: new ContextPackRoot("symbol", about.SelectedCandidate, TotalChangedSymbols: null, TotalChangedFiles: null),
@@ -143,7 +145,7 @@ internal sealed class ContextPackResolver
 
         return CreateResult(
             workspace,
-            mode: "query",
+            mode,
             options,
             projectFilters,
             excludeGenerated,
@@ -204,7 +206,8 @@ internal sealed class ContextPackResolver
 
         IReadOnlyList<ContextPackItem> rankedItems = RankAndDeduplicate(
             CreateDiffItems(review, options),
-            options.Goal);
+            options.Goal,
+            options.ChangeKind);
         ContextPackBudgetResult budget = new ContextPackBudgeter().Apply(
             rankedItems,
             options.BudgetTokens,
@@ -266,6 +269,7 @@ internal sealed class ContextPackResolver
             Command: "context-pack",
             Mode: mode,
             Goal: options.Goal,
+            ChangeKind: options.ChangeKind,
             Projects: projectFilters,
             ExcludeGenerated: excludeGenerated,
             Query: query,
@@ -522,11 +526,12 @@ internal sealed class ContextPackResolver
 
     private static IReadOnlyList<ContextPackItem> RankAndDeduplicate(
         IEnumerable<ContextPackItem> items,
-        string goal)
+        string goal,
+        string? changeKind)
     {
         return [.. items
             .GroupBy(item => item.Id, StringComparer.Ordinal)
-            .Select(group => group.First() with { Priority = Priority(group.First().Kind, goal) })
+            .Select(group => group.First() with { Priority = Priority(group.First().Kind, goal, changeKind) })
             .OrderBy(item => item.Priority)
             .ThenBy(item => item.SourceLocation?.Path, StringComparer.Ordinal)
             .ThenBy(item => item.SourceLocation?.Line)
@@ -537,8 +542,61 @@ internal sealed class ContextPackResolver
             .ThenBy(item => item.Id, StringComparer.Ordinal)];
     }
 
-    private static int Priority(string kind, string goal)
+    private static int Priority(string kind, string goal, string? changeKind)
     {
+        if (goal == "modify" && changeKind is not null)
+        {
+            return changeKind switch
+            {
+                "signature" or "public-api" => kind switch
+                {
+                    "definition" => 0,
+                    "member" => 1,
+                    "implementation" => 2,
+                    "reference" => 3,
+                    "caller" => 4,
+                    "diagnostic" => 5,
+                    _ => 20
+                },
+                "constructor" => kind switch
+                {
+                    "definition" => 0,
+                    "call" => 1,
+                    "reference" => 2,
+                    "caller" => 3,
+                    "diagnostic" => 4,
+                    _ => 20
+                },
+                "nullability" or "async" => kind switch
+                {
+                    "definition" => 0,
+                    "diagnostic" => 1,
+                    "reference" => 2,
+                    "caller" => 3,
+                    "call" => 4,
+                    _ => 20
+                },
+                "rename" => kind switch
+                {
+                    "definition" => 0,
+                    "reference" => 1,
+                    "related-file" => 2,
+                    "diagnostic" => 3,
+                    _ => 20
+                },
+                "di-registration" or "endpoint" => kind switch
+                {
+                    "definition" => 0,
+                    "caller" => 1,
+                    "call" => 2,
+                    "related-file" => 3,
+                    "diagnostic" => 4,
+                    _ => 20
+                },
+                _ => Priority(kind, goal, changeKind: null)
+            };
+        }
+
         return goal switch
         {
             "review" => kind switch
@@ -721,9 +779,39 @@ internal sealed class ContextPackResolver
     {
         return
         [
-            new ContextPackNextAction("about", workspace, selected.Name, null, null, null, "Inspect full semantic summary for the selected symbol."),
-            new ContextPackNextAction("impact", workspace, selected.Name, null, null, null, "Inspect static impact for the selected symbol."),
-            new ContextPackNextAction("where-used", workspace, selected.Name, null, null, null, "Inspect references omitted from the context pack.")
+            new ContextPackNextAction(
+                "about",
+                workspace,
+                selected.Name,
+                null,
+                null,
+                null,
+                "Inspect full semantic summary for the selected symbol.",
+                CandidateId: selected.CandidateId,
+                McpTool: "navlyn_about_symbol",
+                Arguments: CreateMcpArguments(("candidateId", selected.CandidateId))),
+            new ContextPackNextAction(
+                "impact",
+                workspace,
+                selected.Name,
+                null,
+                null,
+                null,
+                "Inspect static impact for the selected symbol.",
+                CandidateId: selected.CandidateId,
+                McpTool: "navlyn_impact",
+                Arguments: CreateMcpArguments(("candidateId", selected.CandidateId))),
+            new ContextPackNextAction(
+                "references",
+                workspace,
+                selected.Name,
+                null,
+                null,
+                null,
+                "Inspect references omitted from the context pack.",
+                CandidateId: selected.CandidateId,
+                McpTool: "navlyn_exact_navigation",
+                Arguments: CreateMcpArguments(("operation", "references"), ("candidateId", selected.CandidateId)))
         ];
     }
 
@@ -735,6 +823,21 @@ internal sealed class ContextPackResolver
         [
             new ContextPackNextAction("find", workspace, query, null, null, null, "Resolve ambiguity before requesting a context pack.")
         ];
+    }
+
+    private static ContextPackNextAction CreateQueryOmittedNextAction(string workspace, FuzzySymbolCandidate selected)
+    {
+        return new ContextPackNextAction(
+            "about",
+            workspace,
+            selected.Name,
+            null,
+            null,
+            null,
+            "Inspect context material omitted from the context pack budget.",
+            CandidateId: selected.CandidateId,
+            McpTool: "navlyn_about_symbol",
+            Arguments: CreateMcpArguments(("candidateId", selected.CandidateId)));
     }
 
     private static ContextPackNextAction CreateQueryOmittedNextAction(string workspace, string query)
@@ -757,5 +860,20 @@ internal sealed class ContextPackResolver
             action.Line,
             action.Column,
             action.Reason))];
+    }
+
+    private static IReadOnlyDictionary<string, object?>? CreateMcpArguments(
+        params (string Key, object? Value)[] values)
+    {
+        Dictionary<string, object?> arguments = [];
+        foreach ((string key, object? value) in values)
+        {
+            if (value is not null)
+            {
+                arguments[key] = value;
+            }
+        }
+
+        return arguments.Count == 0 ? null : arguments;
     }
 }

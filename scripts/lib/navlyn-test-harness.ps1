@@ -52,14 +52,16 @@ function Invoke-CheckedProcess {
     $startInfo.Arguments = Join-ProcessArguments -Arguments $Arguments
 
     $process = [System.Diagnostics.Process]::Start($startInfo)
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
     if ($null -ne $StandardInput) {
         $process.StandardInput.Write($StandardInput)
         $process.StandardInput.Close()
     }
 
-    $stdout = $process.StandardOutput.ReadToEnd()
-    $stderr = $process.StandardError.ReadToEnd()
     $process.WaitForExit()
+    $stdout = $stdoutTask.GetAwaiter().GetResult()
+    $stderr = $stderrTask.GetAwaiter().GetResult()
     $exitCode = $process.ExitCode
 
     if ($exitCode -ne $ExpectedExitCode) {

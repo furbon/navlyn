@@ -20,6 +20,8 @@ internal static class WhereUsedCommand
         Option<string[]> projectOption = SharedOptions.CreateProjectFiltersOption();
         Option<bool> excludeGeneratedOption = SharedOptions.CreateExcludeGeneratedOption();
         Option<int?> limitOption = SharedOptions.CreateLimitOption();
+        Option<string[]> usageKindOption = ReferencesCommand.CreateUsageKindOption();
+        Option<string[]> groupByOption = ReferencesCommand.CreateGroupByOption();
         Option<bool> includeSnippetsOption = FuzzyCommandSupport.CreateIncludeSnippetsOption();
         Option<int?> snippetLinesOption = FuzzyCommandSupport.CreateSnippetLinesOption();
         Option<string> candidatePolicyOption = FuzzyCommandSupport.CreateCandidatePolicyOption("group");
@@ -29,7 +31,7 @@ internal static class WhereUsedCommand
         return WorkspaceCommand.Create(
             "where-used",
             "Resolve a fuzzy symbol query and list source references.",
-            [queryOption, candidateIdOption, assumeKindOption, matchOption, caseSensitiveOption, projectOption, excludeGeneratedOption, limitOption, includeSnippetsOption, snippetLinesOption, candidatePolicyOption, minConfidenceOption, explainSelectionOption],
+            [queryOption, candidateIdOption, assumeKindOption, matchOption, caseSensitiveOption, projectOption, excludeGeneratedOption, limitOption, usageKindOption, groupByOption, includeSnippetsOption, snippetLinesOption, candidatePolicyOption, minConfidenceOption, explainSelectionOption],
             (workspace, parseResult, cancellationToken) => ExecuteAsync(
                 workspace,
                 parseResult.GetValue(queryOption),
@@ -40,6 +42,8 @@ internal static class WhereUsedCommand
                 parseResult.GetValue(projectOption) ?? [],
                 parseResult.GetValue(excludeGeneratedOption),
                 parseResult.GetValue(limitOption),
+                parseResult.GetValue(usageKindOption) ?? [],
+                parseResult.GetValue(groupByOption) ?? [],
                 parseResult.GetValue(includeSnippetsOption),
                 parseResult.GetValue(snippetLinesOption),
                 parseResult.GetValue(candidatePolicyOption)!,
@@ -58,6 +62,8 @@ internal static class WhereUsedCommand
         IReadOnlyList<string> projectFilters,
         bool excludeGenerated,
         int? limit,
+        IReadOnlyList<string> usageKindValues,
+        IReadOnlyList<string> groupByValues,
         bool includeSnippets,
         int? snippetLines,
         string candidatePolicy,
@@ -69,6 +75,16 @@ internal static class WhereUsedCommand
         int snippetContext = snippetLines ?? FuzzyDiscoveryResolver.DefaultSnippetLines;
         if (!FuzzyCommandSupport.TryCreatePositiveOption("--limit", referenceLimit, out int exitCode) ||
             !FuzzyCommandSupport.TryCreateNonNegativeOption("--snippet-lines", snippetContext, out exitCode))
+        {
+            return exitCode;
+        }
+
+        if (!ReferencesCommand.TryNormalizeUsageOptions(
+            usageKindValues,
+            groupByValues,
+            out IReadOnlyList<string> usageKinds,
+            out IReadOnlyList<string> groupBy,
+            out exitCode))
         {
             return exitCode;
         }
@@ -104,7 +120,7 @@ internal static class WhereUsedCommand
         FuzzyWhereUsedResult result = await resolver.WhereUsedAsync(
             loadedWorkspace,
             options,
-            new FuzzyLocationOptions(referenceLimit, FuzzyDiscoveryResolver.DefaultReferenceFileLimit, includeSnippets, snippetContext, excludeGenerated),
+            new FuzzyLocationOptions(referenceLimit, FuzzyDiscoveryResolver.DefaultReferenceFileLimit, includeSnippets, snippetContext, excludeGenerated, usageKinds, groupBy),
             projects,
             projectOutputs,
             cancellationToken);

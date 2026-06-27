@@ -224,6 +224,28 @@ try {
     Assert-Equal -Name 'diagnostics filtered total before limit' -Actual $filteredJson.totalDiagnostics -Expected 4
     Assert-Equal -Name 'diagnostics filtered returned count' -Actual @($filteredJson.diagnostics).Count -Expected 1
 
+    $symbolDiagnostics = Invoke-Navlyn `
+        -Name 'symbol-diagnostics method scope' `
+        -Arguments @('symbol-diagnostics', '--workspace', $FixtureProjectPath, '--file', $FixtureDisplayPath, '--line', '5', '--column', '24', '--limit', '10') `
+        -ExpectedExitCode 0
+
+    $symbolDiagnosticsJson = $symbolDiagnostics.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'symbol-diagnostics symbol name' -Actual $symbolDiagnosticsJson.symbol.name -Expected 'Create'
+    Assert-Equal -Name 'symbol-diagnostics total' -Actual $symbolDiagnosticsJson.totalDiagnostics -Expected 1
+    Assert-Equal -Name 'symbol-diagnostics id' -Actual @($symbolDiagnosticsJson.diagnostics)[0].id -Expected 'CS0246'
+    Assert-Equal -Name 'symbol-diagnostics reason' -Actual (@(@($symbolDiagnosticsJson.diagnostics)[0].reasonCodes) -contains 'diagnostic-intersects-symbol-span') -Expected $true
+
+    $diagnosticPack = Invoke-Navlyn `
+        -Name 'diagnostic-pack id mode' `
+        -Arguments @('diagnostic-pack', '--workspace', $FixtureProjectPath, '--id', 'CS0246', '--exclude-generated', '--limit', '5') `
+        -ExpectedExitCode 0
+
+    $diagnosticPackJson = $diagnosticPack.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'diagnostic-pack mode' -Actual $diagnosticPackJson.input.mode -Expected 'id'
+    Assert-Equal -Name 'diagnostic-pack total' -Actual $diagnosticPackJson.totalDiagnostics -Expected 2
+    Assert-Equal -Name 'diagnostic-pack has context scope' -Actual ($null -ne $diagnosticPackJson.context.scope) -Expected $true
+    Assert-Equal -Name 'diagnostic-pack has source action' -Actual (@($diagnosticPackJson.nextActions | Where-Object { $_.command -eq 'symbol-source' }).Count -ge 1) -Expected $true
+
     $diagnosticsInvalidSeverity = Invoke-Navlyn `
         -Name 'diagnostics invalid severity' `
         -Arguments @('diagnostics', '--workspace', $FixtureProjectPath, '--severity', 'Bad') `

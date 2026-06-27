@@ -42,6 +42,7 @@ internal static class TypeHierarchyCommand
             Line: resolution.Line,
             Column: resolution.Column,
             Project: options.ProjectFilter is null ? null : ProjectFilterOutput.FromAppliedFilter(options.ProjectFilter),
+            SelectionInput: options.SelectionInput,
             ExcludeGenerated: options.ExcludeGenerated,
             Symbol: resolution.Symbol,
             BaseTypes: resolution.BaseTypes,
@@ -61,6 +62,8 @@ internal static class TypeHierarchyCommand
         int Column,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         ProjectFilterOutput? Project,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        CandidateSelectionInput? SelectionInput,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         bool ExcludeGenerated,
         HierarchySymbol Symbol,

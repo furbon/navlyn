@@ -43,6 +43,7 @@ internal static class ContextPackCommand
         Option<string[]> projectOption = SharedOptions.CreateProjectFiltersOption();
         Option<bool> excludeGeneratedOption = SharedOptions.CreateExcludeGeneratedOption();
         Option<string?> goalOption = CreateGoalOption();
+        Option<string?> changeKindOption = CreateChangeKindOption();
         Option<int?> budgetTokensOption = new("--budget-tokens")
         {
             Description = $"Approximate context material budget. Defaults to {DefaultBudgetTokens}."
@@ -103,6 +104,7 @@ internal static class ContextPackCommand
                 projectOption,
                 excludeGeneratedOption,
                 goalOption,
+                changeKindOption,
                 budgetTokensOption,
                 itemLimitOption,
                 snippetPolicyOption,
@@ -137,6 +139,7 @@ internal static class ContextPackCommand
                 parseResult.GetValue(projectOption) ?? [],
                 parseResult.GetValue(excludeGeneratedOption),
                 parseResult.GetValue(goalOption),
+                parseResult.GetValue(changeKindOption),
                 parseResult.GetValue(budgetTokensOption),
                 parseResult.GetValue(itemLimitOption),
                 parseResult.GetValue(snippetPolicyOption)!,
@@ -174,6 +177,7 @@ internal static class ContextPackCommand
         IReadOnlyList<string> projectFilters,
         bool excludeGenerated,
         string? goal,
+        string? changeKind,
         int? budgetTokens,
         int? itemLimit,
         string snippetPolicy,
@@ -215,6 +219,7 @@ internal static class ContextPackCommand
 
         ContextPackOptions options = CreateOptions(
             goal ?? (diff ? "review" : "understand"),
+            changeKind,
             budgetTokens,
             itemLimit,
             snippetPolicy,
@@ -278,6 +283,7 @@ internal static class ContextPackCommand
             {
                 mode = hasQuery ? "query" : "candidateId",
                 goal = options.Goal,
+                changeKind = options.ChangeKind,
                 projectFilters,
                 excludeGenerated,
                 options
@@ -310,9 +316,10 @@ internal static class ContextPackCommand
             mode = "diff",
             baseRef,
             headRef,
-            staged,
-            includeUnstaged,
-            projectFilters,
+                staged,
+                includeUnstaged,
+                changeKind = options.ChangeKind,
+                projectFilters,
             excludeGenerated,
             options
         }));
@@ -330,6 +337,17 @@ internal static class ContextPackCommand
         return option;
     }
 
+    private static Option<string?> CreateChangeKindOption()
+    {
+        Option<string?> option = new("--change-kind")
+        {
+            Description = "Context ranking hint for modify workflows: behavior, signature, rename, constructor, nullability, async, public-api, di-registration, or endpoint."
+        };
+
+        option.AcceptOnlyFromAmong("behavior", "signature", "rename", "constructor", "nullability", "async", "public-api", "di-registration", "endpoint");
+        return option;
+    }
+
     private static Option<string> CreateSnippetPolicyOption()
     {
         Option<string> option = new("--snippet-policy")
@@ -344,6 +362,7 @@ internal static class ContextPackCommand
 
     private static ContextPackOptions CreateOptions(
         string goal,
+        string? changeKind,
         int? budgetTokens,
         int? itemLimit,
         string snippetPolicy,
@@ -375,7 +394,8 @@ internal static class ContextPackCommand
             ImpactLimit: impactLimit ?? DefaultImpactLimit,
             DiffDiagnosticLimit: diagnosticLimit ?? DefaultDiffDiagnosticLimit,
             RelatedTestLimit: relatedTestLimit ?? DefaultRelatedTestLimit,
-            Depth: depth ?? DefaultDepth);
+            Depth: depth ?? DefaultDepth,
+            ChangeKind: changeKind);
     }
 
     private static bool ValidateOptions(ContextPackOptions options, bool diff, out int exitCode)
