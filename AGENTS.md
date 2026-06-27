@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Navlyn is a C#/.NET CLI for repository-local semantic code navigation. It is built for agents, automation, and developers who need stable JSON facts about C# workspaces.
+Navlyn is a C#/.NET CLI for repository-local semantic code navigation and investigation. It is built for agents, automation, and developers who need stable JSON facts about C# workspaces.
 
 Agents working here should make small, verifiable changes while preserving the public CLI contract documented in `docs/navlyn-cli-commands.md`.
 
@@ -15,15 +15,15 @@ Agents working here should make small, verifiable changes while preserving the p
 - Prefer Roslyn/MSBuild APIs for C# semantic behavior.
 - Keep command results on stdout and diagnostics, progress, and errors on stderr.
 - Prefer deterministic JSON for automation-facing output.
-- Normalize paths before comparing them and emit repository-relative paths where possible.
+- Normalize paths before comparing them and emit repository-relative paths with `/` separators where possible.
 
 ## C# And .NET
 
 - Use modern C# with nullable reference types enabled.
 - Store `.cs` files as UTF-8 with BOM, CRLF line endings, and spaces for indentation.
 - Keep new C# files consistent with `.editorconfig`.
-- Use `.\scripts\normalize-csharp-files.ps1` if C# file formatting drifts.
-- Use `.\scripts\test-csharp-file-format.ps1` to verify C# file encoding and line endings directly.
+- Use `./scripts/normalize-csharp-files.ps1` if C# file formatting drifts.
+- Use `./scripts/test-csharp-file-format.ps1` to verify C# file encoding and line endings directly.
 
 ## Investigation
 
@@ -36,10 +36,11 @@ For general code changes, start with:
 ```powershell
 dotnet restore navlyn.slnx
 dotnet build navlyn.slnx
-.\scripts\smoke.ps1
+dotnet test navlyn.slnx --no-build
+./scripts/test-quick.ps1 -NoBuild
 ```
 
-For semantic navigation behavior, also run the focused fixture scripts that match the change. Timeout and file-lock guidance lives in `docs/navlyn-development-workflow.md`.
+For CLI contract changes, also run `./scripts/test-cli-contract.ps1 -NoBuild` and manually inspect the affected command. For semantic navigation behavior, add or update xUnit resolver component coverage when possible, then run the focused fixture scripts that match the change. For large refactors or release preparation, run `./scripts/test-release.ps1`. Timeout and file-lock guidance lives in `docs/navlyn-development-workflow.md`.
 
 If CLI behavior changes, run the affected command manually and inspect stdout, stderr, deterministic JSON shape, and exit behavior.
 

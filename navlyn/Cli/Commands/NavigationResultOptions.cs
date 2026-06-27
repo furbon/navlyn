@@ -159,7 +159,9 @@ internal static class NavigationResultOptions
     private static string NormalizePath(string path)
     {
         return path.Trim()
-            .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+            .Replace('\\', '/')
+            .Replace(Path.DirectorySeparatorChar, '/')
+            .Replace(Path.AltDirectorySeparatorChar, '/');
     }
 
     private static StringComparison GetPathStringComparison()

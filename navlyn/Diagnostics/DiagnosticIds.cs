@@ -31,4 +31,15 @@ internal static class DiagnosticIds
     public const int SourceDefinitionNotFound = 1305;
     public const int SourceFileNotInProject = 1306;
     public const int SourceFileExcludedByGeneratedCodeFilter = 1307;
+
+    public const int GitRepositoryNotFound = 1501;
+    public const int GitCommandFailed = 1502;
+    public const int InvalidDiffOptions = 1503;
+    public const int DiffParseError = 1504;
+
+    public const int InvalidCandidateId = 1701;
+    public const int CandidateIdNotFound = 1702;
+    public const int CandidateIdAmbiguous = 1703;
+    public const int InvalidCandidatePolicy = 1704;
+    public const int ConfidenceBelowMinimum = 1705;
 }

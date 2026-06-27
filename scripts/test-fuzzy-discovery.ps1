@@ -143,6 +143,16 @@ try {
     Assert-Equal -Name 'find unique confidence' -Actual $findUniqueJson.confidence -Expected 'high'
     Assert-Equal -Name 'find unique selected' -Actual $findUniqueJson.selectedCandidate.name -Expected 'EnemyManagerTools'
     Assert-Equal -Name 'find unique selected has span' -Actual ($findUniqueJson.selectedCandidate.endColumn -gt $findUniqueJson.selectedCandidate.column) -Expected $true
+    Assert-Equal -Name 'find unique candidate id' -Actual ($findUniqueJson.selectedCandidate.candidateId.StartsWith('sym:v1:')) -Expected $true
+    Assert-Equal -Name 'find unique selector name' -Actual $findUniqueJson.selectedCandidate.selector.name -Expected 'EnemyManagerTools'
+
+    $candidateRoundTrip = Invoke-Navlyn `
+        -Name 'about candidate id roundtrip' `
+        -Arguments @('about', '--workspace', $FixtureProject, '--candidate-id', $findUniqueJson.selectedCandidate.candidateId)
+    $candidateRoundTripJson = $candidateRoundTrip.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'candidate roundtrip confidence' -Actual $candidateRoundTripJson.confidence -Expected 'high'
+    Assert-Equal -Name 'candidate roundtrip selected' -Actual $candidateRoundTripJson.selectedCandidate.name -Expected 'EnemyManagerTools'
+    Assert-Equal -Name 'candidate roundtrip selection mode' -Actual $candidateRoundTripJson.selectionInput.mode -Expected 'candidateId'
 
     $findAmbiguous = Invoke-Navlyn `
         -Name 'find ambiguous exact' `
@@ -159,6 +169,14 @@ try {
     Assert-Equal -Name 'find medium selected' -Actual $findMediumJson.selectedCandidate.name -Expected 'Spawn'
     Assert-Equal -Name 'find medium alternatives present' -Actual (@($findMediumJson.alternatives).Count -gt 0) -Expected $true
 
+    $findMinConfidence = Invoke-Navlyn `
+        -Name 'find min confidence blocks medium' `
+        -Arguments @('find', '--workspace', $FixtureProject, '--query', 'Spawn', '--assume-kind', 'Method', '--min-confidence', 'high', '--explain-selection')
+    $findMinConfidenceJson = $findMinConfidence.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'find min confidence confidence' -Actual $findMinConfidenceJson.confidence -Expected 'medium'
+    Assert-Equal -Name 'find min confidence selected omitted' -Actual (Get-OptionalProperty -Object $findMinConfidenceJson -Name 'selectedCandidate') -Expected $null
+    Assert-Equal -Name 'find min confidence reason' -Actual (@($findMinConfidenceJson.selectionExplanation.ambiguityReasons) -contains 'confidence-below-minimum') -Expected $true
+
     $findContains = Invoke-Navlyn `
         -Name 'find contains fallback' `
         -Arguments @('find', '--workspace', $FixtureProject, '--query', 'Tools', '--assume-kind', 'NamedType')
@@ -173,6 +191,14 @@ try {
         -ExpectedExitCode 2
     Assert-Equal -Name 'find invalid regex stdout empty' -Actual $findInvalidRegex.Stdout.Length -Expected 0
     Assert-Equal -Name 'find invalid regex diagnostic' -Actual ($findInvalidRegex.Stderr.Contains('NAVLYN1002:')) -Expected $true
+
+    $aboutInvalidCandidateId = Invoke-CheckedProcess `
+        -Name 'about invalid candidate id' `
+        -FilePath 'dotnet' `
+        -Arguments (@($NavlynDll) + @('about', '--workspace', $FixtureProject, '--candidate-id', 'bad')) `
+        -ExpectedExitCode 2
+    Assert-Equal -Name 'about invalid candidate stdout empty' -Actual $aboutInvalidCandidateId.Stdout.Length -Expected 0
+    Assert-Equal -Name 'about invalid candidate diagnostic' -Actual ($aboutInvalidCandidateId.Stderr.Contains('NAVLYN1701:')) -Expected $true
 
     $findGenerated = Invoke-Navlyn `
         -Name 'find generated excluded' `

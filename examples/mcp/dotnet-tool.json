@@ -1,0 +1,7 @@
+{
+  "command": "navlyn-mcp",
+  "args": [
+    "--workspace",
+    "navlyn.slnx"
+  ]
+}

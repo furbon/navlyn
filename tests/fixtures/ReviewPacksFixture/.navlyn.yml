@@ -1,0 +1,7 @@
+version: 1
+rules:
+  - id: no-forbidden-namespace
+    kind: namespace-dependency
+    from: "ReviewPacksFixture"
+    disallow:
+      - "Forbidden.Namespace"

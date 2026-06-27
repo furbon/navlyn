@@ -9,7 +9,11 @@ internal static class AboutCommand
 {
     public static Command Create()
     {
-        Option<string> queryOption = SharedOptions.CreateQueryOption();
+        Option<string?> queryOption = new("--query")
+        {
+            Description = "Symbol name query."
+        };
+        Option<string?> candidateIdOption = FuzzyCommandSupport.CreateCandidateIdOption();
         Option<string[]> assumeKindOption = FuzzyCommandSupport.CreateAssumeKindOption();
         Option<string> matchOption = FuzzyCommandSupport.CreateMatchOption();
         Option<bool> caseSensitiveOption = SharedOptions.CreateCaseSensitiveOption();
@@ -29,14 +33,18 @@ internal static class AboutCommand
         };
         Option<bool> includeSnippetsOption = FuzzyCommandSupport.CreateIncludeSnippetsOption();
         Option<int?> snippetLinesOption = FuzzyCommandSupport.CreateSnippetLinesOption();
+        Option<string> candidatePolicyOption = FuzzyCommandSupport.CreateCandidatePolicyOption("fail");
+        Option<string> minConfidenceOption = FuzzyCommandSupport.CreateMinConfidenceOption("medium");
+        Option<bool> explainSelectionOption = FuzzyCommandSupport.CreateExplainSelectionOption();
 
         return WorkspaceCommand.Create(
             "about",
             "Resolve a fuzzy symbol query and return a compact semantic summary.",
-            [queryOption, assumeKindOption, matchOption, caseSensitiveOption, projectOption, excludeGeneratedOption, memberLimitOption, referenceLimitOption, relationLimitOption, includeSnippetsOption, snippetLinesOption],
+            [queryOption, candidateIdOption, assumeKindOption, matchOption, caseSensitiveOption, projectOption, excludeGeneratedOption, memberLimitOption, referenceLimitOption, relationLimitOption, includeSnippetsOption, snippetLinesOption, candidatePolicyOption, minConfidenceOption, explainSelectionOption],
             (workspace, parseResult, cancellationToken) => ExecuteAsync(
                 workspace,
-                parseResult.GetValue(queryOption)!,
+                parseResult.GetValue(queryOption),
+                parseResult.GetValue(candidateIdOption),
                 parseResult.GetValue(assumeKindOption) ?? [],
                 parseResult.GetValue(matchOption)!,
                 parseResult.GetValue(caseSensitiveOption),
@@ -47,12 +55,16 @@ internal static class AboutCommand
                 parseResult.GetValue(relationLimitOption),
                 parseResult.GetValue(includeSnippetsOption),
                 parseResult.GetValue(snippetLinesOption),
+                parseResult.GetValue(candidatePolicyOption)!,
+                parseResult.GetValue(minConfidenceOption)!,
+                parseResult.GetValue(explainSelectionOption),
                 cancellationToken));
     }
 
     private static async Task<int> ExecuteAsync(
         LoadedWorkspace loadedWorkspace,
-        string query,
+        string? query,
+        string? candidateId,
         IReadOnlyList<string> assumeKinds,
         string match,
         bool caseSensitive,
@@ -63,6 +75,9 @@ internal static class AboutCommand
         int? relationLimit,
         bool includeSnippets,
         int? snippetLines,
+        string candidatePolicy,
+        string minConfidence,
+        bool explainSelection,
         CancellationToken cancellationToken)
     {
         int effectiveMemberLimit = memberLimit ?? FuzzyDiscoveryResolver.DefaultMemberLimit;
@@ -77,15 +92,20 @@ internal static class AboutCommand
             return exitCode;
         }
 
-        if (!FuzzyCommandSupport.TryCreateQuery(
+        if (!FuzzyCommandSupport.TryCreateSelection(
             loadedWorkspace,
             query,
+            candidateId,
             assumeKinds,
             match,
             caseSensitive,
             projectFilters,
             excludeGenerated,
             limit: null,
+            candidatePolicy,
+            minConfidence,
+            explainSelection,
+            allowGroupPolicy: false,
             out FuzzyQueryOptions options,
             out IReadOnlyList<Project> projects,
             out IReadOnlyList<FuzzyProjectFilter>? projectOutputs,
@@ -94,7 +114,13 @@ internal static class AboutCommand
             return exitCode;
         }
 
-        FuzzyAboutResult result = await new FuzzyDiscoveryResolver().AboutAsync(
+        FuzzyDiscoveryResolver resolver = new();
+        if (!await FuzzyCommandSupport.TryValidateSelectionAsync(resolver, projects, options, cancellationToken))
+        {
+            return ExitCodes.UsageError;
+        }
+
+        FuzzyAboutResult result = await resolver.AboutAsync(
             loadedWorkspace,
             options,
             new FuzzyAboutOptions(effectiveMemberLimit, effectiveReferenceLimit, effectiveRelationLimit, includeSnippets, snippetContext, excludeGenerated),

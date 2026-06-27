@@ -1,14 +1,16 @@
 ﻿using System.CommandLine;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.CodeAnalysis;
+using Navlyn.Cli.OutputProfiles;
+using Navlyn.ContextPacks;
 using Navlyn.Diagnostics;
+using Navlyn.Diffs;
 using Navlyn.Symbols;
 using Navlyn.Workspaces;
 
 namespace Navlyn.Cli.Commands;
 
-internal static class BatchCommand
+internal static partial class BatchCommand
 {
     public static Command Create()
     {
@@ -86,42 +88,236 @@ internal static class BatchCommand
         return ExitCodes.Success;
     }
 
-    private static async Task<BatchRequestResult> ExecuteRequestAsync(
+    private static async Task<BatchRequestResult> ExecuteReviewDiffAsync(
         LoadedWorkspace loadedWorkspace,
         BatchDefaults defaults,
         BatchRequest request,
         CancellationToken cancellationToken)
     {
-        return request.Command switch
+        if (!TryGetDiffRequest(request.Payload, out DiffRequest diffRequest, out BatchError? error) ||
+            !TryGetDiffProjectContext(loadedWorkspace, defaults, request.Payload, out IReadOnlyList<Project> projects, out IReadOnlyList<DiffProjectFilter>? projectOutputs, out error) ||
+            !TryGetEffectiveExcludeGenerated(request.Payload, defaults, out bool excludeGenerated, out error) ||
+            !TryGetOptionalInt(request.Payload, "symbolLimit", out int? symbolLimit, out error) ||
+            !TryGetOptionalInt(request.Payload, "impactLimit", out int? impactLimit, out error) ||
+            !TryGetOptionalInt(request.Payload, "diagnosticLimit", out int? diagnosticLimit, out error) ||
+            !TryGetOptionalInt(request.Payload, "relatedTestLimit", out int? relatedTestLimit, out error) ||
+            !TryGetOptionalInt(request.Payload, "depth", out int? depth, out error) ||
+            !TryGetOptionalBool(request.Payload, "includeSnippets", out bool? includeSnippets, out error) ||
+            !TryGetOptionalInt(request.Payload, "snippetLines", out int? snippetLines, out error) ||
+            !TryGetProfile(request.Payload, out string profile, out error))
         {
-            "overview" => BatchRequestResult.Success(
-                request.Id,
-                request.Command,
-                CreateOverviewResult(loadedWorkspace)),
-            "diagnostics" => await ExecuteDiagnosticsAsync(loadedWorkspace, defaults, request, cancellationToken),
-            "symbols" => await ExecuteSymbolsAsync(loadedWorkspace, defaults, request, cancellationToken),
-            "symbols-in" => await ExecuteSymbolsInAsync(loadedWorkspace, defaults, request, cancellationToken),
-            "outline" => await ExecuteOutlineAsync(loadedWorkspace, defaults, request, cancellationToken),
-            "symbol-at" => await ExecuteSymbolAtAsync(loadedWorkspace, defaults, request, cancellationToken),
-            "symbol-info" => await ExecuteSymbolInfoAsync(loadedWorkspace, defaults, request, cancellationToken),
-            "definition" => await ExecuteDefinitionAsync(loadedWorkspace, defaults, request, cancellationToken),
-            "references" => await ExecuteReferencesAsync(loadedWorkspace, defaults, request, cancellationToken),
-            "implementations" => await ExecuteImplementationsAsync(loadedWorkspace, defaults, request, cancellationToken),
-            "type-hierarchy" => await ExecuteTypeHierarchyAsync(loadedWorkspace, defaults, request, cancellationToken),
-            "callers" => await ExecuteCallersAsync(loadedWorkspace, defaults, request, cancellationToken),
-            "calls" => await ExecuteCallsAsync(loadedWorkspace, defaults, request, cancellationToken),
-            "find" => await ExecuteFuzzyFindAsync(loadedWorkspace, defaults, request, cancellationToken),
-            "where-used" => await ExecuteFuzzyWhereUsedAsync(loadedWorkspace, defaults, request, cancellationToken),
-            "about" => await ExecuteFuzzyAboutAsync(loadedWorkspace, defaults, request, cancellationToken),
-            "related" => await ExecuteFuzzyFilesAsync(loadedWorkspace, defaults, request, "related", cancellationToken),
-            "impact" => await ExecuteFuzzyFilesAsync(loadedWorkspace, defaults, request, "impact", cancellationToken),
-            "entrypoints" => await ExecuteFuzzyEntrypointsAsync(loadedWorkspace, defaults, request, cancellationToken),
-            _ => BatchRequestResult.Failed(
-                request.Id,
-                request.Command,
-                DiagnosticIds.InvalidBatchInput,
-                $"Unsupported batch request command: {request.Command}.")
-        };
+            return request.Failed(error!);
+        }
+
+        int effectiveSymbolLimit = symbolLimit ?? 50;
+        int effectiveImpactLimit = impactLimit ?? 100;
+        int effectiveDiagnosticLimit = diagnosticLimit ?? 100;
+        int effectiveRelatedTestLimit = relatedTestLimit ?? 50;
+        int effectiveDepth = depth ?? 2;
+        int effectiveSnippetLines = snippetLines ?? 1;
+        BatchError? limitError =
+            GetPositiveBatchLimitError("symbolLimit", effectiveSymbolLimit) ??
+            GetPositiveBatchLimitError("impactLimit", effectiveImpactLimit) ??
+            GetPositiveBatchLimitError("diagnosticLimit", effectiveDiagnosticLimit) ??
+            GetPositiveBatchLimitError("relatedTestLimit", effectiveRelatedTestLimit) ??
+            GetNonNegativeBatchLimitError("depth", effectiveDepth) ??
+            GetNonNegativeBatchLimitError("snippetLines", effectiveSnippetLines);
+        if (limitError is not null)
+        {
+            return request.Failed(limitError);
+        }
+
+        DiffWorkflowExecutionResult<ReviewDiffResult> result =
+            await new DiffWorkflowResolver().ResolveReviewAsync(
+                loadedWorkspace,
+                diffRequest,
+                projects,
+                projectOutputs,
+                excludeGenerated,
+                effectiveSymbolLimit,
+                effectiveImpactLimit,
+                effectiveDiagnosticLimit,
+                effectiveRelatedTestLimit,
+                effectiveDepth,
+                includeSnippets ?? false,
+                effectiveSnippetLines,
+                cancellationToken);
+
+        return result.Error is not null
+            ? request.Failed(result.Error.DiagnosticId, result.Error.Message)
+            : request.Success(OutputProfile.Format(loadedWorkspace, "review-diff", profile, result.Result!, new
+            {
+                excludeGenerated,
+                symbolLimit = effectiveSymbolLimit,
+                impactLimit = effectiveImpactLimit,
+                diagnosticLimit = effectiveDiagnosticLimit,
+                relatedTestLimit = effectiveRelatedTestLimit,
+                depth = effectiveDepth,
+                includeSnippets = includeSnippets ?? false,
+                snippetLines = effectiveSnippetLines
+            }));
+    }
+
+    private static async Task<BatchRequestResult> ExecuteContextPackAsync(
+        LoadedWorkspace loadedWorkspace,
+        BatchDefaults defaults,
+        BatchRequest request,
+        CancellationToken cancellationToken)
+    {
+        bool hasQuery = request.Payload.TryGetProperty("query", out JsonElement queryElement) &&
+            queryElement.ValueKind == JsonValueKind.String &&
+            !string.IsNullOrWhiteSpace(queryElement.GetString());
+        bool hasCandidateId = request.Payload.TryGetProperty("candidateId", out JsonElement candidateIdElement) &&
+            candidateIdElement.ValueKind == JsonValueKind.String &&
+            !string.IsNullOrWhiteSpace(candidateIdElement.GetString());
+        if (!TryGetOptionalBool(request.Payload, "diff", out bool? diffValue, out BatchError? error) ||
+            !TryGetOptionalString(request.Payload, "goal", out string? goal, out error) ||
+            !TryGetOptionalString(request.Payload, "snippetPolicy", out string? snippetPolicy, out error) ||
+            !TryGetOptionalInt(request.Payload, "budgetTokens", out int? budgetTokens, out error) ||
+            !TryGetOptionalInt(request.Payload, "itemLimit", out int? itemLimit, out error) ||
+            !TryGetOptionalInt(request.Payload, "snippetLines", out int? snippetLines, out error) ||
+            !TryGetOptionalInt(request.Payload, "candidateLimit", out int? candidateLimit, out error) ||
+            !TryGetOptionalInt(request.Payload, "memberLimit", out int? memberLimit, out error) ||
+            !TryGetOptionalInt(request.Payload, "referenceLimit", out int? referenceLimit, out error) ||
+            !TryGetOptionalInt(request.Payload, "relationLimit", out int? relationLimit, out error) ||
+            !TryGetOptionalInt(request.Payload, "fileLimit", out int? fileLimit, out error) ||
+            !TryGetOptionalInt(request.Payload, "diagnosticLimit", out int? diagnosticLimit, out error) ||
+            !TryGetOptionalInt(request.Payload, "symbolLimit", out int? symbolLimit, out error) ||
+            !TryGetOptionalInt(request.Payload, "impactLimit", out int? impactLimit, out error) ||
+            !TryGetOptionalInt(request.Payload, "relatedTestLimit", out int? relatedTestLimit, out error) ||
+            !TryGetOptionalInt(request.Payload, "depth", out int? depth, out error) ||
+            !TryGetEffectiveExcludeGenerated(request.Payload, defaults, out bool excludeGenerated, out error) ||
+            !TryGetProfile(request.Payload, out string profile, out error))
+        {
+            return request.Failed(error!);
+        }
+
+        bool diff = diffValue ?? false;
+        if ((hasQuery || hasCandidateId) == diff || (hasQuery && hasCandidateId))
+        {
+            return request.Failed(DiagnosticIds.InvalidBatchInput, "Specify exactly one context-pack input mode: query, candidateId, or diff.");
+        }
+
+        if (!diff &&
+            (request.Payload.TryGetProperty("base", out _) ||
+                request.Payload.TryGetProperty("head", out _) ||
+                request.Payload.TryGetProperty("staged", out _) ||
+                request.Payload.TryGetProperty("includeUnstaged", out _)))
+        {
+            return request.Failed(DiagnosticIds.InvalidDiffOptions, "Diff options require diff: true.");
+        }
+
+        if (goal is not null && goal is not ("review" or "modify" or "understand"))
+        {
+            return request.Failed(DiagnosticIds.ParseError, "goal must be review, modify, or understand.");
+        }
+
+        if (snippetPolicy is not null && snippetPolicy is not ("none" or "signature" or "line" or "block"))
+        {
+            return request.Failed(DiagnosticIds.ParseError, "snippetPolicy must be none, signature, line, or block.");
+        }
+
+        ContextPackOptions options = new(
+            Goal: goal ?? (diff ? "review" : "understand"),
+            BudgetTokens: budgetTokens ?? 8000,
+            ItemLimit: itemLimit ?? 80,
+            SnippetPolicy: snippetPolicy ?? "line",
+            SnippetLines: snippetLines ?? 1,
+            CandidateLimit: candidateLimit ?? 20,
+            MemberLimit: memberLimit ?? 50,
+            ReferenceLimit: referenceLimit ?? 100,
+            RelationLimit: relationLimit ?? 25,
+            FileLimit: fileLimit ?? 50,
+            QueryDiagnosticLimit: diagnosticLimit ?? 50,
+            SymbolLimit: symbolLimit ?? 50,
+            ImpactLimit: impactLimit ?? 100,
+            DiffDiagnosticLimit: diagnosticLimit ?? 100,
+            RelatedTestLimit: relatedTestLimit ?? 50,
+            Depth: depth ?? 2);
+
+        BatchError? limitError =
+            GetPositiveBatchLimitError("budgetTokens", options.BudgetTokens) ??
+            GetPositiveBatchLimitError("itemLimit", options.ItemLimit) ??
+            GetNonNegativeBatchLimitError("snippetLines", options.SnippetLines) ??
+            GetPositiveBatchLimitError("candidateLimit", options.CandidateLimit) ??
+            GetPositiveBatchLimitError("memberLimit", options.MemberLimit) ??
+            GetPositiveBatchLimitError("referenceLimit", options.ReferenceLimit) ??
+            GetPositiveBatchLimitError("relationLimit", options.RelationLimit) ??
+            GetPositiveBatchLimitError("fileLimit", options.FileLimit) ??
+            GetPositiveBatchLimitError("diagnosticLimit", diff ? options.DiffDiagnosticLimit : options.QueryDiagnosticLimit) ??
+            GetPositiveBatchLimitError("symbolLimit", options.SymbolLimit) ??
+            GetPositiveBatchLimitError("impactLimit", options.ImpactLimit) ??
+            GetPositiveBatchLimitError("relatedTestLimit", options.RelatedTestLimit) ??
+            GetNonNegativeBatchLimitError("depth", options.Depth);
+        if (limitError is not null)
+        {
+            return request.Failed(limitError);
+        }
+
+        ContextPackResolver resolver = new();
+        if (!diff)
+        {
+            if (!TryGetFuzzyQuery(
+                loadedWorkspace,
+                defaults,
+                request,
+                readCandidateLimit: false,
+                out FuzzyQueryOptions queryOptions,
+                out IReadOnlyList<Project> projects,
+                out IReadOnlyList<FuzzyProjectFilter>? projectOutputs,
+                out error))
+            {
+                return request.Failed(error!);
+            }
+
+            queryOptions = queryOptions with { Limit = options.CandidateLimit, ExcludeGenerated = excludeGenerated };
+            FuzzyDiscoveryResolver fuzzyResolver = new();
+            BatchRequestResult? failedResult = await ValidateFuzzySelectionAsync(request, fuzzyResolver, projects, queryOptions, cancellationToken);
+            if (failedResult is not null)
+            {
+                return failedResult;
+            }
+
+            ContextPackResult result = await resolver.ResolveQueryAsync(
+                loadedWorkspace,
+                queryOptions,
+                projects,
+                projectOutputs,
+                excludeGenerated,
+                options,
+                cancellationToken);
+            return request.Success(OutputProfile.Format(loadedWorkspace, "context-pack", profile, result, new
+            {
+                mode = hasQuery ? "query" : "candidateId",
+                goal = options.Goal,
+                excludeGenerated,
+                options
+            }));
+        }
+
+        if (!TryGetDiffRequest(request.Payload, out DiffRequest diffRequest, out error) ||
+            !TryGetDiffProjectContext(loadedWorkspace, defaults, request.Payload, out IReadOnlyList<Project> diffProjects, out IReadOnlyList<DiffProjectFilter>? diffProjectOutputs, out error))
+        {
+            return request.Failed(error!);
+        }
+
+        DiffWorkflowExecutionResult<ContextPackResult> diffResult = await resolver.ResolveDiffAsync(
+            loadedWorkspace,
+            diffRequest,
+            diffProjects,
+            diffProjectOutputs,
+            excludeGenerated,
+            options,
+            cancellationToken);
+
+        return diffResult.Error is not null
+            ? request.Failed(diffResult.Error.DiagnosticId, diffResult.Error.Message)
+            : request.Success(OutputProfile.Format(loadedWorkspace, "context-pack", profile, diffResult.Result!, new
+            {
+                mode = "diff",
+                excludeGenerated,
+                options
+            }));
     }
 
     private static object CreateOverviewResult(LoadedWorkspace loadedWorkspace)
@@ -918,7 +1114,14 @@ internal static class BatchCommand
             return request.Failed(error!);
         }
 
-        return request.Success(await new FuzzyDiscoveryResolver().FindAsync(
+        FuzzyDiscoveryResolver resolver = new();
+        BatchRequestResult? failedResult = await ValidateFuzzySelectionAsync(request, resolver, projects, options, cancellationToken);
+        if (failedResult is not null)
+        {
+            return failedResult;
+        }
+
+        return request.Success(await resolver.FindAsync(
             loadedWorkspace,
             options,
             projects,
@@ -953,7 +1156,14 @@ internal static class BatchCommand
             return request.Failed(DiagnosticIds.InvalidLimit, "limit must be 1 or greater.");
         }
 
-        return request.Success(await new FuzzyDiscoveryResolver().WhereUsedAsync(
+        FuzzyDiscoveryResolver resolver = new();
+        BatchRequestResult? failedResult = await ValidateFuzzySelectionAsync(request, resolver, projects, options, cancellationToken);
+        if (failedResult is not null)
+        {
+            return failedResult;
+        }
+
+        return request.Success(await resolver.WhereUsedAsync(
             loadedWorkspace,
             options,
             new FuzzyLocationOptions(referenceLimit, FuzzyDiscoveryResolver.DefaultReferenceFileLimit, includeSnippets, snippetLines, options.ExcludeGenerated),
@@ -993,7 +1203,14 @@ internal static class BatchCommand
             return request.Failed(DiagnosticIds.InvalidLimit, "memberLimit, referenceLimit, and relationLimit must be 1 or greater.");
         }
 
-        return request.Success(await new FuzzyDiscoveryResolver().AboutAsync(
+        FuzzyDiscoveryResolver resolver = new();
+        BatchRequestResult? failedResult = await ValidateFuzzySelectionAsync(request, resolver, projects, options, cancellationToken);
+        if (failedResult is not null)
+        {
+            return failedResult;
+        }
+
+        return request.Success(await resolver.AboutAsync(
             loadedWorkspace,
             options,
             new FuzzyAboutOptions(effectiveMemberLimit, effectiveReferenceLimit, effectiveRelationLimit, includeSnippets, snippetLines, options.ExcludeGenerated),
@@ -1051,7 +1268,14 @@ internal static class BatchCommand
             return request.Failed(DiagnosticIds.ParseError, includeError!);
         }
 
-        return request.Success(await new FuzzyDiscoveryResolver().FilesAsync(
+        FuzzyDiscoveryResolver resolver = new();
+        BatchRequestResult? failedResult = await ValidateFuzzySelectionAsync(request, resolver, projects, options, cancellationToken);
+        if (failedResult is not null)
+        {
+            return failedResult;
+        }
+
+        return request.Success(await resolver.FilesAsync(
             loadedWorkspace,
             intent,
             options,
@@ -1090,13 +1314,40 @@ internal static class BatchCommand
             return request.Failed(DiagnosticIds.InvalidLimit, "limit must be 1 or greater and depth must be 0 or greater.");
         }
 
-        return request.Success(await new FuzzyDiscoveryResolver().EntrypointsAsync(
+        FuzzyDiscoveryResolver resolver = new();
+        BatchRequestResult? failedResult = await ValidateFuzzySelectionAsync(request, resolver, projects, options, cancellationToken);
+        if (failedResult is not null)
+        {
+            return failedResult;
+        }
+
+        return request.Success(await resolver.EntrypointsAsync(
             loadedWorkspace,
             options,
             new FuzzyEntrypointsOptions(effectiveDepth, effectiveLimit, includeSnippets, snippetLines, options.ExcludeGenerated),
             projects,
             projectFilters,
             cancellationToken));
+    }
+
+    private static async Task<BatchRequestResult?> ValidateFuzzySelectionAsync(
+        BatchRequest request,
+        FuzzyDiscoveryResolver resolver,
+        IReadOnlyList<Project> projects,
+        FuzzyQueryOptions options,
+        CancellationToken cancellationToken)
+    {
+        FuzzyCandidateResolution resolution = await resolver.ResolveCandidatesForSelectionAsync(
+            projects,
+            options,
+            cancellationToken);
+
+        if (resolution.Error is null)
+        {
+            return null;
+        }
+
+        return request.Failed(resolution.Error.DiagnosticId, resolution.Error.Message);
     }
 
     private static bool TryReadBatchInput(
@@ -1302,6 +1553,103 @@ internal static class BatchCommand
         return true;
     }
 
+    private static bool TryGetDiffProjectContext(
+        LoadedWorkspace loadedWorkspace,
+        BatchDefaults defaults,
+        JsonElement payload,
+        out IReadOnlyList<Project> projects,
+        out IReadOnlyList<DiffProjectFilter>? projectOutputs,
+        out BatchError? error)
+    {
+        projects = [];
+        projectOutputs = null;
+
+        if (!TryGetProjectFilters(payload, defaults, out IReadOnlyList<string> projectFilters, out error))
+        {
+            return false;
+        }
+
+        ProjectFilterResolutionResult result =
+            new ProjectFilterResolver().ResolveMany(loadedWorkspace.Solution, projectFilters);
+        if (result.Error is not null)
+        {
+            error = BatchError.FromDiagnostic(result.Error.DiagnosticId, result.Error.Message);
+            return false;
+        }
+
+        projects = result.Projects;
+        projectOutputs = result.AppliedFilters.Count == 0
+            ? null
+            : result.AppliedFilters.Select(filter => new DiffProjectFilter(
+                Filter: filter.Filter,
+                Name: filter.Name,
+                Path: filter.Path,
+                TargetFramework: filter.TargetFramework)).ToArray();
+        return true;
+    }
+
+    private static bool TryGetDiffRequest(
+        JsonElement payload,
+        out DiffRequest request,
+        out BatchError? error)
+    {
+        request = default!;
+        if (!TryGetOptionalString(payload, "base", out string? baseRef, out error) ||
+            !TryGetOptionalString(payload, "head", out string? headRef, out error) ||
+            !TryGetOptionalBool(payload, "staged", out bool? stagedValue, out error) ||
+            !TryGetOptionalBool(payload, "includeUnstaged", out bool? includeUnstagedValue, out error))
+        {
+            return false;
+        }
+
+        bool staged = stagedValue ?? false;
+        bool includeUnstaged = includeUnstagedValue ?? true;
+        if (!string.IsNullOrWhiteSpace(headRef) && string.IsNullOrWhiteSpace(baseRef))
+        {
+            error = BatchError.FromDiagnostic(DiagnosticIds.InvalidDiffOptions, "head requires base.");
+            return false;
+        }
+
+        if (staged && (!string.IsNullOrWhiteSpace(baseRef) || !string.IsNullOrWhiteSpace(headRef)))
+        {
+            error = BatchError.FromDiagnostic(DiagnosticIds.InvalidDiffOptions, "staged cannot be combined with base or head.");
+            return false;
+        }
+
+        string? normalizedBase = string.IsNullOrWhiteSpace(baseRef) ? null : baseRef.Trim();
+        string? normalizedHead = string.IsNullOrWhiteSpace(headRef) ? null : headRef.Trim();
+        string mode = normalizedBase is not null && normalizedHead is not null
+            ? "range"
+            : normalizedBase is not null
+                ? "baseToWorkingTree"
+                : staged
+                    ? "staged"
+                    : "workingTree";
+
+        request = new DiffRequest(
+            mode,
+            normalizedBase,
+            normalizedHead,
+            staged,
+            !staged && normalizedBase is null && normalizedHead is null && includeUnstaged);
+        error = null;
+        return true;
+    }
+
+    private static BatchError? GetPositiveBatchLimitError(string propertyName, int value)
+    {
+        return value > 0
+            ? null
+            : BatchError.FromDiagnostic(DiagnosticIds.InvalidLimit, $"{propertyName} must be 1 or greater.");
+    }
+
+    private static BatchError? GetNonNegativeBatchLimitError(string propertyName, int value)
+    {
+        return value >= 0
+            ? null
+            : BatchError.FromDiagnostic(DiagnosticIds.InvalidLimit, $"{propertyName} must be 0 or greater.");
+    }
+
     private static bool TryGetFuzzyQuery(
         LoadedWorkspace loadedWorkspace,
         BatchDefaults defaults,
@@ -1316,8 +1664,12 @@ internal static class BatchCommand
         projects = [];
         projectFilters = null;
 
-        if (!TryGetRequiredString(request.Payload, "query", out string query, out error) ||
+        if (!TryGetOptionalString(request.Payload, "query", out string? queryValue, out error) ||
+            !TryGetOptionalString(request.Payload, "candidateId", out string? candidateIdValue, out error) ||
             !TryGetOptionalString(request.Payload, "match", out string? matchValue, out error) ||
+            !TryGetOptionalString(request.Payload, "candidatePolicy", out string? candidatePolicyValue, out error) ||
+            !TryGetOptionalString(request.Payload, "minConfidence", out string? minConfidenceValue, out error) ||
+            !TryGetOptionalBool(request.Payload, "explainSelection", out bool? explainSelectionValue, out error) ||
             !TryGetOptionalBool(request.Payload, "caseSensitive", out bool? caseSensitive, out error) ||
             !TryGetStringArray(request.Payload, "assumeKinds", out IReadOnlyList<string> assumeKinds, out error, allowStringValue: true))
         {
@@ -1335,6 +1687,59 @@ internal static class BatchCommand
         {
             error = BatchError.FromDiagnostic(DiagnosticIds.ParseError, "Fuzzy match mode must be smart, exact, contains, or regex.");
             return false;
+        }
+
+        bool hasQuery = !string.IsNullOrWhiteSpace(queryValue);
+        bool hasCandidateId = !string.IsNullOrWhiteSpace(candidateIdValue);
+        if (request.Command == "find" && hasCandidateId)
+        {
+            error = BatchError.FromDiagnostic(DiagnosticIds.ParseError, "find does not accept candidateId.");
+            return false;
+        }
+
+        if (hasQuery == hasCandidateId)
+        {
+            error = BatchError.FromDiagnostic(DiagnosticIds.ParseError, "Specify exactly one fuzzy selection input: query or candidateId.");
+            return false;
+        }
+
+        bool allowGroupPolicy = request.Command is "find" or "where-used";
+        string defaultPolicy = allowGroupPolicy ? "group" : "fail";
+        string candidatePolicy = candidatePolicyValue ?? defaultPolicy;
+        if (candidatePolicy is not ("fail" or "select" or "group"))
+        {
+            error = BatchError.FromDiagnostic(DiagnosticIds.InvalidCandidatePolicy, "candidatePolicy must be fail, select, or group.");
+            return false;
+        }
+
+        if (!allowGroupPolicy && candidatePolicy == "group")
+        {
+            error = BatchError.FromDiagnostic(DiagnosticIds.InvalidCandidatePolicy, "candidatePolicy group is not supported by this command.");
+            return false;
+        }
+
+        string minConfidence = minConfidenceValue ?? (request.Command == "find" ? "low" : "medium");
+        if (minConfidence is not ("high" or "medium" or "low"))
+        {
+            error = BatchError.FromDiagnostic(DiagnosticIds.ParseError, "minConfidence must be high, medium, or low.");
+            return false;
+        }
+
+        string query = hasCandidateId ? candidateIdValue!.Trim() : queryValue!.Trim();
+        string? candidateId = hasCandidateId ? query : null;
+        if (hasCandidateId)
+        {
+            if (assumeKinds.Count > 0 || match != "smart" || caseSensitive == true)
+            {
+                error = BatchError.FromDiagnostic(DiagnosticIds.ParseError, "candidateId cannot be combined with assumeKind, match, or caseSensitive.");
+                return false;
+            }
+
+            if (!FuzzyCandidateIdentity.TryParseCandidateId(candidateId!))
+            {
+                error = BatchError.FromDiagnostic(DiagnosticIds.InvalidCandidateId, $"Invalid candidate id: {candidateId}.");
+                return false;
+            }
         }
 
         if (!TryGetProjectFilters(request.Payload, defaults, out IReadOnlyList<string> projectFilterValues, out error) ||
@@ -1368,12 +1773,14 @@ internal static class BatchCommand
 
         options = new FuzzyQueryOptions(
             Query: query,
-            AssumeKinds: NormalizeStrings(assumeKinds),
+            AssumeKinds: hasCandidateId ? [] : NormalizeStrings(assumeKinds),
             Match: match,
-            CaseSensitive: caseSensitive == true ? true : null,
+            CaseSensitive: hasCandidateId ? null : caseSensitive == true ? true : null,
             ExcludeGenerated: excludeGenerated,
-            Limit: limit);
-        if (match == "regex")
+            Limit: limit,
+            CandidateId: candidateId,
+            Selection: new FuzzySelectionOptions(candidatePolicy, minConfidence, explainSelectionValue ?? false));
+        if (candidateId is null && match == "regex")
         {
             SymbolSearchOptions searchOptions = new(
                 Query: options.Query,
@@ -1652,6 +2059,37 @@ internal static class BatchCommand
         return true;
     }
 
+    private static bool TryGetOptionalFile(
+        JsonElement payload,
+        string propertyName,
+        out FileInfo? file,
+        out BatchError? error)
+    {
+        file = null;
+        if (!payload.TryGetProperty(propertyName, out JsonElement element))
+        {
+            error = null;
+            return true;
+        }
+
+        if (!TryReadOptionalStringElement(element, propertyName, out string? value, out error))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            error = BatchError.FromDiagnostic(
+                DiagnosticIds.InvalidBatchInput,
+                $"{propertyName} must not be empty.");
+            return false;
+        }
+
+        file = new FileInfo(value);
+        error = null;
+        return true;
+    }
+
     private static bool TryGetRequiredInt(
         JsonElement payload,
         string propertyName,
@@ -1773,6 +2211,34 @@ internal static class BatchCommand
         }
 
         return TryReadOptionalStringElement(element, propertyName, out value, out error);
+    }
+
+    private static bool TryGetProfile(JsonElement payload, out string profile, out BatchError? error)
+    {
+        if (!TryGetOptionalString(payload, "profile", out string? value, out error))
+        {
+            profile = OutputProfile.Default;
+            return false;
+        }
+
+        if (value is null)
+        {
+            profile = OutputProfile.Default;
+            error = null;
+            return true;
+        }
+
+        profile = value.Trim();
+        if (!OutputProfile.IsValid(profile))
+        {
+            error = BatchError.FromDiagnostic(
+                DiagnosticIds.ParseError,
+                "profile must be compact, evidence, or full.");
+            return false;
+        }
+
+        error = null;
+        return true;
     }
 
     private static bool TryReadOptionalStringElement(
@@ -1954,437 +2420,5 @@ internal static class BatchCommand
             (value is not null && matchers.Any(matcher => matcher.IsMatch(value)));
     }
 
-    private sealed record BatchInput(BatchDefaults Defaults, IReadOnlyList<BatchRequest> Requests);
 
-    private sealed record BatchDefaults(string? Project, bool? ExcludeGenerated);
-
-    private sealed record BatchRequest(string Id, string Command, JsonElement Payload)
-    {
-        public BatchRequestResult Success(object result)
-        {
-            return BatchRequestResult.Success(Id, Command, result);
-        }
-
-        public BatchRequestResult Failed(BatchError error)
-        {
-            return BatchRequestResult.Failed(Id, Command, error);
-        }
-
-        public BatchRequestResult Failed(int diagnosticId, string message)
-        {
-            return BatchRequestResult.Failed(Id, Command, diagnosticId, message);
-        }
-
-        public BatchRequestResult Failed(ProjectFilterResolutionError error)
-        {
-            return BatchRequestResult.Failed(Id, Command, error.DiagnosticId, error.Message);
-        }
-
-        public BatchRequestResult Failed(SymbolsInResolutionError error)
-        {
-            return BatchRequestResult.Failed(Id, Command, error.DiagnosticId, error.Message);
-        }
-
-        public BatchRequestResult Failed(SymbolAtResolutionError error)
-        {
-            return BatchRequestResult.Failed(Id, Command, error.DiagnosticId, error.Message);
-        }
-
-        public BatchRequestResult Failed(SymbolInfoResolutionError error)
-        {
-            return BatchRequestResult.Failed(Id, Command, error.DiagnosticId, error.Message);
-        }
-
-        public BatchRequestResult Failed(OutlineResolutionError error)
-        {
-            return BatchRequestResult.Failed(Id, Command, error.DiagnosticId, error.Message);
-        }
-
-        public BatchRequestResult Failed(DefinitionResolutionError error)
-        {
-            return BatchRequestResult.Failed(Id, Command, error.DiagnosticId, error.Message);
-        }
-
-        public BatchRequestResult Failed(ReferencesResolutionError error)
-        {
-            return BatchRequestResult.Failed(Id, Command, error.DiagnosticId, error.Message);
-        }
-
-        public BatchRequestResult Failed(ImplementationsResolutionError error)
-        {
-            return BatchRequestResult.Failed(Id, Command, error.DiagnosticId, error.Message);
-        }
-
-        public BatchRequestResult Failed(TypeHierarchyResolutionError error)
-        {
-            return BatchRequestResult.Failed(Id, Command, error.DiagnosticId, error.Message);
-        }
-
-        public BatchRequestResult Failed(CallHierarchyResolutionError error)
-        {
-            return BatchRequestResult.Failed(Id, Command, error.DiagnosticId, error.Message);
-        }
-    }
-
-    private sealed record SourcePositionBatchOptions(
-        FileInfo File,
-        int Line,
-        int Column,
-        Project? Project,
-        ProjectFilterOutput? ProjectFilter,
-        bool ExcludeGenerated);
-
-    private sealed record NavigationResultBatchOptions(
-        NavigationResultFilter Filter,
-        IReadOnlyList<ProjectFilterOutput>? ProjectFilters);
-
-    private sealed record BatchResult(
-        string Workspace,
-        string Kind,
-        int TotalRequests,
-        int SucceededRequests,
-        int FailedRequests,
-        IReadOnlyList<BatchRequestResult> Results);
-
-    private sealed record BatchRequestResult(
-        string Id,
-        string Command,
-        bool Ok,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        object? Result,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        BatchError? Error)
-    {
-        public static BatchRequestResult Success(string id, string command, object result)
-        {
-            return new BatchRequestResult(id, command, Ok: true, result, Error: null);
-        }
-
-        public static BatchRequestResult Failed(string id, string command, BatchError error)
-        {
-            return new BatchRequestResult(id, command, Ok: false, Result: null, error);
-        }
-
-        public static BatchRequestResult Failed(string id, string command, int diagnosticId, string message)
-        {
-            return Failed(id, command, BatchError.FromDiagnostic(diagnosticId, message));
-        }
-    }
-
-    private sealed record BatchError(string Code, string Message)
-    {
-        public static BatchError FromDiagnostic(int diagnosticId, string message)
-        {
-            return new BatchError($"{DiagnosticIds.Prefix}{diagnosticId:D4}", message);
-        }
-    }
-
-    private sealed record OverviewResult(
-        string Workspace,
-        string Kind,
-        IReadOnlyList<OverviewProjectResult> Projects);
-
-    private sealed record OverviewProjectResult(
-        string Name,
-        string? Path,
-        string Language,
-        string? AssemblyName,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        string? TargetFramework,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        string? LanguageVersion,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<string>? PreprocessorSymbols);
-
-    private sealed record DiagnosticsResult(
-        string Workspace,
-        string Kind,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<ProjectFilterOutput>? Projects,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<string>? Severities,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<string>? Ids,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        bool ExcludeGenerated,
-        int? Limit,
-        int TotalDiagnostics,
-        IReadOnlyList<DiagnosticResult> Diagnostics);
-
-    private sealed record DiagnosticResult(
-        DiagnosticProjectResult Project,
-        string Severity,
-        string Id,
-        string Message,
-        string? Path,
-        int? Line,
-        int? Column,
-        int? EndLine,
-        int? EndColumn);
-
-    private sealed record DiagnosticProjectResult(
-        string Name,
-        string? Path,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        string? TargetFramework);
-
-    private sealed record SymbolsResult(
-        string Query,
-        string Match,
-        bool CaseSensitive,
-        IReadOnlyList<string> Kinds,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<string>? Namespaces,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        string? NamespaceMatch,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<string>? Containers,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        string? ContainerMatch,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<string>? Accessibilities,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<ProjectFilterOutput>? Projects,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        bool ExcludeGenerated,
-        int? Limit,
-        int TotalMatches,
-        IReadOnlyList<SymbolMatchResult> Matches);
-
-    private sealed record SymbolMatchResult(
-        string Name,
-        string Kind,
-        string? Container,
-        SymbolFacts Facts,
-        string Path,
-        int Line,
-        int Column,
-        int EndLine,
-        int EndColumn);
-
-    private sealed record SymbolsInResult(
-        string File,
-        int Line,
-        int StartColumn,
-        int EndColumn,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        ProjectFilterOutput? Project,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        bool ExcludeGenerated,
-        IReadOnlyList<SymbolsInSymbolResult> Symbols);
-
-    private sealed record SymbolsInSymbolResult(
-        string Name,
-        string Kind,
-        string? Container,
-        SymbolFacts Facts,
-        int Line,
-        int Column,
-        int EndLine,
-        int EndColumn);
-
-    private sealed record SymbolAtResult(
-        string File,
-        int Line,
-        int Column,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        ProjectFilterOutput? Project,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        bool ExcludeGenerated,
-        SymbolAtSymbolResult Symbol);
-
-    private sealed record SymbolAtSymbolResult(
-        string Name,
-        string Kind,
-        string? Container,
-        SymbolFacts Facts,
-        string? Path,
-        int? Line,
-        int? Column,
-        int? EndLine,
-        int? EndColumn);
-
-    private sealed record SymbolInfoResult(
-        string File,
-        int Line,
-        int Column,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        ProjectFilterOutput? Project,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        bool ExcludeGenerated,
-        SymbolInfoSymbol Symbol,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        SymbolExpressionInfo? Expression,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        SymbolInfoSymbol? ContainingSymbol,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        SymbolInvocationInfo? Invocation,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        SymbolAttributeInfo? Attribute,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        SymbolReturnInfo? Return,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        SymbolLambdaInfo? Lambda);
-
-    private sealed record OutlineResult(
-        string File,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        ProjectFilterOutput? Project,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        bool ExcludeGenerated,
-        IReadOnlyList<OutlineEntryResult> Entries);
-
-    private sealed record OutlineEntryResult(
-        string Name,
-        string Kind,
-        string? Container,
-        SymbolFacts Facts,
-        string Path,
-        int Line,
-        int Column,
-        int EndLine,
-        int EndColumn);
-
-    private sealed record DefinitionResult(
-        string File,
-        int Line,
-        int Column,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        ProjectFilterOutput? Project,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        bool ExcludeGenerated,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        bool IncludeMetadata,
-        SourceSymbolResult Symbol,
-        IReadOnlyList<SourceLocationResult> Definitions);
-
-    private sealed record ReferencesResult(
-        string File,
-        int Line,
-        int Column,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        ProjectFilterOutput? Project,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<ProjectFilterOutput>? ResultProjects,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<string>? ResultPaths,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<string>? ResultKinds,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        bool ExcludeGenerated,
-        int? Limit,
-        int TotalMatches,
-        SourceSymbolResult Symbol,
-        IReadOnlyList<ReferenceLocationResult> References);
-
-    private sealed record ImplementationsResult(
-        string File,
-        int Line,
-        int Column,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        ProjectFilterOutput? Project,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<ProjectFilterOutput>? ResultProjects,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<string>? ResultPaths,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<string>? ResultKinds,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        bool ExcludeGenerated,
-        int? Limit,
-        int TotalMatches,
-        SourceSymbolResult Symbol,
-        IReadOnlyList<ImplementationLocationResult> Implementations);
-
-    private sealed record TypeHierarchyResult(
-        string File,
-        int Line,
-        int Column,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        ProjectFilterOutput? Project,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        bool ExcludeGenerated,
-        HierarchySymbol Symbol,
-        IReadOnlyList<HierarchySymbol> BaseTypes,
-        IReadOnlyList<HierarchySymbol> Interfaces,
-        IReadOnlyList<HierarchySymbol> DerivedTypes,
-        IReadOnlyList<HierarchySymbol> ImplementingTypes,
-        IReadOnlyList<HierarchySymbol> BaseMembers,
-        IReadOnlyList<HierarchySymbol> OverridingMembers,
-        IReadOnlyList<HierarchySymbol> ImplementedMembers);
-
-    private sealed record CallersResult(
-        string File,
-        int Line,
-        int Column,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        ProjectFilterOutput? Project,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<ProjectFilterOutput>? ResultProjects,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<string>? ResultPaths,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<string>? ResultKinds,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        bool ExcludeGenerated,
-        int? Limit,
-        int TotalGroups,
-        CallHierarchySymbolResult Symbol,
-        IReadOnlyList<CallHierarchyGroupResult> Callers);
-
-    private sealed record CallsResult(
-        string File,
-        int Line,
-        int Column,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        ProjectFilterOutput? Project,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<ProjectFilterOutput>? ResultProjects,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<string>? ResultPaths,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        IReadOnlyList<string>? ResultKinds,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        bool ExcludeGenerated,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        bool IncludeMetadata,
-        int? Limit,
-        int TotalGroups,
-        CallHierarchySymbolResult Caller,
-        IReadOnlyList<CallHierarchyGroupResult> Calls);
-
-    private sealed record SourceSymbolResult(string Name, string Kind, string? Container, SymbolFacts Facts);
-
-    private sealed record SourceLocationResult(string Path, int Line, int Column, int EndLine, int EndColumn);
-
-    private sealed record SourceSymbolLocationResult(
-        string Name,
-        string Kind,
-        string? Container,
-        SymbolFacts Facts,
-        string? Path,
-        int? Line,
-        int? Column,
-        int? EndLine,
-        int? EndColumn);
-
-    private sealed record ReferenceLocationResult(
-        string Path,
-        int Line,
-        int Column,
-        int EndLine,
-        int EndColumn,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        SourceSymbolLocationResult? ContainingSymbol);
-
-    private sealed record ImplementationLocationResult(
-        string Name,
-        string Kind,
-        string? Container,
-        SymbolFacts Facts,
-        string Path,
-        int Line,
-        int Column,
-        int EndLine,
-        int EndColumn);
 }

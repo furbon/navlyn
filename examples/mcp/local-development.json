@@ -1,0 +1,12 @@
+{
+  "command": "dotnet",
+  "args": [
+    "navlyn.Mcp/bin/Debug/net10.0/navlyn.Mcp.dll",
+    "--workspace",
+    "navlyn.slnx",
+    "--navlyn-executable",
+    "dotnet",
+    "--navlyn-arg",
+    "navlyn/bin/Debug/net10.0/navlyn.dll"
+  ]
+}

@@ -36,10 +36,20 @@ function ConvertFrom-Bytes {
     }
 }
 
+function Test-IsBuildOutputPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $relativePath = [System.IO.Path]::GetRelativePath($RepoRoot, $Path)
+    $segments = $relativePath -split '[\\/]'
+    return $segments -contains 'bin' -or $segments -contains 'obj'
+}
+
 $Files = Get-ChildItem -LiteralPath $RepoRoot -Recurse -Filter '*.cs' -File |
     Where-Object {
-        $_.FullName -notmatch '\\bin\\' -and
-        $_.FullName -notmatch '\\obj\\'
+        !(Test-IsBuildOutputPath -Path $_.FullName)
     }
 
 foreach ($File in $Files) {

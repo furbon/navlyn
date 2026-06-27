@@ -15,10 +15,10 @@ $FixtureSolutionPath = Join-Path $RepoRoot 'tests/fixtures/WorkspaceSemanticsFix
 $ConditionalSourcePath = Join-Path $RepoRoot 'tests/fixtures/WorkspaceSemanticsFixture/Conditional/ConditionalCode.cs'
 $MultiTargetSourcePath = Join-Path $RepoRoot 'tests/fixtures/WorkspaceSemanticsFixture/MultiTarget/TargetSpecificCode.cs'
 $LinkedSourcePath = Join-Path $RepoRoot 'tests/fixtures/WorkspaceSemanticsFixture/Shared/LinkedContext.cs'
-$ConditionalDisplayPath = Join-Path 'tests' (Join-Path 'fixtures' (Join-Path 'WorkspaceSemanticsFixture' (Join-Path 'Conditional' 'ConditionalCode.cs')))
-$MultiTargetDisplayPath = Join-Path 'tests' (Join-Path 'fixtures' (Join-Path 'WorkspaceSemanticsFixture' (Join-Path 'MultiTarget' 'TargetSpecificCode.cs')))
-$LinkedDisplayPath = Join-Path 'tests' (Join-Path 'fixtures' (Join-Path 'WorkspaceSemanticsFixture' (Join-Path 'Shared' 'LinkedContext.cs')))
-$MultiTargetProjectDisplayPath = Join-Path 'tests' (Join-Path 'fixtures' (Join-Path 'WorkspaceSemanticsFixture' (Join-Path 'MultiTarget' 'MultiTarget.csproj')))
+$ConditionalDisplayPath = 'tests/fixtures/WorkspaceSemanticsFixture/Conditional/ConditionalCode.cs'
+$MultiTargetDisplayPath = 'tests/fixtures/WorkspaceSemanticsFixture/MultiTarget/TargetSpecificCode.cs'
+$LinkedDisplayPath = 'tests/fixtures/WorkspaceSemanticsFixture/Shared/LinkedContext.cs'
+$MultiTargetProjectDisplayPath = 'tests/fixtures/WorkspaceSemanticsFixture/MultiTarget/MultiTarget.csproj'
 
 [xml]$ProjectXml = Get-Content -Raw -LiteralPath $ProjectPath
 $TargetFramework = [string]$ProjectXml.Project.PropertyGroup.TargetFramework

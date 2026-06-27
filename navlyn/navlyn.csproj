@@ -10,15 +10,24 @@
     <ToolCommandName>navlyn</ToolCommandName>
     <Version>0.1.0</Version>
     <Authors>furbon.tech</Authors>
-    <Description>Semantic code navigation for agents and automation.</Description>
+    <Description>Semantic code navigation and investigation for agents and automation.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>csharp;dotnet;roslyn;cli;code-navigation;automation;agents</PackageTags>
+    <RepositoryUrl>https://github.com/furbon/navlyn</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/furbon/navlyn</PackageProjectUrl>
+    <PackageReleaseNotes>Initial local semantic code navigation and investigation tool release.</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
     <None Include="..\README.md" Pack="true" PackagePath="\" />
     <None Include="..\README_ja.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>navlyn.Tests</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,111 @@
+﻿using Navlyn.Symbols;
+using Navlyn.Tests.TestSupport;
+
+namespace Navlyn.Tests.Symbols;
+
+[Collection(ResolverComponentTestCollection.Name)]
+public sealed class RelationshipResolverComponentTests(ResolverComponentTestFixture fixture)
+{
+    [Fact]
+    public async Task ImplementationsResolver_InterfaceMember_ReturnsConcreteImplementation()
+    {
+        SourcePosition query = fixture.SymbolNavigationSource.Position(
+            "string FormatWidget(Widget widget);",
+            "FormatWidget");
+
+        ImplementationsResolutionResult result = await new ImplementationsResolver().ResolveAsync(
+            fixture.SymbolNavigationWorkspace.Solution,
+            fixture.SymbolNavigationSource.File,
+            query.Line,
+            query.Column,
+            project: null,
+            excludeGenerated: true,
+            CancellationToken.None);
+
+        ImplementationsResolution resolution = ResolverAssert.NoError(result.Resolution, result.Error);
+        ImplementationLocation implementation = Assert.Single(resolution.Implementations);
+        Assert.Equal("FormatWidget", implementation.Name);
+        Assert.Equal("Method", implementation.Kind);
+        Assert.Equal("SymbolNavigationFixture.DefaultWidgetFormatter", implementation.Container);
+        Assert.Equal("SymbolNavigationFixture.DefaultWidgetFormatter.FormatWidget(SymbolNavigationFixture.Widget)", implementation.Facts.DisplayName);
+    }
+
+    [Fact]
+    public async Task TypeHierarchyResolver_Interface_ReturnsImplementingType()
+    {
+        SourcePosition query = fixture.SymbolNavigationSource.Position(
+            "public interface IWidgetFormatter",
+            "IWidgetFormatter");
+
+        TypeHierarchyResolutionResult result = await new TypeHierarchyResolver().ResolveAsync(
+            fixture.SymbolNavigationWorkspace.Solution,
+            fixture.SymbolNavigationSource.File,
+            query.Line,
+            query.Column,
+            project: null,
+            excludeGenerated: true,
+            CancellationToken.None);
+
+        TypeHierarchyResolution resolution = ResolverAssert.NoError(result.Resolution, result.Error);
+        HierarchySymbol implementation = Assert.Single(resolution.ImplementingTypes);
+        Assert.Equal("DefaultWidgetFormatter", implementation.Name);
+        Assert.Equal("NamedType", implementation.Kind);
+        Assert.Equal("SymbolNavigationFixture", implementation.Container);
+        ResolverAssert.PathEndsWith(implementation.Path, fixture.SymbolNavigationSource);
+    }
+
+    [Fact]
+    public async Task CallHierarchyResolver_Callers_IncludesInterfaceDispatchCaller()
+    {
+        SourcePosition query = fixture.SymbolNavigationSource.Position(
+            "string FormatWidget(Widget widget);",
+            "FormatWidget");
+        SourcePosition expectedCall = fixture.SymbolNavigationSource.Position(
+            "string viaInterface = formatter.FormatWidget(Widget.CreateDefault());",
+            "FormatWidget");
+
+        CallersResolutionResult result = await new CallHierarchyResolver().ResolveCallersAsync(
+            fixture.SymbolNavigationWorkspace.Solution,
+            fixture.SymbolNavigationSource.File,
+            query.Line,
+            query.Column,
+            project: null,
+            excludeGenerated: true,
+            CancellationToken.None);
+
+        CallersResolution resolution = ResolverAssert.NoError(result.Resolution, result.Error);
+        CallHierarchyGroup caller = Assert.Single(resolution.Callers);
+        Assert.Equal("Exercise", caller.Symbol.Name);
+        Assert.Equal("Method", caller.Symbol.Kind);
+        Assert.Equal("SymbolNavigationFixture.SemanticEdgeCases", caller.Symbol.Container);
+
+        CallHierarchyLocation location = Assert.Single(caller.Locations);
+        ResolverAssert.Location(expectedCall, location.Line, location.Column, location.EndLine, location.EndColumn);
+    }
+
+    [Fact]
+    public async Task CallHierarchyResolver_Calls_NormalizesPropertyAndEventAccesses()
+    {
+        SourcePosition query = fixture.SymbolNavigationSource.Position(
+            "public void IncrementCounter()",
+            "IncrementCounter");
+
+        CallsResolutionResult result = await new CallHierarchyResolver().ResolveCallsAsync(
+            fixture.SymbolNavigationWorkspace.Solution,
+            fixture.SymbolNavigationSource.File,
+            query.Line,
+            query.Column,
+            project: null,
+            excludeGenerated: true,
+            includeMetadata: false,
+            CancellationToken.None);
+
+        CallsResolution resolution = ResolverAssert.NoError(result.Resolution, result.Error);
+        Assert.Contains(
+            resolution.Calls,
+            group => group.Symbol.Name == "Counter" && group.Symbol.Kind == "Property");
+        Assert.Contains(
+            resolution.Calls,
+            group => group.Symbol.Name == "Changed" && group.Symbol.Kind == "Event");
+    }
+}

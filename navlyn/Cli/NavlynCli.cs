@@ -16,7 +16,13 @@ internal static class NavlynCli
         {
             foreach (ParseError error in parseResult.Errors)
             {
-                DiagnosticReporter.WriteError(DiagnosticIds.ParseError, error.Message);
+                DiagnosticReporter.WriteError(DiagnosticIds.ParseError, NormalizeParseErrorMessage(error.Message));
+            }
+
+            if (args.Length == 0)
+            {
+                Console.Error.WriteLine();
+                WriteRootHelp(rootCommand);
             }
 
             return Task.FromResult(ExitCodes.UsageError);
@@ -25,11 +31,23 @@ internal static class NavlynCli
         return parseResult.InvokeAsync();
     }
 
+    private static void WriteRootHelp(RootCommand rootCommand)
+    {
+        ParseResult helpParseResult = rootCommand.Parse(["--help"]);
+        helpParseResult.Invoke(new InvocationConfiguration { Output = Console.Error });
+    }
+
+    private static string NormalizeParseErrorMessage(string message)
+    {
+        return message.EndsWith("。.", StringComparison.Ordinal) ? message[..^1] : message;
+    }
+
     private static RootCommand CreateRootCommand()
     {
-        RootCommand rootCommand = new("Semantic code navigation for agents and automation.");
+        RootCommand rootCommand = new("Semantic code navigation and investigation for agents and automation.");
         rootCommand.Subcommands.Add(CheckCommand.Create());
         rootCommand.Subcommands.Add(OverviewCommand.Create());
+        rootCommand.Subcommands.Add(RepoGraphCommand.Create());
         rootCommand.Subcommands.Add(SymbolsCommand.Create());
         rootCommand.Subcommands.Add(SymbolsInCommand.Create());
         rootCommand.Subcommands.Add(OutlineCommand.Create());
@@ -47,6 +65,19 @@ internal static class NavlynCli
         rootCommand.Subcommands.Add(RelatedCommand.Create());
         rootCommand.Subcommands.Add(ImpactCommand.Create());
         rootCommand.Subcommands.Add(EntrypointsCommand.Create());
+        rootCommand.Subcommands.Add(FrameworkEntrypointsCommand.Create());
+        rootCommand.Subcommands.Add(ChangedSymbolsCommand.Create());
+        rootCommand.Subcommands.Add(ImpactDiffCommand.Create());
+        rootCommand.Subcommands.Add(DiagnosticsDiffCommand.Create());
+        rootCommand.Subcommands.Add(ReviewDiffCommand.Create());
+        rootCommand.Subcommands.Add(ReviewPackCommand.Create());
+        rootCommand.Subcommands.Add(ContextPackCommand.Create());
+        rootCommand.Subcommands.Add(PublicApiDiffCommand.Create());
+        rootCommand.Subcommands.Add(TestsForSymbolCommand.Create());
+        rootCommand.Subcommands.Add(TestsForDiffCommand.Create());
+        rootCommand.Subcommands.Add(DiGraphCommand.Create());
+        rootCommand.Subcommands.Add(WhereRegisteredCommand.Create());
+        rootCommand.Subcommands.Add(DiImpactCommand.Create());
         rootCommand.Subcommands.Add(DiagnosticsCommand.Create());
         rootCommand.Subcommands.Add(BatchCommand.Create());
         return rootCommand;

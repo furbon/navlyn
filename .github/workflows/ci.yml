@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    name: Build and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - ubuntu-latest
+          - macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore navlyn.slnx
+
+      - name: Build
+        run: dotnet build navlyn.slnx --no-restore
+
+      - name: Test
+        run: dotnet test navlyn.slnx --no-build
+
+      - name: C# file format validation
+        shell: pwsh
+        run: ./scripts/test-csharp-file-format.ps1
+
+      - name: Quick validation
+        shell: pwsh
+        run: ./scripts/test-quick.ps1 -NoBuild
+
+      - name: CLI contract validation
+        shell: pwsh
+        run: ./scripts/test-cli-contract.ps1 -NoBuild
+
+      - name: Symbol navigation fixture validation
+        shell: pwsh
+        run: ./scripts/test-symbol-navigation.ps1 -NoBuild
+
+      - name: Fuzzy discovery fixture validation
+        shell: pwsh
+        run: ./scripts/test-fuzzy-discovery.ps1 -NoBuild
+
+      - name: Multi-project navigation fixture validation
+        shell: pwsh
+        run: ./scripts/test-multi-project-navigation.ps1 -NoBuild
+
+      - name: Workspace semantics fixture validation
+        shell: pwsh
+        run: ./scripts/test-workspace-semantics.ps1 -NoBuild
+
+      - name: Diagnostics fixture validation
+        shell: pwsh
+        run: ./scripts/test-diagnostics.ps1 -NoBuild

@@ -45,6 +45,46 @@ internal static class FuzzyCommandSupport
         };
     }
 
+    public static Option<string?> CreateCandidateIdOption()
+    {
+        return new Option<string?>("--candidate-id")
+        {
+            Description = "Select a fuzzy candidate returned by a previous command."
+        };
+    }
+
+    public static Option<string> CreateCandidatePolicyOption(string defaultValue)
+    {
+        Option<string> option = new("--candidate-policy")
+        {
+            Description = "Candidate selection policy: fail, select, or group.",
+            DefaultValueFactory = _ => defaultValue
+        };
+
+        option.AcceptOnlyFromAmong("fail", "select", "group");
+        return option;
+    }
+
+    public static Option<string> CreateMinConfidenceOption(string defaultValue)
+    {
+        Option<string> option = new("--min-confidence")
+        {
+            Description = "Minimum confidence required before returning selected-candidate facts.",
+            DefaultValueFactory = _ => defaultValue
+        };
+
+        option.AcceptOnlyFromAmong("high", "medium", "low");
+        return option;
+    }
+
+    public static Option<bool> CreateExplainSelectionOption()
+    {
+        return new Option<bool>("--explain-selection")
+        {
+            Description = "Include structured candidate selection explanation."
+        };
+    }
+
     public static bool TryCreateQuery(
         LoadedWorkspace loadedWorkspace,
         string query,
@@ -127,6 +167,112 @@ internal static class FuzzyCommandSupport
                 Path: filter.Path,
                 TargetFramework: filter.TargetFramework)).ToArray();
         return true;
+    }
+
+    public static bool TryCreateSelection(
+        LoadedWorkspace loadedWorkspace,
+        string? query,
+        string? candidateId,
+        IReadOnlyList<string> assumeKinds,
+        string match,
+        bool caseSensitive,
+        IReadOnlyList<string> projectFilters,
+        bool excludeGenerated,
+        int? limit,
+        string candidatePolicy,
+        string minConfidence,
+        bool explainSelection,
+        bool allowGroupPolicy,
+        out FuzzyQueryOptions options,
+        out IReadOnlyList<Project> projects,
+        out IReadOnlyList<FuzzyProjectFilter>? projectOutputs,
+        out int exitCode)
+    {
+        options = new FuzzyQueryOptions("", [], "smart", null, false, null);
+        projects = [];
+        projectOutputs = null;
+        exitCode = ExitCodes.Success;
+
+        bool hasQuery = !string.IsNullOrWhiteSpace(query);
+        bool hasCandidateId = !string.IsNullOrWhiteSpace(candidateId);
+        if (hasQuery == hasCandidateId)
+        {
+            DiagnosticReporter.WriteError(DiagnosticIds.ParseError, "Specify exactly one fuzzy selection input: --query or --candidate-id.");
+            exitCode = ExitCodes.UsageError;
+            return false;
+        }
+
+        if (!allowGroupPolicy && candidatePolicy == "group")
+        {
+            DiagnosticReporter.WriteError(DiagnosticIds.InvalidCandidatePolicy, "--candidate-policy group is not supported by this command.");
+            exitCode = ExitCodes.UsageError;
+            return false;
+        }
+
+        if (hasCandidateId)
+        {
+            string normalizedCandidateId = candidateId!.Trim();
+            if (assumeKinds.Count > 0 || match != "smart" || caseSensitive)
+            {
+                DiagnosticReporter.WriteError(DiagnosticIds.ParseError, "--candidate-id cannot be combined with --assume-kind, --match, or --case-sensitive.");
+                exitCode = ExitCodes.UsageError;
+                return false;
+            }
+
+            if (!FuzzyCandidateIdentity.TryParseCandidateId(normalizedCandidateId))
+            {
+                DiagnosticReporter.WriteError(DiagnosticIds.InvalidCandidateId, $"Invalid candidate id: {normalizedCandidateId}.");
+                exitCode = ExitCodes.UsageError;
+                return false;
+            }
+
+            query = normalizedCandidateId;
+            candidateId = normalizedCandidateId;
+        }
+
+        if (!TryCreateQuery(
+            loadedWorkspace,
+            query!,
+            hasCandidateId ? [] : assumeKinds,
+            hasCandidateId ? "smart" : match,
+            hasCandidateId ? false : caseSensitive,
+            projectFilters,
+            excludeGenerated,
+            limit,
+            out options,
+            out projects,
+            out projectOutputs,
+            out exitCode))
+        {
+            return false;
+        }
+
+        options = options with
+        {
+            CandidateId = candidateId,
+            Selection = new FuzzySelectionOptions(candidatePolicy, minConfidence, explainSelection)
+        };
+        return true;
+    }
+
+    public static async Task<bool> TryValidateSelectionAsync(
+        FuzzyDiscoveryResolver resolver,
+        IReadOnlyList<Project> projects,
+        FuzzyQueryOptions options,
+        CancellationToken cancellationToken)
+    {
+        FuzzyCandidateResolution resolution = await resolver.ResolveCandidatesForSelectionAsync(
+            projects,
+            options,
+            cancellationToken);
+
+        if (resolution.Error is null)
+        {
+            return true;
+        }
+
+        DiagnosticReporter.WriteError(resolution.Error.DiagnosticId, resolution.Error.Message);
+        return false;
     }
 
     public static bool TryCreatePositiveOption(string name, int value, out int exitCode)

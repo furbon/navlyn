@@ -102,14 +102,16 @@ foreach ($trackedLocalPath in $trackedLocalPaths) {
     Add-Issue -Issues $Issues -Code 'NAVLYN-PUBLIC-TRACKED-LOCAL-ARTIFACT' -Path $trackedLocalPath -Message 'Local scratch or build output is tracked.'
 }
 
-$projectPath = Join-Path $RepoRoot 'navlyn/navlyn.csproj'
-if (Test-Path -LiteralPath $projectPath) {
-    [xml]$projectXml = Get-Content -Raw -LiteralPath $projectPath
-    foreach ($propertyName in @('Authors', 'PackageLicenseExpression', 'Description', 'PackageReadmeFile')) {
-        $propertyNode = $projectXml.SelectSingleNode("//PropertyGroup/$propertyName")
-        $value = if ($null -eq $propertyNode) { '' } else { [string]$propertyNode.InnerText }
-        if ([string]::IsNullOrWhiteSpace($value)) {
-            Add-Issue -Issues $Issues -Code "NAVLYN-PUBLIC-PACKAGE-$($propertyName.ToUpperInvariant())-MISSING" -Path 'navlyn/navlyn.csproj' -Message "Package metadata '$propertyName' is missing."
+foreach ($projectRelativePath in @('navlyn/navlyn.csproj', 'navlyn.Mcp/navlyn.Mcp.csproj')) {
+    $projectPath = Join-Path $RepoRoot $projectRelativePath
+    if (Test-Path -LiteralPath $projectPath) {
+        [xml]$projectXml = Get-Content -Raw -LiteralPath $projectPath
+        foreach ($propertyName in @('Authors', 'PackageLicenseExpression', 'Description', 'PackageReadmeFile', 'RepositoryUrl', 'PackageProjectUrl')) {
+            $propertyNode = $projectXml.SelectSingleNode("//PropertyGroup/$propertyName")
+            $value = if ($null -eq $propertyNode) { '' } else { [string]$propertyNode.InnerText }
+            if ([string]::IsNullOrWhiteSpace($value)) {
+                Add-Issue -Issues $Issues -Code "NAVLYN-PUBLIC-PACKAGE-$($propertyName.ToUpperInvariant())-MISSING" -Path $projectRelativePath -Message "Package metadata '$propertyName' is missing."
+            }
         }
     }
 }
@@ -157,7 +159,8 @@ foreach ($root in $publicSearchRoots) {
 if ($RunValidation) {
     Invoke-CheckedCommand -Name 'dotnet restore' -Command 'dotnet restore navlyn.slnx'
     Invoke-CheckedCommand -Name 'dotnet build' -Command 'dotnet build navlyn.slnx'
-    Invoke-CheckedCommand -Name 'smoke' -Command '.\scripts\smoke.ps1'
+    Invoke-CheckedCommand -Name 'quick validation' -Command './scripts/test-quick.ps1 -NoBuild'
+    Invoke-CheckedCommand -Name 'CLI contract validation' -Command './scripts/test-cli-contract.ps1 -NoBuild'
 }
 
 if ($Issues.Count -eq 0) {

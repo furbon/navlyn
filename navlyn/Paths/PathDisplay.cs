@@ -18,24 +18,26 @@ internal static class PathDisplay
             relativePath.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal);
 
         return isOutsideDisplayRoot || Path.IsPathRooted(relativePath)
-            ? fullPath
-            : relativePath;
+            ? NormalizeDisplaySeparators(fullPath)
+            : NormalizeDisplaySeparators(relativePath);
     }
 
     public static IReadOnlyList<string> GetInputPathCandidates(string path, string? anchorPath)
     {
-        if (Path.IsPathRooted(path))
+        string normalizedPath = NormalizeInputSeparators(path);
+
+        if (Path.IsPathRooted(normalizedPath))
         {
-            return [Path.GetFullPath(path)];
+            return [Path.GetFullPath(normalizedPath)];
         }
 
         List<string> candidates = [];
-        AddCandidate(candidates, Path.GetFullPath(path));
+        AddCandidate(candidates, Path.GetFullPath(normalizedPath));
 
         string? currentRepositoryRoot = FindRepositoryRoot(Directory.GetCurrentDirectory());
         if (currentRepositoryRoot is not null)
         {
-            AddCandidate(candidates, Path.GetFullPath(Path.Combine(currentRepositoryRoot, path)));
+            AddCandidate(candidates, Path.GetFullPath(Path.Combine(currentRepositoryRoot, normalizedPath)));
         }
 
         if (!string.IsNullOrWhiteSpace(anchorPath))
@@ -45,12 +47,12 @@ internal static class PathDisplay
                 ? anchorFullPath
                 : Path.GetDirectoryName(anchorFullPath) ?? anchorFullPath;
 
-            AddCandidate(candidates, Path.GetFullPath(Path.Combine(anchorDirectory, path)));
+            AddCandidate(candidates, Path.GetFullPath(Path.Combine(anchorDirectory, normalizedPath)));
 
             string? anchorRepositoryRoot = FindRepositoryRoot(anchorDirectory);
             if (anchorRepositoryRoot is not null)
             {
-                AddCandidate(candidates, Path.GetFullPath(Path.Combine(anchorRepositoryRoot, path)));
+                AddCandidate(candidates, Path.GetFullPath(Path.Combine(anchorRepositoryRoot, normalizedPath)));
             }
         }
 
@@ -88,5 +90,20 @@ internal static class PathDisplay
         {
             candidates.Add(candidate);
         }
+    }
+
+    private static string NormalizeDisplaySeparators(string path)
+    {
+        return path
+            .Replace('\\', '/')
+            .Replace(Path.DirectorySeparatorChar, '/')
+            .Replace(Path.AltDirectorySeparatorChar, '/');
+    }
+
+    private static string NormalizeInputSeparators(string path)
+    {
+        return path
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .Replace('/', Path.DirectorySeparatorChar);
     }
 }

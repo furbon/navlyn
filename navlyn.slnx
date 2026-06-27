@@ -1,3 +1,5 @@
 <Solution>
   <Project Path="navlyn/navlyn.csproj" />
+  <Project Path="navlyn.Mcp/navlyn.Mcp.csproj" />
+  <Project Path="navlyn.Tests/navlyn.Tests.csproj" />
 </Solution>

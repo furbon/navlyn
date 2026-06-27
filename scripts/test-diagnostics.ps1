@@ -12,8 +12,9 @@ $SolutionPath = Join-Path $RepoRoot 'navlyn.slnx'
 $ProjectPath = Join-Path $RepoRoot 'navlyn/navlyn.csproj'
 $ProjectDir = Join-Path $RepoRoot 'navlyn'
 $FixtureProjectPath = Join-Path $RepoRoot 'tests/fixtures/DiagnosticFixture/DiagnosticFixture.csproj'
-$FixtureDisplayPath = Join-Path 'tests' (Join-Path 'fixtures' (Join-Path 'DiagnosticFixture' 'BrokenCode.cs'))
-$FixtureProjectDisplayPath = Join-Path 'tests' (Join-Path 'fixtures' (Join-Path 'DiagnosticFixture' 'DiagnosticFixture.csproj'))
+$FixtureDisplayPath = 'tests/fixtures/DiagnosticFixture/BrokenCode.cs'
+$GeneratedFixtureDisplayPath = 'tests/fixtures/DiagnosticFixture/GeneratedBroken.g.cs'
+$FixtureProjectDisplayPath = 'tests/fixtures/DiagnosticFixture/DiagnosticFixture.csproj'
 
 [xml]$ProjectXml = Get-Content -Raw -LiteralPath $ProjectPath
 $TargetFramework = [string]$ProjectXml.Project.PropertyGroup.TargetFramework
@@ -176,9 +177,11 @@ try {
 
     $json = $diagnostics.Stdout | ConvertFrom-Json
     $missingTypeDiagnostics = @($json.diagnostics | Where-Object { $_.id -eq 'CS0246' })
+    $generatedDiagnostics = @($missingTypeDiagnostics | Where-Object { $_.path -eq $GeneratedFixtureDisplayPath })
     Assert-Equal -Name 'diagnostics workspace' -Actual $json.workspace -Expected $FixtureProjectDisplayPath
     Assert-Equal -Name 'diagnostics kind' -Actual $json.kind -Expected 'project'
-    Assert-Equal -Name 'diagnostics CS0246 count' -Actual $missingTypeDiagnostics.Count -Expected 2
+    Assert-Equal -Name 'diagnostics CS0246 count' -Actual $missingTypeDiagnostics.Count -Expected 4
+    Assert-Equal -Name 'diagnostics generated CS0246 count' -Actual $generatedDiagnostics.Count -Expected 2
     Assert-Equal -Name 'diagnostics first severity' -Actual $missingTypeDiagnostics[0].severity -Expected 'Error'
     Assert-Equal -Name 'diagnostics first path' -Actual $missingTypeDiagnostics[0].path -Expected $FixtureDisplayPath
     Assert-Equal -Name 'diagnostics first line' -Actual $missingTypeDiagnostics[0].line -Expected 5
@@ -198,6 +201,7 @@ try {
     Assert-Equal -Name 'diagnostics exclude generated flag' -Actual $excludeGeneratedJson.excludeGenerated -Expected $true
     Assert-Equal -Name 'diagnostics exclude generated total' -Actual $excludeGeneratedJson.totalDiagnostics -Expected 2
     Assert-Equal -Name 'diagnostics exclude generated ids' -Actual @($excludeGeneratedJson.diagnostics | Where-Object { $_.id -eq 'CS0246' }).Count -Expected 2
+    Assert-Equal -Name 'diagnostics exclude generated paths' -Actual @($excludeGeneratedJson.diagnostics | Where-Object { $_.path -eq $GeneratedFixtureDisplayPath }).Count -Expected 0
 
     $diagnosticsByProject = Invoke-Navlyn `
         -Name 'diagnostics project filter' `
@@ -217,7 +221,7 @@ try {
     Assert-Equal -Name 'diagnostics severity filter value' -Actual @($filteredJson.severities)[0] -Expected 'Error'
     Assert-Equal -Name 'diagnostics id filter value' -Actual @($filteredJson.ids)[0] -Expected 'CS0246'
     Assert-Equal -Name 'diagnostics limit value' -Actual $filteredJson.limit -Expected 1
-    Assert-Equal -Name 'diagnostics filtered total before limit' -Actual $filteredJson.totalDiagnostics -Expected 2
+    Assert-Equal -Name 'diagnostics filtered total before limit' -Actual $filteredJson.totalDiagnostics -Expected 4
     Assert-Equal -Name 'diagnostics filtered returned count' -Actual @($filteredJson.diagnostics).Count -Expected 1
 
     $diagnosticsInvalidSeverity = Invoke-Navlyn `

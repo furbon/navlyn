@@ -1,0 +1,9 @@
+{
+  "requests": [
+    { "id": "review", "command": "review-diff", "profile": "evidence", "symbolLimit": 20, "impactLimit": 40 },
+    { "id": "context", "command": "context-pack", "diff": true, "profile": "compact", "budgetTokens": 8000 },
+    { "id": "tests", "command": "tests-for-diff", "profile": "compact", "testLimit": 20 },
+    { "id": "api", "command": "public-api-diff", "profile": "evidence", "base": "main", "changeLimit": 20 },
+    { "id": "packs", "command": "review-pack", "pack": ["async", "disposal", "nullability", "security"], "profile": "evidence", "findingLimit": 50 }
+  ]
+}

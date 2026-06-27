@@ -16,10 +16,10 @@ $AppSourcePath = Join-Path $RepoRoot 'tests/fixtures/MultiProjectFixture/App/Cro
 $LibrarySourcePath = Join-Path $RepoRoot 'tests/fixtures/MultiProjectFixture/Library/SharedWidget.cs'
 $AppProjectPath = Join-Path $RepoRoot 'tests/fixtures/MultiProjectFixture/App/App.csproj'
 $LibraryProjectPath = Join-Path $RepoRoot 'tests/fixtures/MultiProjectFixture/Library/Library.csproj'
-$AppDisplayPath = Join-Path 'tests' (Join-Path 'fixtures' (Join-Path 'MultiProjectFixture' (Join-Path 'App' 'CrossProjectRunner.cs')))
-$LibraryDisplayPath = Join-Path 'tests' (Join-Path 'fixtures' (Join-Path 'MultiProjectFixture' (Join-Path 'Library' 'SharedWidget.cs')))
-$AppProjectDisplayPath = Join-Path 'tests' (Join-Path 'fixtures' (Join-Path 'MultiProjectFixture' (Join-Path 'App' 'App.csproj')))
-$LibraryProjectDisplayPath = Join-Path 'tests' (Join-Path 'fixtures' (Join-Path 'MultiProjectFixture' (Join-Path 'Library' 'Library.csproj')))
+$AppDisplayPath = 'tests/fixtures/MultiProjectFixture/App/CrossProjectRunner.cs'
+$LibraryDisplayPath = 'tests/fixtures/MultiProjectFixture/Library/SharedWidget.cs'
+$AppProjectDisplayPath = 'tests/fixtures/MultiProjectFixture/App/App.csproj'
+$LibraryProjectDisplayPath = 'tests/fixtures/MultiProjectFixture/Library/Library.csproj'
 
 [xml]$ProjectXml = Get-Content -Raw -LiteralPath $ProjectPath
 $TargetFramework = [string]$ProjectXml.Project.PropertyGroup.TargetFramework
@@ -299,13 +299,13 @@ try {
         -ExpectedExitCode 0
 
     $overviewJson = $overview.Stdout | ConvertFrom-Json
-    Assert-Equal -Name 'overview workspace' -Actual $overviewJson.workspace -Expected (Join-Path 'tests' (Join-Path 'fixtures' (Join-Path 'MultiProjectFixture' 'MultiProjectFixture.slnx')))
+    Assert-Equal -Name 'overview workspace' -Actual $overviewJson.workspace -Expected 'tests/fixtures/MultiProjectFixture/MultiProjectFixture.slnx'
     Assert-Equal -Name 'overview kind' -Actual $overviewJson.kind -Expected 'solution'
     Assert-Equal -Name 'overview project count' -Actual @($overviewJson.projects).Count -Expected 2
     Assert-Equal -Name 'overview first project name' -Actual @($overviewJson.projects)[0].name -Expected 'App'
-    Assert-Equal -Name 'overview first project path' -Actual @($overviewJson.projects)[0].path -Expected (Join-Path 'tests' (Join-Path 'fixtures' (Join-Path 'MultiProjectFixture' (Join-Path 'App' 'App.csproj'))))
+    Assert-Equal -Name 'overview first project path' -Actual @($overviewJson.projects)[0].path -Expected 'tests/fixtures/MultiProjectFixture/App/App.csproj'
     Assert-Equal -Name 'overview second project name' -Actual @($overviewJson.projects)[1].name -Expected 'Library'
-    Assert-Equal -Name 'overview second project path' -Actual @($overviewJson.projects)[1].path -Expected (Join-Path 'tests' (Join-Path 'fixtures' (Join-Path 'MultiProjectFixture' (Join-Path 'Library' 'Library.csproj'))))
+    Assert-Equal -Name 'overview second project path' -Actual @($overviewJson.projects)[1].path -Expected 'tests/fixtures/MultiProjectFixture/Library/Library.csproj'
 
     $symbolsByProjectName = Invoke-Navlyn `
         -Name 'symbols project filter by name' `

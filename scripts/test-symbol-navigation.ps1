@@ -14,8 +14,8 @@ $ProjectDir = Join-Path $RepoRoot 'navlyn'
 $FixtureProjectPath = Join-Path $RepoRoot 'tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj'
 $FixtureSourcePath = Join-Path $RepoRoot 'tests/fixtures/SymbolNavigationFixture/FixtureCode.cs'
 $GeneratedSourcePath = Join-Path $RepoRoot 'tests/fixtures/SymbolNavigationFixture/GeneratedThing.g.cs'
-$FixtureDisplayPath = Join-Path 'tests' (Join-Path 'fixtures' (Join-Path 'SymbolNavigationFixture' 'FixtureCode.cs'))
-$GeneratedDisplayPath = Join-Path 'tests' (Join-Path 'fixtures' (Join-Path 'SymbolNavigationFixture' 'GeneratedThing.g.cs'))
+$FixtureDisplayPath = 'tests/fixtures/SymbolNavigationFixture/FixtureCode.cs'
+$GeneratedDisplayPath = 'tests/fixtures/SymbolNavigationFixture/GeneratedThing.g.cs'
 
 [xml]$ProjectXml = Get-Content -Raw -LiteralPath $ProjectPath
 $TargetFramework = [string]$ProjectXml.Project.PropertyGroup.TargetFramework
