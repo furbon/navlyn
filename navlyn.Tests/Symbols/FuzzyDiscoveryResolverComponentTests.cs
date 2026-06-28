@@ -144,6 +144,20 @@ public sealed class FuzzyDiscoveryResolverComponentTests(ResolverComponentTestFi
     }
 
     [Fact]
+    public async Task AboutAsync_ExcludeGenerated_ExcludesGeneratedReferenceSummary()
+    {
+        FuzzyAboutResult includeGenerated = await AboutSpawnAsync(excludeGenerated: false);
+        FuzzyAboutResult excludeGenerated = await AboutSpawnAsync(excludeGenerated: true);
+
+        Assert.Equal(3, includeGenerated.References!.TotalMatches);
+        Assert.Equal(2, excludeGenerated.References!.TotalMatches);
+        Assert.Contains(includeGenerated.References.References, IsGeneratedPath);
+        Assert.DoesNotContain(excludeGenerated.References.References, IsGeneratedPath);
+        Assert.Contains(includeGenerated.References.Files, file => file.Path.EndsWith("GeneratedWidget.g.cs", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(excludeGenerated.References.Files, file => file.Path.EndsWith("GeneratedWidget.g.cs", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task FindAsync_MinConfidenceHigh_DoesNotSelectMediumCandidate()
     {
         FuzzyFindResult result = await new FuzzyDiscoveryResolver().FindAsync(
@@ -176,5 +190,33 @@ public sealed class FuzzyDiscoveryResolverComponentTests(ResolverComponentTestFi
     private IReadOnlyList<Project> Projects()
     {
         return fixture.FuzzyDiscoveryWorkspace.Solution.Projects.ToArray();
+    }
+
+    private Task<FuzzyAboutResult> AboutSpawnAsync(bool excludeGenerated)
+    {
+        return new FuzzyDiscoveryResolver().AboutAsync(
+            fixture.FuzzyDiscoveryWorkspace,
+            new FuzzyQueryOptions(
+                Query: "Spawn",
+                AssumeKinds: ["Method"],
+                Match: "auto",
+                CaseSensitive: null,
+                ExcludeGenerated: excludeGenerated,
+                Limit: null),
+            new FuzzyAboutOptions(
+                MemberLimit: 10,
+                ReferenceLimit: 10,
+                RelationLimit: 10,
+                IncludeSnippets: false,
+                SnippetLines: 0,
+                ExcludeGenerated: excludeGenerated),
+            Projects(),
+            projectFilters: null,
+            CancellationToken.None);
+    }
+
+    private static bool IsGeneratedPath(FuzzySourceLocation location)
+    {
+        return location.Path.EndsWith("GeneratedWidget.g.cs", StringComparison.OrdinalIgnoreCase);
     }
 }

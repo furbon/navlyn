@@ -30,6 +30,7 @@ internal static partial class BatchCommand
             "callers" => await ExecuteCallersAsync(loadedWorkspace, defaults, request, cancellationToken),
             "calls" => await ExecuteCallsAsync(loadedWorkspace, defaults, request, cancellationToken),
             "find" => await ExecuteFuzzyFindAsync(loadedWorkspace, defaults, request, cancellationToken),
+            "resolve-target" => await ExecuteResolveTargetAsync(loadedWorkspace, defaults, request, cancellationToken),
             "where-used" => await ExecuteFuzzyWhereUsedAsync(loadedWorkspace, defaults, request, cancellationToken),
             "about" => await ExecuteFuzzyAboutAsync(loadedWorkspace, defaults, request, cancellationToken),
             "related" => await ExecuteFuzzyFilesAsync(loadedWorkspace, defaults, request, "related", cancellationToken),

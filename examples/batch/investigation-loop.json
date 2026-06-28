@@ -1,6 +1,7 @@
 {
   "requests": [
     { "id": "repo", "command": "repo-graph", "profile": "compact" },
+    { "id": "target", "command": "resolve-target", "query": "CheckCommand", "assumeKind": "NamedType", "limit": 10 },
     { "id": "find", "command": "find", "query": "CheckCommand", "assumeKind": "NamedType", "limit": 10 },
     { "id": "tests", "command": "tests-for-symbol", "query": "CheckCommand", "assumeKind": "NamedType", "profile": "compact", "testLimit": 10 }
   ]

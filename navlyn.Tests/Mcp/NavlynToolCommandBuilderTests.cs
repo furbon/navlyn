@@ -47,6 +47,59 @@ public sealed class NavlynToolCommandBuilderTests
     }
 
     [Fact]
+    public void ResolveTarget_QueryBuildsCliCommand()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.ResolveTarget(
+            query: "CheckCommand",
+            candidateId: null,
+            file: null,
+            line: null,
+            column: null,
+            assumeKind: "NamedType",
+            assumeKinds: null,
+            match: null,
+            caseSensitive: null,
+            project: null,
+            projects: null,
+            excludeGenerated: true,
+            limit: 5,
+            candidatePolicy: null,
+            minConfidence: null,
+            explainSelection: null);
+
+        Assert.True(result.IsValid);
+        Assert.Equal("resolve-target", result.Command);
+        Assert.Equal(
+            ["--query", "CheckCommand", "--assume-kind", "NamedType", "--limit", "5", "--exclude-generated"],
+            result.Arguments);
+    }
+
+    [Fact]
+    public void ResolveTarget_SourcePositionRejectsFuzzyOptions()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.ResolveTarget(
+            query: null,
+            candidateId: null,
+            file: "Service.cs",
+            line: 12,
+            column: 8,
+            assumeKind: "NamedType",
+            assumeKinds: null,
+            match: null,
+            caseSensitive: null,
+            project: null,
+            projects: null,
+            excludeGenerated: null,
+            limit: null,
+            candidatePolicy: null,
+            minConfidence: null,
+            explainSelection: null);
+
+        Assert.False(result.IsValid);
+        Assert.Equal("Source-position resolve-target mode cannot be combined with fuzzy options.", result.Error);
+    }
+
+    [Fact]
     public void ReviewDiff_IncludeUnstagedFalseIsForwardedAsBoolValue()
     {
         CommandBuildResult result = NavlynToolCommandBuilder.ReviewDiff(

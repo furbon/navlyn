@@ -1223,6 +1223,82 @@ internal static partial class BatchCommand
             cancellationToken));
     }
 
+    private static async Task<BatchRequestResult> ExecuteResolveTargetAsync(
+        LoadedWorkspace loadedWorkspace,
+        BatchDefaults defaults,
+        BatchRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetSymbolSelectionInput(request.Payload, "resolve-target", out SymbolSelectionInput input, out BatchError? error) ||
+            !TryGetEffectiveExcludeGenerated(request.Payload, defaults, out bool excludeGenerated, out error))
+        {
+            return request.Failed(error!);
+        }
+
+        ResolveTargetResolver resolver = new();
+        if (input.IsSourcePosition)
+        {
+            if (!TryGetProjectFilters(request.Payload, defaults, out IReadOnlyList<string> projectFilters, out error))
+            {
+                return request.Failed(error!);
+            }
+
+            if (projectFilters.Count > 1)
+            {
+                return request.Failed(DiagnosticIds.ParseError, "Source-position mode accepts at most one project filter.");
+            }
+
+            ProjectFilterResolutionResult projectResult = new ProjectFilterResolver().ResolveSingle(
+                loadedWorkspace.Solution,
+                projectFilters.Count == 0 ? null : projectFilters[0]);
+            if (projectResult.Error is not null)
+            {
+                return request.Failed(projectResult.Error);
+            }
+
+            Project? project = projectFilters.Count == 0 ? null : projectResult.Projects.Single();
+            ResolveTargetResult result = await resolver.ResolveSourcePositionAsync(
+                loadedWorkspace,
+                input.File!,
+                input.Line!.Value,
+                input.Column!.Value,
+                project,
+                excludeGenerated,
+                cancellationToken);
+
+            return result.SelectedTarget is null
+                ? request.Failed(DiagnosticIds.SymbolNotFoundAtPosition, result.Warnings.FirstOrDefault() ?? "No symbol was found at the source position.")
+                : request.Success(result);
+        }
+
+        if (!TryGetFuzzyQuery(
+            loadedWorkspace,
+            defaults,
+            request,
+            readCandidateLimit: true,
+            out FuzzyQueryOptions options,
+            out IReadOnlyList<Project> projects,
+            out IReadOnlyList<FuzzyProjectFilter>? projectFiltersOutput,
+            out error))
+        {
+            return request.Failed(error!);
+        }
+
+        FuzzyDiscoveryResolver fuzzyResolver = new();
+        BatchRequestResult? failedResult = await ValidateFuzzySelectionAsync(request, fuzzyResolver, projects, options, cancellationToken);
+        if (failedResult is not null)
+        {
+            return failedResult;
+        }
+
+        return request.Success(await resolver.ResolveFuzzyAsync(
+            loadedWorkspace,
+            options,
+            projects,
+            projectFiltersOutput,
+            cancellationToken));
+    }
+
     private static async Task<BatchRequestResult> ExecuteFuzzyWhereUsedAsync(
         LoadedWorkspace loadedWorkspace,
         BatchDefaults defaults,
@@ -1835,7 +1911,9 @@ internal static partial class BatchCommand
         }
 
         bool allowGroupPolicy = request.Command is "find" or "where-used";
-        string defaultPolicy = allowGroupPolicy ? "group" : "fail";
+        string defaultPolicy = request.Command == "resolve-target"
+            ? "select"
+            : allowGroupPolicy ? "group" : "fail";
         string candidatePolicy = candidatePolicyValue ?? defaultPolicy;
         if (candidatePolicy is not ("fail" or "select" or "group"))
         {

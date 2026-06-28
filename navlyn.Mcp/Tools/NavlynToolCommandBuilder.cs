@@ -90,6 +90,76 @@ internal static class NavlynToolCommandBuilder
         return CommandBuildResult.Valid("find", args);
     }
 
+    public static CommandBuildResult ResolveTarget(
+        string? query,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        string? assumeKind,
+        string[]? assumeKinds,
+        string? match,
+        bool? caseSensitive,
+        string? project,
+        string[]? projects,
+        bool? excludeGenerated,
+        int? limit,
+        string? candidatePolicy,
+        string? minConfidence,
+        bool? explainSelection)
+    {
+        if (!TryAddSymbolOrPositionInput([], query, candidateId, file, line, column, out List<string> args, out string? error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        bool sourcePositionMode = !string.IsNullOrWhiteSpace(file) || line is not null || column is not null;
+        if (sourcePositionMode)
+        {
+            bool hasFuzzyOptions = !string.IsNullOrWhiteSpace(assumeKind) ||
+                NormalizeValues(assumeKinds).Count > 0 ||
+                !string.IsNullOrWhiteSpace(match) ||
+                caseSensitive is not null ||
+                limit is not null ||
+                !string.IsNullOrWhiteSpace(candidatePolicy) ||
+                !string.IsNullOrWhiteSpace(minConfidence) ||
+                explainSelection is not null;
+            if (hasFuzzyOptions)
+            {
+                return CommandBuildResult.Invalid("Source-position resolve-target mode cannot be combined with fuzzy options.");
+            }
+
+            if (!TryAddProjects(args, project, projects, out error))
+            {
+                return CommandBuildResult.Invalid(error);
+            }
+
+            AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+            return CommandBuildResult.Valid("resolve-target", args);
+        }
+
+        if (!TryAddFuzzyOptions(
+            args,
+            assumeKind,
+            assumeKinds,
+            match,
+            caseSensitive,
+            project,
+            projects,
+            excludeGenerated,
+            limit,
+            candidatePolicy,
+            minConfidence,
+            explainSelection,
+            allowGroupPolicy: false,
+            out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        return CommandBuildResult.Valid("resolve-target", args);
+    }
+
     public static CommandBuildResult FuzzySymbolCommand(
         string cliCommand,
         string? query,

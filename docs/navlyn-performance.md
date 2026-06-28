@@ -36,6 +36,20 @@ Reports are structured JSON with:
 
 Timings are environment-dependent. Treat local reports as release and investigation evidence, not a universal service-level objective.
 
+## Reading A Report
+
+For agent adoption decisions, inspect more than elapsed time:
+
+- `elapsedMs`: wall-clock cost for a single command or tool call.
+- stdout size: downstream parsing and LLM context pressure.
+- stderr size and exit code: workspace load health, warnings, and failures.
+- JSON validity and top-level command/profile: whether automation can safely parse the result.
+- result counts: candidate count, changed symbol count, related files, tests, routes, or diagnostics.
+- truncation flags and warnings: whether the chosen profile or limits hid useful evidence.
+- expected files: whether the files a maintainer expects are present in related/context outputs.
+
+Record the SDK, operating system, repository commit, workspace path, Navlyn version, scenario, profile, iterations, and whether the first run included restore/build/cache warmup.
+
 ## Choosing A Workflow
 
 Use direct CLI commands when:
@@ -65,6 +79,26 @@ Use `full` when:
 
 - downstream tooling expects the richest command-specific JSON shape;
 - compatibility with the full CLI contract matters more than output size.
+
+## Agent-Loop Patterns
+
+Prefer this pattern for a first broad scan:
+
+```powershell
+navlyn repo-graph --workspace navlyn.slnx --profile compact
+navlyn resolve-target --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --limit 10
+navlyn context-pack --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --goal modify --profile compact --budget-tokens 8000
+```
+
+Prefer batch when the agent already knows it needs several facts:
+
+```powershell
+Get-Content examples/batch/investigation-loop.json | navlyn batch --workspace navlyn.slnx
+```
+
+For MCP clients, the equivalent is `navlyn_batch`. The server intentionally starts the CLI per tool call, so batching several supported facts can be more important than adding more dedicated MCP tools.
+
+Do not interpret faster compact output as better semantic coverage. It is smaller by design. If a compact result warns about truncation or omits the expected file, rerun with higher limits, `evidence`, or `full`.
 
 ## Release Readiness
 
