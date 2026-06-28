@@ -33,9 +33,10 @@ Get-Content examples/batch/investigation-loop.json | navlyn batch --workspace na
 
 ## Symbol Investigation
 
-When the agent has an approximate symbol name, let Navlyn resolve candidates first. Reuse `candidateId` for deeper calls so the investigation remains anchored to the same declaration.
+When the agent has an approximate symbol name, resolve a target first. Reuse `candidateId` for deeper calls so the investigation remains anchored to the same declaration. Use `find` when the agent or human needs a broader candidate list.
 
 ```powershell
+navlyn resolve-target --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --limit 10
 navlyn find --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --limit 10
 navlyn about --workspace navlyn.slnx --candidate-id sym:v1:...
 navlyn references --workspace navlyn.slnx --candidate-id sym:v1:... --usage-kind invoke --usage-kind construct --group-by file --group-by usage-kind --limit 50
@@ -131,7 +132,7 @@ navlyn route-map --workspace navlyn.slnx --profile compact
 navlyn options-graph --workspace navlyn.slnx --query PaymentOptions --profile compact
 navlyn where-handled --workspace navlyn.slnx --query CreateOrderCommand --assume-kind NamedType --profile compact
 navlyn ef-model --workspace navlyn.slnx --entity Order --profile compact
-navlyn package-usage --workspace navlyn.slnx --package Microsoft.EntityFrameworkCore --namespaces Microsoft.EntityFrameworkCore --profile compact
+navlyn package-usage --workspace navlyn.slnx --package Microsoft.EntityFrameworkCore --namespace Microsoft.EntityFrameworkCore --profile compact
 ```
 
 These commands report bounded source-level evidence. They do not claim complete runtime route tables, effective authorization, secret/config values, EF runtime models, or package compatibility.
@@ -153,7 +154,7 @@ Equivalent MCP flow for a symbol investigation:
 
 ```text
 navlyn_workspace_summary(profile: "compact")
-navlyn_find_symbol(query: "CheckCommand", assumeKind: "NamedType")
+navlyn_resolve_target(query: "CheckCommand", assumeKind: "NamedType")
 navlyn_exact_navigation(operation: "references", candidateId: "sym:v1:...", usageKinds: ["invoke", "construct"], groupBy: ["file", "usage-kind"], limit: 50)
 navlyn_about_symbol(candidateId: "sym:v1:...")
 navlyn_related_files(candidateId: "sym:v1:...", limit: 30)

@@ -64,6 +64,7 @@ internal static class NavlynCli
         rootCommand.Subcommands.Add(CallersCommand.Create());
         rootCommand.Subcommands.Add(CallsCommand.Create());
         rootCommand.Subcommands.Add(FindCommand.Create());
+        rootCommand.Subcommands.Add(ResolveTargetCommand.Create());
         rootCommand.Subcommands.Add(WhereUsedCommand.Create());
         rootCommand.Subcommands.Add(AboutCommand.Create());
         rootCommand.Subcommands.Add(RelatedCommand.Create());

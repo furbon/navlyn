@@ -2,6 +2,8 @@
 
 This document is the release packaging and publication runbook for Navlyn.
 
+Discovery-channel copy, GitHub About/topics suggestions, VS Code MCP install-link notes, and registry boundaries live in [`navlyn-discovery-channels.md`](navlyn-discovery-channels.md).
+
 Navlyn is distributed as two separate .NET tool packages:
 
 - `navlyn`: the CLI for semantic navigation and investigation.
@@ -23,9 +25,44 @@ Installed command names are:
 - `navlyn`
 - `navlyn-mcp`
 
+## Repository-Local Tool Manifest
+
+For teams and agent workspaces, prefer a repository-local .NET tool manifest when you want every contributor and CI job to use the same Navlyn versions:
+
+```powershell
+dotnet new tool-manifest
+dotnet tool install navlyn --version 0.2.0
+dotnet tool install navlyn-mcp --version 0.2.0
+dotnet tool restore
+dotnet tool run navlyn -- check --workspace path/to/YourRepo.slnx
+```
+
+Commit `.config/dotnet-tools.json` after reviewing the exact versions. A copyable manifest shape lives in [`../examples/install/dotnet-tools.json`](../examples/install/dotnet-tools.json).
+
+Use global tools for individual machines and quick evaluation. Use local tools for repository policy, reproducible agent setup, and CI scripts. In CI, run `dotnet tool restore` before invoking `dotnet tool run navlyn -- ...`.
+
+Local MCP server configuration can still invoke `navlyn-mcp` when the restored local tool directory is on the command path for that process. If that is not true in your client, use an absolute command path or a small wrapper script outside the committed example.
+
+## MCP Client Setup Examples
+
+The installed stdio server shape is:
+
+```json
+{
+  "command": "navlyn-mcp",
+  "args": ["--workspace", "path/to/YourRepo.slnx"]
+}
+```
+
+For VS Code workspace configuration, use `.vscode/mcp.json` with a `servers` object. See [`../examples/install/vscode-mcp.json`](../examples/install/vscode-mcp.json).
+
+For local development from this repository, use [`../examples/mcp/local-development.json`](../examples/mcp/local-development.json). For installed tools, use [`../examples/mcp/dotnet-tool.json`](../examples/mcp/dotnet-tool.json).
+
+When an agent needs several facts from one workspace, prefer the MCP `navlyn_batch` tool or CLI `navlyn batch` with examples from [`../examples/batch`](../examples/batch). This reduces repeated workspace load cost and keeps tool selection smaller.
+
 ## Release Identity
 
-The first public NuGet release is `0.1.0`.
+The current public release target is `0.2.0`.
 
 Keep `navlyn` and `navlyn-mcp` versions synchronized for the initial public releases. Both packages should use the same repository URL, license expression, README, package icon, author, and release notes discipline.
 
@@ -117,7 +154,7 @@ The workflow must run release validation before packing and publishing. Normal `
 
 After packages are published and install smoke passes from NuGet:
 
-1. Create a `v0.1.0` tag.
+1. Create a `v0.2.0` tag.
 2. Create a GitHub Release using the `CHANGELOG.md` entry.
 3. Link to the NuGet install commands.
 4. Optionally attach `navlyn-release-pack.json` and package artifacts for traceability.
@@ -129,8 +166,8 @@ Do not create the public release before package smoke and dry-run publish have s
 After NuGet indexing completes, test installation from the public feed in a clean shell:
 
 ```powershell
-dotnet tool install --global navlyn --version 0.1.0
-dotnet tool install --global navlyn-mcp --version 0.1.0
+dotnet tool install --global navlyn --version 0.2.0
+dotnet tool install --global navlyn-mcp --version 0.2.0
 navlyn --help
 navlyn-mcp --help
 navlyn check --workspace path/to/YourRepo.slnx

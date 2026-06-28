@@ -8,17 +8,17 @@
     <PackAsTool>true</PackAsTool>
     <PackageId>navlyn</PackageId>
     <ToolCommandName>navlyn</ToolCommandName>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Authors>furbon.tech</Authors>
-    <Description>Semantic C#/.NET code navigation and investigation CLI for agents and automation.</Description>
+    <Description>Read-only semantic C#/.NET evidence CLI for coding agents, CI, and automation.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>navlyn-icon.png</PackageIcon>
-    <PackageTags>dotnet-tool;csharp;dotnet;roslyn;cli;code-navigation;automation;agents</PackageTags>
+    <PackageTags>dotnet-tool;csharp;dotnet;roslyn;cli;mcp;ai-agents;semantic-code-navigation;automation</PackageTags>
     <RepositoryUrl>https://github.com/furbon/navlyn</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/furbon/navlyn</PackageProjectUrl>
-    <PackageReleaseNotes>Initial public 0.1.0 release of the Navlyn semantic C#/.NET investigation CLI.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.2.0 adds resolve-target anchoring across CLI, batch, and MCP workflows; updates agent onboarding, installation examples, JSON compatibility notes, and release-readiness documentation.</PackageReleaseNotes>
     <Copyright>Copyright (c) 2026 furbon.tech</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>

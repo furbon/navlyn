@@ -9,7 +9,7 @@ internal static class NavlynMcpPrompts
     [McpServerPrompt(Name = "navlyn_understand_symbol", Title = "Understand A C# Symbol")]
     [Description("Guide an MCP client through a facts-only Navlyn symbol understanding flow.")]
     public static string UnderstandSymbol(
-        [Description("Candidate id from navlyn_find_symbol when available.")] string? candidateId = null,
+        [Description("Candidate id from navlyn_resolve_target or navlyn_find_symbol when available.")] string? candidateId = null,
         [Description("Approximate symbol query when candidateId is not available.")] string? query = null)
     {
         string target = FormatTarget(candidateId, query);
@@ -17,7 +17,7 @@ internal static class NavlynMcpPrompts
 Use Navlyn as a facts-only C# semantic investigation server for {target}.
 
 Recommended flow:
-1. If candidateId is missing, call navlyn_find_symbol with the query and inspect confidence, candidates, and truncation.
+1. If candidateId is missing, call navlyn_resolve_target with the query and inspect confidence, selectedTarget, candidates, and warnings.
 2. Call navlyn_about_symbol with candidateId when possible.
 3. Call navlyn_exact_navigation with operation definition or references when precise source facts are needed.
 4. Call navlyn_context_pack with goal understand and a compact profile before reading several files.
@@ -29,7 +29,7 @@ Do not infer runtime behavior from static facts alone. Check confidence, warning
     [McpServerPrompt(Name = "navlyn_prepare_edit", Title = "Prepare A C# Edit")]
     [Description("Guide an MCP client through pre-edit semantic investigation using Navlyn facts.")]
     public static string PrepareEdit(
-        [Description("Candidate id from navlyn_find_symbol when available.")] string? candidateId = null,
+        [Description("Candidate id from navlyn_resolve_target or navlyn_find_symbol when available.")] string? candidateId = null,
         [Description("Approximate symbol query when candidateId is not available.")] string? query = null,
         [Description("Optional expected change kind such as signature, behavior, nullability, async, or public-api.")] string? changeKind = null)
     {
@@ -39,7 +39,7 @@ Do not infer runtime behavior from static facts alone. Check confidence, warning
 Prepare {change} for {target} with Navlyn facts before editing.
 
 Recommended flow:
-1. Resolve the target with navlyn_find_symbol if candidateId is missing.
+1. Resolve the target with navlyn_resolve_target if candidateId is missing.
 2. Call navlyn_exact_navigation with operation references and a sensible limit.
 3. Call navlyn_impact with candidateId and depth 2 for bounded static impact.
 4. Call navlyn_tests_for_symbol with candidateId to find related test candidates.

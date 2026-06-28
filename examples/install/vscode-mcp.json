@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "navlyn": {
+      "type": "stdio",
+      "command": "navlyn-mcp",
+      "args": [
+        "--workspace",
+        "${workspaceFolder}/YourRepo.slnx"
+      ],
+      "cwd": "${workspaceFolder}"
+    }
+  }
+}

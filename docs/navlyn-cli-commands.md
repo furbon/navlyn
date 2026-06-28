@@ -9,7 +9,7 @@ Navlyn commands are grouped by investigation style:
 | Family | Commands | Purpose |
 | --- | --- | --- |
 | Workspace facts | `check`, `overview`, `repo-graph`, `diagnostics`, `symbol-diagnostics`, `diagnostic-pack` | Load workspaces and report deterministic repository, project, package, and compiler facts. |
-| Fuzzy investigations | `find`, `where-used`, `about`, `related`, `impact`, `entrypoints` | Resolve approximate symbol intent into candidates, selected-symbol summaries, related files, impact, and entrypoint chains. |
+| Fuzzy investigations | `find`, `resolve-target`, `where-used`, `about`, `related`, `impact`, `entrypoints` | Resolve approximate symbol intent into candidates, selected target envelopes, selected-symbol summaries, related files, impact, and entrypoint chains. |
 | Diff and review | `changed-symbols`, `impact-diff`, `diagnostics-diff`, `review-diff`, `review-pack` | Produce evidence-first facts for Git diffs and review workflows. |
 | Context and batching | `context-pack`, `batch` | Build bounded agent reading material and run multiple machine-readable requests through one workspace load. |
 | Public API and tests | `public-api-diff`, `tests-for-symbol`, `tests-for-diff` | Compare source-level public/protected API surface and discover related test candidates. |
@@ -40,6 +40,32 @@ Navlyn commands are grouped by investigation style:
 
 Run examples from the repository root. Use `--no-launch-profile` when running through `dotnet run` so Visual Studio launch settings do not affect stdout.
 
+## JSON Compatibility Policy
+
+Navlyn output is intended for agents, CI, and scripts. Consumers should parse named fields and ignore unknown fields.
+
+Compatibility guarantees:
+
+- Successful commands write one JSON document to stdout.
+- Diagnostics, progress, and errors are written to stderr.
+- Usage errors exit `2`; runtime and workspace failures exit `1`.
+- Existing documented top-level fields keep their meaning within the same major workflow schema.
+- New fields may be added at any object level.
+- New enum-like string values may be added when Roslyn or Navlyn can report more precise facts.
+- Arrays are ordered deterministically by command-specific stable keys such as path, line, column, name, kind, project, and configured ranking.
+- Paths in JSON are repository-relative where possible and use `/` separators.
+
+Not guaranteed:
+
+- Opaque identifiers such as `candidateId` stay stable across source edits, generated-code changes, project filter changes, or Navlyn versions.
+- `full` output remains small or token-budget friendly.
+- Static impact, framework, DI, application-domain, diagnostics, and review facts are complete runtime proofs.
+- The exact set of additive symbol `facts` fields is fixed.
+
+Breaking changes require documentation updates and contract-test updates. Renaming or removing documented fields, changing exit behavior, moving diagnostics to stdout, changing path normalization, or changing profile semantics is breaking. Deprecation should be additive first: keep the old field, add a replacement or warning when practical, document the transition, and remove only in an intentional breaking release.
+
+Profiled workflow output uses `schemaVersion: "navlyn.workflow.v1"`. That schema version covers the shared workflow envelope (`schemaVersion`, `navlynVersion`, `workspace`, `kind`, `command`, `profile`, `configuration`, `reproCommand`, summaries, limits, warnings, and next actions), not every command's rich inner domain facts. A future `navlyn.workflow.v2` would be used for incompatible envelope changes.
+
 ## Output Profiles
 
 High-level workflow commands support `--profile compact|evidence|full`. The default is `full`.
@@ -47,6 +73,13 @@ High-level workflow commands support `--profile compact|evidence|full`. The defa
 - `full` preserves the rich command result and adds workflow metadata such as `schemaVersion`, `navlynVersion`, `profile`, `configuration`, and `reproCommand`.
 - `evidence` keeps summary and evidence-first sections for review, CI, and MCP callers while trimming snippet text and deep arrays.
 - `compact` keeps metadata, summary counts, warnings, next actions, and small highlights for output-budgeted agent scans.
+
+Profile compatibility:
+
+- `full` is the best choice for tools that need command-specific detail and can tolerate additive fields.
+- `evidence` and `compact` are stable workflow profiles, but intentionally omit or trim deep details. Consumers should rely on their summaries, warnings, limits, truncation flags, and highlights instead of expecting every field from `full`.
+- A command may add new compact/evidence highlights, warning codes, or next actions without a schema-version bump.
+- If a profile truncates data, it reports truncation through `truncated`, section-level `truncated`, profile limits, command limits, warnings, or a combination documented by the command.
 
 Profiled workflow output uses `schemaVersion: "navlyn.workflow.v1"`. The supported direct commands are `repo-graph`, `changed-symbols`, `impact-diff`, `diagnostics-diff`, `review-diff`, `review-pack`, `context-pack`, `public-api-diff`, `tests-for-symbol`, `tests-for-diff`, `framework-entrypoints`, `di-graph`, `where-registered`, `di-impact`, `route-map`, `route-impact`, `options-graph`, `config-impact`, `where-handled`, `message-flow`, `ef-model`, `entity-impact`, `package-usage`, and `package-impact`.
 
@@ -111,7 +144,7 @@ Common options:
 - `--assume-kind <kind>`: optional repeated Roslyn symbol kind used for ranking.
 - `--match smart|exact|contains|regex`: defaults to `smart`.
 - `--case-sensitive`: makes name matching case-sensitive where applicable.
-- `--candidate-id <id>`: selects a candidate returned by a previous fuzzy command. Supported by fuzzy workflows such as `where-used`, `about`, `related`, `impact`, `entrypoints`, and `context-pack`; exact source-navigation commands such as `symbol-at`, `symbol-info`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, and `calls`; test/DI/application-domain commands such as `tests-for-symbol`, `where-registered`, `di-impact`, `where-handled`, `message-flow`, and `entity-impact`; not supported by `find`.
+- `--candidate-id <id>`: selects a candidate returned by a previous fuzzy command. Supported by fuzzy workflows such as `resolve-target`, `where-used`, `about`, `related`, `impact`, `entrypoints`, and `context-pack`; exact source-navigation commands such as `symbol-at`, `symbol-info`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, and `calls`; test/DI/application-domain commands such as `tests-for-symbol`, `where-registered`, `di-impact`, `where-handled`, `message-flow`, and `entity-impact`; not supported by `find`.
 - `--candidate-policy fail|select|group`: controls ambiguous query handling. Defaults preserve existing behavior: `group` for `find` and `where-used`, `fail` for other selected-candidate workflows.
 - `--min-confidence high|medium|low`: minimum confidence required before returning selected-candidate facts. Defaults to `low` for `find` and `medium` for selected-candidate workflows.
 - `--explain-selection`: adds structured selection explanation.
@@ -152,6 +185,59 @@ dotnet run --no-launch-profile --project navlyn -- find --workspace navlyn.slnx 
 ```
 
 `find` returns the common fuzzy envelope and candidate list. It does not return references or relation summaries. Use its `candidateId` values to re-query selected-candidate workflows without repeating fuzzy selection.
+
+### `resolve-target`
+
+Resolves the first target an agent should anchor on from a fuzzy query, a previous `candidateId`, or an exact source position. Use it as a small standard entrypoint when the caller wants one selected target plus next actions. Use `find` instead when the caller wants a full candidate list for manual choice.
+
+```powershell
+dotnet run --no-launch-profile --project navlyn -- resolve-target --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType
+dotnet run --no-launch-profile --project navlyn -- resolve-target --workspace navlyn.slnx --candidate-id sym:v1:...
+dotnet run --no-launch-profile --project navlyn -- resolve-target --workspace navlyn.slnx --file navlyn/Cli/Commands/CheckCommand.cs --line 6 --column 23
+```
+
+Input modes:
+
+- `--query <text>` with fuzzy options such as `--assume-kind`, `--match`, `--candidate-policy`, and `--min-confidence`.
+- `--candidate-id <id>` returned by a previous fuzzy command.
+- `--file <path> --line <number> --column <number>` for exact source-position anchoring.
+
+Result shape:
+
+```json
+{
+  "workspace": "navlyn.slnx",
+  "kind": "solution",
+  "command": "resolve-target",
+  "selectionInput": {
+    "mode": "query",
+    "query": "CheckCommand"
+  },
+  "selectedTarget": {
+    "name": "CheckCommand",
+    "kind": "NamedType",
+    "container": "Navlyn.Cli.Commands",
+    "path": "navlyn/Cli/Commands/CheckCommand.cs",
+    "line": 6,
+    "column": 23
+  },
+  "candidateId": "sym:v1:b80453171915c2303ccb9b591fdcebb6",
+  "confidence": "high",
+  "candidateCount": 1,
+  "totalCandidates": 1,
+  "recommendedNextActions": [
+    {
+      "command": "definition",
+      "candidateId": "sym:v1:b80453171915c2303ccb9b591fdcebb6"
+    }
+  ],
+  "warnings": []
+}
+```
+
+When query mode cannot safely select one target, `selectedTarget` and `candidateId` are omitted, `ambiguityReason` is populated, and limited `candidates` are returned. Malformed or stale `candidateId` values use the same candidate-id diagnostics as other fuzzy commands. Source-position mode does not currently mint a `candidateId`; follow its file/line/column next actions or run query mode when a candidate id is needed.
+
+Future work candidates such as fully qualified name input, XML documentation comment id input, and metadata-name input are intentionally not part of the current contract.
 
 ### `where-used`
 
@@ -1235,7 +1321,7 @@ Input shape:
 Each request must include:
 
 - `id`: caller-provided correlation id. It must be unique enough for the caller's own workflow.
-- `command`: one of `overview`, `diagnostics`, `symbols`, `symbols-in`, `outline`, `symbol-at`, `symbol-info`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, `calls`, `find`, `where-used`, `about`, `related`, `impact`, `entrypoints`, `review-diff`, `review-pack`, `context-pack`, `repo-graph`, `public-api-diff`, `tests-for-symbol`, `tests-for-diff`, `framework-entrypoints`, `di-graph`, `where-registered`, `di-impact`, `route-map`, `route-impact`, `options-graph`, `config-impact`, `where-handled`, `message-flow`, `ef-model`, `entity-impact`, `package-usage`, or `package-impact`.
+- `command`: one of `overview`, `diagnostics`, `symbols`, `symbols-in`, `outline`, `symbol-at`, `symbol-info`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, `calls`, `find`, `resolve-target`, `where-used`, `about`, `related`, `impact`, `entrypoints`, `review-diff`, `review-pack`, `context-pack`, `repo-graph`, `public-api-diff`, `tests-for-symbol`, `tests-for-diff`, `framework-entrypoints`, `di-graph`, `where-registered`, `di-impact`, `route-map`, `route-impact`, `options-graph`, `config-impact`, `where-handled`, `message-flow`, `ef-model`, `entity-impact`, `package-usage`, or `package-impact`.
 
 Top-level `defaults.project` applies to requests that support project scoping. Requests may override it with `project`. `symbols` and `diagnostics` may also use `projects` for multiple project filters; do not specify both `project` and `projects` on the same request.
 Top-level `defaults.excludeGenerated` applies to requests that support generated-code filtering. Requests may override it with `excludeGenerated`.
@@ -1253,6 +1339,7 @@ Request options otherwise use the same names as the command JSON concepts:
 - `implementations`, `callers`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`, `resultProject`, `resultProjects`, `resultPath`, `resultPaths`, `resultKind`, `resultKinds`, `limit`.
 - `calls`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`, `resultProject`, `resultProjects`, `resultPath`, `resultPaths`, `resultKind`, `resultKinds`, `limit`, `includeMetadata`.
 - `find`: required `query`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `limit`, `candidatePolicy`, `minConfidence`, `explainSelection`.
+- `resolve-target`: required exactly one input mode: `query`, `candidateId`, or `file` with `line` and `column`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `limit`, `candidatePolicy`, `minConfidence`, `explainSelection`.
 - `where-used`: required `query` or `candidateId`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `limit`, `usageKind`, `usageKinds`, `groupBy`, `includeSnippets`, `snippetLines`, `candidatePolicy`, `minConfidence`, `explainSelection`.
 - `about`: required `query` or `candidateId`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `memberLimit`, `referenceLimit`, `relationLimit`, `includeSnippets`, `snippetLines`, `candidatePolicy`, `minConfidence`, `explainSelection`.
 - `related`, `impact`: required `query` or `candidateId`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `include`, `limit`, `depth`, `includeSnippets`, `snippetLines`, `candidatePolicy`, `minConfidence`, `explainSelection`.

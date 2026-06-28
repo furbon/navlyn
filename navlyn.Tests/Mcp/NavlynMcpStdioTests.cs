@@ -43,7 +43,7 @@ public sealed class NavlynMcpStdioTests
                 ClientInfo = new Implementation
                 {
                     Name = "navlyn-tests",
-                    Version = "0.1.0"
+                    Version = "0.2.0"
                 }
             },
             NullLoggerFactory.Instance,
@@ -51,6 +51,7 @@ public sealed class NavlynMcpStdioTests
 
         IList<McpClientTool> tools = await client.ListToolsAsync(cancellationToken: timeout.Token);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.WorkspaceSummaryTool);
+        Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.ResolveTargetTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.FindSymbolTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.ExactNavigationTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.BatchTool);

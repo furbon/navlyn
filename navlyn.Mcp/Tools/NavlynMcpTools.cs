@@ -11,6 +11,7 @@ internal static class NavlynMcpTools
 {
     public const string WorkspaceSummaryTool = "navlyn_workspace_summary";
     public const string FindSymbolTool = "navlyn_find_symbol";
+    public const string ResolveTargetTool = "navlyn_resolve_target";
     public const string AboutSymbolTool = "navlyn_about_symbol";
     public const string RelatedFilesTool = "navlyn_related_files";
     public const string ImpactTool = "navlyn_impact";
@@ -29,6 +30,9 @@ internal static class NavlynMcpTools
 
     private const string FindSymbolDescription =
         "Use when you have an approximate C# symbol name and need deterministic candidates or candidate ids. Do not use for comments, strings, markdown, generated artifacts, or non-C# content. Ambiguous results are returned as candidates; do not merge them. Follow with navlyn_about_symbol, navlyn_related_files, or navlyn_impact using candidateId.";
+
+    private const string ResolveTargetDescription =
+        "Use as the standard first symbol entry when an agent has an approximate C# name, a candidateId, or an exact source position and needs one small target envelope with recommended next actions. Prefer navlyn_find_symbol when the user explicitly wants a candidate list. Do not use for comments, strings, docs, non-C# files, or arbitrary command execution.";
 
     private const string AboutSymbolDescription =
         "Use when you need selected-symbol facts such as definition, member outline, reference summary, and relations. Prefer candidateId from navlyn_find_symbol when possible. Do not use for diff review; use navlyn_review_diff or navlyn_context_pack diff mode. Ambiguous queries return CLI candidate information without synthesized combined facts.";
@@ -109,6 +113,35 @@ internal static class NavlynMcpTools
             services,
             FindSymbolTool,
             NavlynToolCommandBuilder.FindSymbol(query, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, limit, candidatePolicy, minConfidence, explainSelection),
+            cancellationToken);
+    }
+
+    [McpServerTool(Name = ResolveTargetTool, Title = "Navlyn Resolve Target", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(ResolveTargetDescription)]
+    public static Task<CallToolResult> ResolveTarget(
+        IServiceProvider services,
+        [Description("Approximate symbol name query. Mutually exclusive with candidateId and file/line/column.")] string? query = null,
+        [Description("Candidate id returned by a previous fuzzy command. Mutually exclusive with query and file/line/column.")] string? candidateId = null,
+        [Description("C# source file target. Must be provided with line and column when query and candidateId are omitted.")] string? file = null,
+        [Description("1-based source line. Must be provided with file and column when source position mode is used.")] int? line = null,
+        [Description("1-based source column. Must be provided with file and line when source position mode is used.")] int? column = null,
+        [Description("Single Roslyn SymbolKind hint for query mode. Mutually exclusive with assumeKinds.")] string? assumeKind = null,
+        [Description("Roslyn SymbolKind hints for query mode. Mutually exclusive with assumeKind.")] string[]? assumeKinds = null,
+        [Description("Query match mode: smart, exact, contains, or regex.")] string? match = null,
+        [Description("Use case-sensitive query matching.")] bool? caseSensitive = null,
+        [Description("Single project filter. Mutually exclusive with projects.")] string? project = null,
+        [Description("Project filters. Mutually exclusive with project.")] string[]? projects = null,
+        [Description("Exclude generated code candidates or source-position targets.")] bool? excludeGenerated = null,
+        [Description("Candidate display limit for query mode. Must be 1 or greater.")] int? limit = null,
+        [Description("Candidate policy for query mode: fail or select.")] string? candidatePolicy = null,
+        [Description("Minimum confidence for query mode: high, medium, or low.")] string? minConfidence = null,
+        [Description("Include selection explanation in query or candidateId mode.")] bool? explainSelection = null,
+        CancellationToken cancellationToken = default)
+    {
+        return RunAsync(
+            services,
+            ResolveTargetTool,
+            NavlynToolCommandBuilder.ResolveTarget(query, candidateId, file, line, column, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, limit, candidatePolicy, minConfidence, explainSelection),
             cancellationToken);
     }
 
