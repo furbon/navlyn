@@ -86,7 +86,9 @@ Publishing is opt-in. Dry-run is the default:
 ./scripts/publish-nuget.ps1
 ```
 
-To publish, set `NUGET_API_KEY` and pass `-Publish`:
+To publish from GitHub Actions, use NuGet Trusted Publishing. The publish workflow exchanges the GitHub OIDC token for a short-lived NuGet API key shortly before pushing packages, then passes that temporary value to this script as `NUGET_API_KEY`.
+
+For local emergency publishing only, set `NUGET_API_KEY` manually and pass `-Publish`:
 
 ```powershell
 $env:NUGET_API_KEY = '<key>'
@@ -95,7 +97,7 @@ $env:NUGET_API_KEY = '<key>'
 
 The script reads `artifacts/packages/navlyn-release-pack.json` unless package paths are supplied explicitly.
 
-Use a NuGet API key scoped as narrowly as possible for the package IDs and publish operation. Keep the key out of the repository and store it only in the protected GitHub environment or local release environment.
+Avoid long-lived NuGet API keys for normal releases. If a fallback key is ever created, scope it as narrowly as possible for the package IDs and publish operation, keep it out of the repository, and delete it after use.
 
 ## GitHub Manual Publish Workflow
 
@@ -105,7 +107,8 @@ Required repository setup before using it:
 
 - Create a GitHub environment named `nuget-production`.
 - Add required reviewers to the environment.
-- Add `NUGET_API_KEY` as an environment secret.
+- Add an environment variable named `NUGET_USER` with the nuget.org profile name, not an email address.
+- Configure nuget.org Trusted Publishing for the package-owning NuGet account, GitHub repository owner `furbon`, repository `navlyn`, workflow file `publish-nuget.yml`, and environment `nuget-production`.
 - Keep the workflow trigger as `workflow_dispatch` only.
 
 The workflow must run release validation before packing and publishing. Normal `push` and `pull_request` CI must never publish packages.
@@ -148,7 +151,7 @@ NuGet packages are immutable after publication. If a bad package is published:
 
 - Confirm package IDs `navlyn` and `navlyn-mcp` are available or owned by the maintainer.
 - Confirm repository About description and topics are set on GitHub.
-- Confirm the `nuget-production` environment and `NUGET_API_KEY` secret are configured if using the manual publish workflow.
+- Confirm the `nuget-production` environment, `NUGET_USER` environment variable, and nuget.org Trusted Publishing policy are configured if using the manual publish workflow.
 - Update versions and release notes in both tool projects.
 - Update `CHANGELOG.md`.
 - Run `./scripts/test-release.ps1`.
