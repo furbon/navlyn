@@ -43,7 +43,7 @@ public sealed class NavlynMcpStdioTests
                 ClientInfo = new Implementation
                 {
                     Name = "navlyn-tests",
-                    Version = "0.2.0"
+                    Version = "0.3.0"
                 }
             },
             NullLoggerFactory.Instance,

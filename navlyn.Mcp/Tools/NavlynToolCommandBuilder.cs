@@ -116,25 +116,25 @@ internal static class NavlynToolCommandBuilder
         bool sourcePositionMode = !string.IsNullOrWhiteSpace(file) || line is not null || column is not null;
         if (sourcePositionMode)
         {
-            bool hasFuzzyOptions = !string.IsNullOrWhiteSpace(assumeKind) ||
-                NormalizeValues(assumeKinds).Count > 0 ||
-                !string.IsNullOrWhiteSpace(match) ||
-                caseSensitive is not null ||
-                limit is not null ||
-                !string.IsNullOrWhiteSpace(candidatePolicy) ||
-                !string.IsNullOrWhiteSpace(minConfidence) ||
-                explainSelection is not null;
-            if (hasFuzzyOptions)
-            {
-                return CommandBuildResult.Invalid("Source-position resolve-target mode cannot be combined with fuzzy options.");
-            }
-
-            if (!TryAddProjects(args, project, projects, out error))
+            if (!TryAddSourcePositionOptions(
+                args,
+                "resolve-target",
+                assumeKind,
+                assumeKinds,
+                match,
+                caseSensitive,
+                project,
+                projects,
+                excludeGenerated,
+                limit,
+                candidatePolicy,
+                minConfidence,
+                explainSelection,
+                out error))
             {
                 return CommandBuildResult.Invalid(error);
             }
 
-            AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
             return CommandBuildResult.Valid("resolve-target", args);
         }
 
@@ -414,23 +414,46 @@ internal static class NavlynToolCommandBuilder
             return CommandBuildResult.Invalid(error);
         }
 
-        if (!TryAddFuzzyOptions(
-            args,
-            assumeKind,
-            assumeKinds,
-            match,
-            caseSensitive,
-            project,
-            projects,
-            excludeGenerated,
-            limit: null,
-            candidatePolicy,
-            minConfidence,
-            explainSelection,
-            allowGroupPolicy: false,
-            out error))
+        if (effectiveDiff)
         {
-            return CommandBuildResult.Invalid(error);
+            if (!TryAddDiffContextOptions(
+                args,
+                assumeKind,
+                assumeKinds,
+                match,
+                caseSensitive,
+                project,
+                projects,
+                excludeGenerated,
+                candidateLimit,
+                candidatePolicy,
+                minConfidence,
+                explainSelection,
+                out error))
+            {
+                return CommandBuildResult.Invalid(error);
+            }
+        }
+        else
+        {
+            if (!TryAddFuzzyOptions(
+                args,
+                assumeKind,
+                assumeKinds,
+                match,
+                caseSensitive,
+                project,
+                projects,
+                excludeGenerated,
+                limit: null,
+                candidatePolicy,
+                minConfidence,
+                explainSelection,
+                allowGroupPolicy: false,
+                out error))
+            {
+                return CommandBuildResult.Invalid(error);
+            }
         }
 
         if (!TryAddAllowedValue(args, "--goal", goal, GoalValues, out error) ||
@@ -561,10 +584,40 @@ internal static class NavlynToolCommandBuilder
         bool? explainSelection,
         string? profile)
     {
-        if (!TryAddSymbolOrPositionInput([], query, candidateId, file, line, column, out List<string> args, out string? error) ||
-            !TryAddFuzzyOptions(args, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, limit: null, candidatePolicy, minConfidence, explainSelection, allowGroupPolicy: false, out error) ||
-            !TryAddSingleOrMany(args, "--test-project", testProject, testProjects, "testProject", "testProjects", out error) ||
-            !TryAddPositiveInt(args, "--candidate-limit", candidateLimit, out error) ||
+        if (!TryAddSymbolOrPositionInput([], query, candidateId, file, line, column, out List<string> args, out string? error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        bool sourcePositionMode = !string.IsNullOrWhiteSpace(file) || line is not null || column is not null;
+        if (sourcePositionMode)
+        {
+            if (!TryAddSourcePositionOptions(
+                args,
+                "tests-for-symbol",
+                assumeKind,
+                assumeKinds,
+                match,
+                caseSensitive,
+                project,
+                projects,
+                excludeGenerated,
+                candidateLimit,
+                candidatePolicy,
+                minConfidence,
+                explainSelection,
+                out error))
+            {
+                return CommandBuildResult.Invalid(error);
+            }
+        }
+        else if (!TryAddFuzzyOptions(args, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, limit: null, candidatePolicy, minConfidence, explainSelection, allowGroupPolicy: false, out error) ||
+            !TryAddPositiveInt(args, "--candidate-limit", candidateLimit, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        if (!TryAddSingleOrMany(args, "--test-project", testProject, testProjects, "testProject", "testProjects", out error) ||
             !TryAddPositiveInt(args, "--test-limit", testLimit, out error) ||
             !TryAddPositiveInt(args, "--reference-limit", referenceLimit, out error) ||
             !TryAddNonNegativeInt(args, "--snippet-lines", snippetLines, out error) ||
@@ -638,10 +691,40 @@ internal static class NavlynToolCommandBuilder
         bool? explainSelection,
         string? profile)
     {
-        if (!TryAddSymbolOrPositionInput([], query, candidateId, file, line, column, out List<string> args, out string? error) ||
-            !TryAddFuzzyOptions(args, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, limit: null, candidatePolicy, minConfidence, explainSelection, allowGroupPolicy: false, out error) ||
-            !TryAddPositiveInt(args, "--candidate-limit", candidateLimit, out error) ||
-            !TryAddPositiveInt(args, "--registration-limit", registrationLimit, out error) ||
+        if (!TryAddSymbolOrPositionInput([], query, candidateId, file, line, column, out List<string> args, out string? error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        bool sourcePositionMode = !string.IsNullOrWhiteSpace(file) || line is not null || column is not null;
+        if (sourcePositionMode)
+        {
+            if (!TryAddSourcePositionOptions(
+                args,
+                "di-impact",
+                assumeKind,
+                assumeKinds,
+                match,
+                caseSensitive,
+                project,
+                projects,
+                excludeGenerated,
+                candidateLimit,
+                candidatePolicy,
+                minConfidence,
+                explainSelection,
+                out error))
+            {
+                return CommandBuildResult.Invalid(error);
+            }
+        }
+        else if (!TryAddFuzzyOptions(args, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, limit: null, candidatePolicy, minConfidence, explainSelection, allowGroupPolicy: false, out error) ||
+            !TryAddPositiveInt(args, "--candidate-limit", candidateLimit, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        if (!TryAddPositiveInt(args, "--registration-limit", registrationLimit, out error) ||
             !TryAddPositiveInt(args, "--consumer-limit", consumerLimit, out error) ||
             !TryAddPositiveInt(args, "--dependency-limit", dependencyLimit, out error) ||
             !TryAddPositiveInt(args, "--risk-limit", riskLimit, out error) ||
@@ -704,6 +787,87 @@ internal static class NavlynToolCommandBuilder
 
         input["requests"] = JsonNode.Parse(requests.Value.GetRawText());
         return CommandBuildResult.Valid("batch", [], input.ToJsonString(new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+    }
+
+    private static bool TryAddSourcePositionOptions(
+        List<string> args,
+        string commandName,
+        string? assumeKind,
+        string[]? assumeKinds,
+        string? match,
+        bool? caseSensitive,
+        string? project,
+        string[]? projects,
+        bool? excludeGenerated,
+        int? candidateLimit,
+        string? candidatePolicy,
+        string? minConfidence,
+        bool? explainSelection,
+        out string? error)
+    {
+        if (HasFuzzySelectionOptions(assumeKind, assumeKinds, match, caseSensitive, candidateLimit, candidatePolicy, minConfidence, explainSelection))
+        {
+            error = $"Source-position {commandName} mode cannot be combined with fuzzy options.";
+            return false;
+        }
+
+        if (!TryAddSourcePositionProject(args, project, projects, out error))
+        {
+            return false;
+        }
+
+        AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+        return true;
+    }
+
+    private static bool TryAddDiffContextOptions(
+        List<string> args,
+        string? assumeKind,
+        string[]? assumeKinds,
+        string? match,
+        bool? caseSensitive,
+        string? project,
+        string[]? projects,
+        bool? excludeGenerated,
+        int? candidateLimit,
+        string? candidatePolicy,
+        string? minConfidence,
+        bool? explainSelection,
+        out string? error)
+    {
+        if (HasFuzzySelectionOptions(assumeKind, assumeKinds, match, caseSensitive, candidateLimit, candidatePolicy, minConfidence, explainSelection))
+        {
+            error = "Diff context-pack mode cannot be combined with fuzzy selection options.";
+            return false;
+        }
+
+        if (!TryAddProjects(args, project, projects, out error))
+        {
+            return false;
+        }
+
+        AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+        return true;
+    }
+
+    private static bool HasFuzzySelectionOptions(
+        string? assumeKind,
+        string[]? assumeKinds,
+        string? match,
+        bool? caseSensitive,
+        int? candidateLimit,
+        string? candidatePolicy,
+        string? minConfidence,
+        bool? explainSelection)
+    {
+        return !string.IsNullOrWhiteSpace(assumeKind) ||
+            NormalizeValues(assumeKinds).Count > 0 ||
+            !string.IsNullOrWhiteSpace(match) ||
+            caseSensitive is not null ||
+            candidateLimit is not null ||
+            !string.IsNullOrWhiteSpace(candidatePolicy) ||
+            !string.IsNullOrWhiteSpace(minConfidence) ||
+            explainSelection is not null;
     }
 
     private static bool TryAddFuzzyOptions(
@@ -885,6 +1049,27 @@ internal static class NavlynToolCommandBuilder
     private static bool TryAddProjects(List<string> args, string? project, string[]? projects, out string? error)
     {
         return TryAddSingleOrMany(args, "--project", project, projects, "project", "projects", out error);
+    }
+
+    private static bool TryAddSourcePositionProject(List<string> args, string? project, string[]? projects, out string? error)
+    {
+        bool hasSingle = !string.IsNullOrWhiteSpace(project);
+        IReadOnlyList<string> values = NormalizeValues(projects);
+        if (hasSingle && values.Count > 0)
+        {
+            error = "project and projects are mutually exclusive.";
+            return false;
+        }
+
+        if (values.Count > 1)
+        {
+            error = "Source-position mode accepts at most one project.";
+            return false;
+        }
+
+        AddOptionalValue(args, "--project", hasSingle ? project : values.FirstOrDefault());
+        error = null;
+        return true;
     }
 
     private static bool TryAddSingleOrMany(

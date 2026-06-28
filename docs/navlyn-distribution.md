@@ -31,8 +31,8 @@ For teams and agent workspaces, prefer a repository-local .NET tool manifest whe
 
 ```powershell
 dotnet new tool-manifest
-dotnet tool install navlyn --version 0.2.0
-dotnet tool install navlyn-mcp --version 0.2.0
+dotnet tool install navlyn --version 0.3.0
+dotnet tool install navlyn-mcp --version 0.3.0
 dotnet tool restore
 dotnet tool run navlyn -- check --workspace path/to/YourRepo.slnx
 ```
@@ -62,7 +62,7 @@ When an agent needs several facts from one workspace, prefer the MCP `navlyn_bat
 
 ## Release Identity
 
-The current public release target is `0.2.0`.
+The current public release target is `0.3.0`.
 
 Keep `navlyn` and `navlyn-mcp` versions synchronized for the initial public releases. Both packages should use the same repository URL, license expression, README, package icon, author, and release notes discipline.
 
@@ -154,7 +154,7 @@ The workflow must run release validation before packing and publishing. Normal `
 
 After packages are published and install smoke passes from NuGet:
 
-1. Create a `v0.2.0` tag.
+1. Create a `v0.3.0` tag.
 2. Create a GitHub Release using the `CHANGELOG.md` entry.
 3. Link to the NuGet install commands.
 4. Optionally attach `navlyn-release-pack.json` and package artifacts for traceability.
@@ -166,8 +166,8 @@ Do not create the public release before package smoke and dry-run publish have s
 After NuGet indexing completes, test installation from the public feed in a clean shell:
 
 ```powershell
-dotnet tool install --global navlyn --version 0.2.0
-dotnet tool install --global navlyn-mcp --version 0.2.0
+dotnet tool install --global navlyn --version 0.3.0
+dotnet tool install --global navlyn-mcp --version 0.3.0
 navlyn --help
 navlyn-mcp --help
 navlyn check --workspace path/to/YourRepo.slnx
