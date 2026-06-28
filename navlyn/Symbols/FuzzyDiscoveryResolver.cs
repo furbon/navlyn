@@ -171,7 +171,8 @@ internal sealed class FuzzyDiscoveryResolver
                 Limit: aboutOptions.ReferenceLimit,
                 FileLimit: DefaultReferenceFileLimit,
                 IncludeSnippets: aboutOptions.IncludeSnippets,
-                SnippetLines: aboutOptions.SnippetLines),
+                SnippetLines: aboutOptions.SnippetLines,
+                ExcludeGenerated: aboutOptions.ExcludeGenerated),
             cancellationToken);
 
         FuzzyRelationSummary relations = await ResolveRelationSummaryAsync(

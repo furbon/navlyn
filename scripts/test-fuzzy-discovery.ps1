@@ -221,7 +221,7 @@ try {
         -Arguments @('where-used', '--workspace', $FixtureProject, '--query', 'Spawn', '--assume-kind', 'Method', '--limit', '5')
     $whereUsedJson = $whereUsed.Stdout | ConvertFrom-Json
     Assert-Equal -Name 'where-used confidence' -Actual $whereUsedJson.confidence -Expected 'medium'
-    Assert-Equal -Name 'where-used total matches' -Actual $whereUsedJson.totalMatches -Expected 2
+    Assert-Equal -Name 'where-used total matches' -Actual $whereUsedJson.totalMatches -Expected 3
     Assert-Equal -Name 'where-used containing symbol' -Actual (@($whereUsedJson.references)[0].containingSymbol.kind -eq 'Method') -Expected $true
     Assert-Equal -Name 'where-used reference has span' -Actual (@($whereUsedJson.references)[0].endColumn -gt @($whereUsedJson.references)[0].column) -Expected $true
     Assert-Equal -Name 'where-used containing symbol has span' -Actual (@($whereUsedJson.references)[0].containingSymbol.endColumn -gt @($whereUsedJson.references)[0].containingSymbol.column) -Expected $true
@@ -231,8 +231,8 @@ try {
         -Name 'where-used usage kind grouping' `
         -Arguments @('where-used', '--workspace', $FixtureProject, '--query', 'Spawn', '--assume-kind', 'Method', '--limit', '5', '--usage-kind', 'invoke', '--group-by', 'usage-kind')
     $whereUsedGroupedJson = $whereUsedGrouped.Stdout | ConvertFrom-Json
-    Assert-Equal -Name 'where-used grouped total matches' -Actual $whereUsedGroupedJson.totalMatches -Expected 2
-    Assert-Equal -Name 'where-used grouped usage count' -Actual @($whereUsedGroupedJson.usageKindCounts)[0].count -Expected 2
+    Assert-Equal -Name 'where-used grouped total matches' -Actual $whereUsedGroupedJson.totalMatches -Expected 3
+    Assert-Equal -Name 'where-used grouped usage count' -Actual @($whereUsedGroupedJson.usageKindCounts)[0].count -Expected 3
     Assert-Equal -Name 'where-used grouped key' -Actual @($whereUsedGroupedJson.groups)[0].key -Expected 'invoke'
 
     $whereUsedSnippet = Invoke-Navlyn `
@@ -248,6 +248,22 @@ try {
     Assert-Equal -Name 'about selected type' -Actual $aboutJson.selectedCandidate.name -Expected 'EnemyManagerTools'
     Assert-Equal -Name 'about member count' -Actual $aboutJson.members.totalMembers -Expected 2
     Assert-Equal -Name 'about definition has span' -Actual ($aboutJson.definition.endColumn -gt $aboutJson.definition.column) -Expected $true
+
+    $aboutSpawn = Invoke-Navlyn `
+        -Name 'about references include generated' `
+        -Arguments @('about', '--workspace', $FixtureProject, '--query', 'Spawn', '--assume-kind', 'Method', '--reference-limit', '10')
+    $aboutSpawnJson = $aboutSpawn.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'about include generated total matches' -Actual $aboutSpawnJson.references.totalMatches -Expected 3
+    Assert-Equal -Name 'about include generated reference' -Actual ((@($aboutSpawnJson.references.references | Where-Object { $_.path.EndsWith('GeneratedWidget.g.cs') }).Count) -gt 0) -Expected $true
+    Assert-Equal -Name 'about include generated file summary' -Actual ((@($aboutSpawnJson.references.files | Where-Object { $_.path.EndsWith('GeneratedWidget.g.cs') }).Count) -gt 0) -Expected $true
+
+    $aboutSpawnExcludeGenerated = Invoke-Navlyn `
+        -Name 'about references exclude generated' `
+        -Arguments @('about', '--workspace', $FixtureProject, '--query', 'Spawn', '--assume-kind', 'Method', '--reference-limit', '10', '--exclude-generated')
+    $aboutSpawnExcludeGeneratedJson = $aboutSpawnExcludeGenerated.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'about exclude generated total matches' -Actual $aboutSpawnExcludeGeneratedJson.references.totalMatches -Expected 2
+    Assert-Equal -Name 'about exclude generated reference' -Actual (@($aboutSpawnExcludeGeneratedJson.references.references | Where-Object { $_.path.EndsWith('GeneratedWidget.g.cs') }).Count) -Expected 0
+    Assert-Equal -Name 'about exclude generated file summary' -Actual (@($aboutSpawnExcludeGeneratedJson.references.files | Where-Object { $_.path.EndsWith('GeneratedWidget.g.cs') }).Count) -Expected 0
 
     $related = Invoke-Navlyn `
         -Name 'related files' `
@@ -267,7 +283,7 @@ try {
         -Name 'entrypoints chains' `
         -Arguments @('entrypoints', '--workspace', $FixtureProject, '--query', 'Spawn', '--assume-kind', 'Method', '--limit', '5', '--depth', '2')
     $entrypointsJson = $entrypoints.Stdout | ConvertFrom-Json
-    Assert-Equal -Name 'entrypoints total chains' -Actual $entrypointsJson.totalChains -Expected 2
+    Assert-Equal -Name 'entrypoints total chains' -Actual $entrypointsJson.totalChains -Expected 3
     Assert-Equal -Name 'entrypoints chain end' -Actual @($entrypointsJson.chains)[0].endReason -Expected 'no-upstream-callers'
     Assert-Equal -Name 'entrypoints chain symbol has span' -Actual (@(@($entrypointsJson.chains)[0].symbols)[0].endColumn -gt @(@($entrypointsJson.chains)[0].symbols)[0].column) -Expected $true
 
