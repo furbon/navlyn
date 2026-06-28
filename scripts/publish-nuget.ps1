@@ -43,7 +43,7 @@ if (!$Publish) {
 
 $apiKey = [Environment]::GetEnvironmentVariable($ApiKeyEnvironmentVariable)
 if ([string]::IsNullOrWhiteSpace($apiKey)) {
-    throw "Environment variable $ApiKeyEnvironmentVariable is required to publish."
+    throw "Environment variable $ApiKeyEnvironmentVariable is required to publish. In GitHub Actions, set it from the NuGet/login Trusted Publishing output."
 }
 
 foreach ($package in $resolvedPackages) {
