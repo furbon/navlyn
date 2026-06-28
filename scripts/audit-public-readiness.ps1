@@ -175,11 +175,12 @@ foreach ($root in $publicSearchRoots) {
     }
 
     $files = @()
-    if ((Get-Item -LiteralPath $fullRoot).PSIsContainer) {
-        $files = Get-ChildItem -LiteralPath $fullRoot -Recurse -File
+    $rootItem = Get-Item -LiteralPath $fullRoot -Force
+    if ($rootItem.PSIsContainer) {
+        $files = Get-ChildItem -LiteralPath $fullRoot -Recurse -File -Force
     }
     else {
-        $files = @(Get-Item -LiteralPath $fullRoot)
+        $files = @($rootItem)
     }
 
     foreach ($file in $files) {
