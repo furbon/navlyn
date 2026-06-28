@@ -8,10 +8,18 @@ on:
     tags:
       - v*
 
+permissions:
+  contents: read
+
+concurrency:
+  group: release-validation-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   validate:
     name: Release validation (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
 
     strategy:
       fail-fast: false

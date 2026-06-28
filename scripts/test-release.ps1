@@ -12,6 +12,7 @@ $FormatCheckScript = Join-Path $PSScriptRoot 'test-csharp-file-format.ps1'
 $QuickScript = Join-Path $PSScriptRoot 'test-quick.ps1'
 $CliContractScript = Join-Path $PSScriptRoot 'test-cli-contract.ps1'
 $PackageInstallScript = Join-Path $PSScriptRoot 'test-package-install.ps1'
+$PerformanceScript = Join-Path $PSScriptRoot 'measure-navlyn-performance.ps1'
 $FocusedScripts = @(
     'test-symbol-navigation.ps1',
     'test-fuzzy-discovery.ps1',
@@ -57,6 +58,7 @@ try {
     }
 
     & $AuditScript
+    & $PerformanceScript -Workspace $script:NavlynTestSolutionPath -Scenario quick -Iterations 1 -Warmup 0 -NoBuild -Output 'artifacts/performance-smoke/navlyn-quick.json'
     & $PackageInstallScript
 
     Write-Host 'Release validation passed.'

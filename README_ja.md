@@ -70,6 +70,7 @@ navlyn repo-graph --workspace path/to/YourRepo.slnx --profile compact
 ```
 
 パッケージ化とリリースの流れは [`docs/navlyn-distribution.md`](docs/navlyn-distribution.md) にあります。
+性能の考え方と計測コマンドは [`docs/navlyn-performance.md`](docs/navlyn-performance.md) にあります。
 
 ## CLI の例
 

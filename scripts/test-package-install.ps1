@@ -68,6 +68,143 @@ function Invoke-Checked {
     }
 }
 
+function Write-McpFrame {
+    param(
+        [System.IO.StreamWriter]$Writer,
+        [object]$Payload
+    )
+
+    $json = $Payload | ConvertTo-Json -Depth 50 -Compress
+    $Writer.WriteLine($json)
+    $Writer.Flush()
+}
+
+function Read-McpFrame {
+    param(
+        [System.IO.StreamReader]$Reader,
+        [int]$TimeoutMilliseconds = 60000
+    )
+
+    $readTask = $Reader.ReadLineAsync()
+    if (!$readTask.Wait($TimeoutMilliseconds)) {
+        throw "Timed out waiting for MCP server response after $TimeoutMilliseconds ms."
+    }
+
+    $line = $readTask.GetAwaiter().GetResult()
+    if ($null -eq $line) {
+        throw 'MCP server closed stdout before writing a response.'
+    }
+
+    return $line
+}
+
+function Invoke-McpInstalledToolSmoke {
+    param(
+        [string]$McpExecutable,
+        [string]$CliExecutable
+    )
+
+    Write-Host 'Running navlyn-mcp stdio smoke...'
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $McpExecutable
+    $startInfo.WorkingDirectory = $RepoRoot
+    $startInfo.RedirectStandardInput = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.StandardInputEncoding = [System.Text.Encoding]::UTF8
+    $startInfo.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+    $startInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+    $startInfo.UseShellExecute = $false
+    foreach ($argument in @('--workspace', 'navlyn.slnx', '--navlyn-executable', $CliExecutable, '--working-directory', $RepoRoot, '--timeout-ms', '60000', '--max-json-chars', '4000000')) {
+        [void]$startInfo.ArgumentList.Add($argument)
+    }
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    [void]$process.Start()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+
+    try {
+        Write-McpFrame -Writer $process.StandardInput -Payload @{
+            jsonrpc = '2.0'
+            id = 1
+            method = 'initialize'
+            params = @{
+                protocolVersion = '2025-06-18'
+                capabilities = @{}
+                clientInfo = @{
+                    name = 'navlyn-package-smoke'
+                    version = '0.1.0'
+                }
+            }
+        }
+        [void](Read-McpFrame -Reader $process.StandardOutput)
+        Write-McpFrame -Writer $process.StandardInput -Payload @{
+            jsonrpc = '2.0'
+            method = 'notifications/initialized'
+            params = @{}
+        }
+
+        Write-McpFrame -Writer $process.StandardInput -Payload @{
+            jsonrpc = '2.0'
+            id = 2
+            method = 'tools/call'
+            params = @{
+                name = 'navlyn_workspace_summary'
+                arguments = @{
+                    relationshipLimit = 5
+                    profile = 'compact'
+                }
+            }
+        }
+
+        $responseJson = Read-McpFrame -Reader $process.StandardOutput
+        $response = $responseJson | ConvertFrom-Json -Depth 100
+        if ($response.PSObject.Properties.Name -contains 'error' -and $null -ne $response.error) {
+            throw "MCP tool call returned JSON-RPC error: $($response.error | ConvertTo-Json -Depth 20 -Compress)"
+        }
+
+        if (!($response.PSObject.Properties.Name -contains 'result')) {
+            throw "MCP tool call response did not include a result: $responseJson"
+        }
+
+        if ($response.result.PSObject.Properties.Name -contains 'isError' -and $response.result.isError -eq $true) {
+            throw "MCP tool call returned an error result: $responseJson"
+        }
+
+        $structured = $response.result.structuredContent
+        if ($null -eq $structured -or $structured.ok -ne $true -or $structured.result.command -ne 'repo-graph') {
+            throw "MCP structuredContent did not contain successful repo-graph output: $responseJson"
+        }
+    }
+    finally {
+        try {
+            $process.StandardInput.Close()
+        }
+        catch {
+        }
+
+        if (!$process.WaitForExit(5000)) {
+            try {
+                $process.Kill($true)
+            }
+            catch {
+            }
+        }
+
+        $stderr = ''
+        try {
+            $stderr = $stderrTask.GetAwaiter().GetResult()
+        }
+        catch {
+        }
+
+        if ($process.ExitCode -ne 0 -and ![string]::IsNullOrWhiteSpace($stderr)) {
+            throw "navlyn-mcp stdio smoke exited with $($process.ExitCode). stderr:`n$stderr"
+        }
+    }
+}
+
 if (!$NoBuild) {
     Invoke-Checked -Name 'dotnet build' -FilePath 'dotnet' -Arguments @('build', 'navlyn.slnx', '-c', 'Release')
 }
@@ -116,5 +253,6 @@ Invoke-Checked -Name 'navlyn help' -FilePath $navlyn -Arguments @('--help')
 Invoke-Checked -Name 'navlyn check' -FilePath $navlyn -Arguments @('check', '--workspace', 'navlyn.slnx')
 Invoke-Checked -Name 'navlyn repo-graph compact' -FilePath $navlyn -Arguments @('repo-graph', '--workspace', 'navlyn.slnx', '--profile', 'compact')
 Invoke-Checked -Name 'navlyn-mcp help' -FilePath $navlynMcp -Arguments @('--help')
+Invoke-McpInstalledToolSmoke -McpExecutable $navlynMcp -CliExecutable $navlyn
 
 Write-Host 'Package install smoke passed.'

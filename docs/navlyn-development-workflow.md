@@ -7,6 +7,7 @@ This document captures durable local development checks, command implementation 
 - `docs/navlyn-cli-commands.md`: public CLI contract. Update this when implemented command behavior changes.
 - `docs/navlyn-mcp-server.md`: public MCP server setup, tool surface, result envelope, and boundaries.
 - `docs/navlyn-distribution.md`: package validation and release workflow.
+- `docs/navlyn-performance.md`: local performance measurement, MCP cost model, and release-readiness performance smoke.
 - `docs/navlyn-agent-recipes.md`: batch recipes for agents and automation.
 - `docs/navlyn-github-actions.md`: PR facts workflow example.
 - `README.md`: project entry point for users. Keep it compact and current.
@@ -74,6 +75,8 @@ For release preparation or a large refactor:
 
 `test-release.ps1` restores and builds once, runs xUnit, checks C# file format, runs quick validation, runs CLI contract validation, runs focused fixture scripts with `-NoBuild`, runs the public readiness audit, and runs local package install smoke when feasible.
 
+Release publication and package ownership details live in `docs/navlyn-distribution.md`. Performance smoke guidance lives in `docs/navlyn-performance.md`.
+
 ## Test Selection Rules
 
 - Docs-only change: `git diff --check`. For public workflow docs, inspect command names and examples.
@@ -132,6 +135,7 @@ The performance script emits structured JSON with elapsed time, stdout/stderr si
 ```
 
 Package and PR facts scripts write generated output under ignored `artifacts/` paths. Publishing is dry-run by default; pass `-Publish` only from an intentional release environment with `NUGET_API_KEY` set.
+When publishing through GitHub Actions, use the guarded manual workflow with the `nuget-production` environment and `NUGET_API_KEY` environment secret.
 
 ### Focused Fixture Validation
 

@@ -34,11 +34,8 @@ internal static class GeneratedCodeFacts
 
     private static IEnumerable<string> GetPathSegments(string path)
     {
-        string normalizedPath = path
-            .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
-
-        return normalizedPath.Split(
-            Path.DirectorySeparatorChar,
+        return path.Split(
+            ['/', '\\'],
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 }

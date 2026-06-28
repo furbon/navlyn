@@ -1,0 +1,51 @@
+name: Publish NuGet
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-nuget
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish NuGet packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: nuget-production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Release validation
+        shell: pwsh
+        run: ./scripts/test-release.ps1
+
+      - name: Pack release
+        shell: pwsh
+        run: ./scripts/pack-release.ps1 -NoValidation -Output artifacts/packages
+
+      - name: Dry-run publish
+        shell: pwsh
+        run: ./scripts/publish-nuget.ps1
+
+      - name: Publish
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: ./scripts/publish-nuget.ps1 -Publish
+
+      - name: Upload release packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: navlyn-release-packages
+          path: artifacts/packages

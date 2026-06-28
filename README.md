@@ -70,6 +70,7 @@ navlyn repo-graph --workspace path/to/YourRepo.slnx --profile compact
 ```
 
 See [`docs/navlyn-distribution.md`](docs/navlyn-distribution.md) for packaging and release workflow details.
+Performance notes and measurement commands are in [`docs/navlyn-performance.md`](docs/navlyn-performance.md).
 
 ## CLI Example
 

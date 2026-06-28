@@ -50,7 +50,12 @@ if ($TimeoutSeconds -lt 1) {
 }
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$workspacePath = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $Workspace))
+$workspacePath = if ([System.IO.Path]::IsPathRooted($Workspace)) {
+    [System.IO.Path]::GetFullPath($Workspace)
+}
+else {
+    [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $Workspace))
+}
 if (!(Test-Path -LiteralPath $workspacePath)) {
     throw "Workspace does not exist: $workspacePath"
 }

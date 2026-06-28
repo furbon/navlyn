@@ -17,6 +17,23 @@ function Get-ProjectVersion {
     return [string]$projectXml.Project.PropertyGroup.Version
 }
 
+function Get-FileSha256 {
+    param([string]$Path)
+
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function ConvertTo-ManifestPath {
+    param([string]$Path)
+
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    if ($fullPath.StartsWith($RepoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $fullPath.Substring($RepoRoot.Length).TrimStart('\', '/').Replace('\', '/')
+    }
+
+    return $fullPath.Replace('\', '/')
+}
+
 function Invoke-Checked {
     param([string]$Name, [string[]]$Arguments)
 
@@ -39,6 +56,8 @@ try {
 
     $navlynVersion = Get-ProjectVersion -ProjectPath (Join-Path $RepoRoot 'navlyn/navlyn.csproj')
     $mcpVersion = Get-ProjectVersion -ProjectPath (Join-Path $RepoRoot 'navlyn.Mcp/navlyn.Mcp.csproj')
+    $navlynPackagePath = Join-Path $OutputPath "navlyn.$navlynVersion.nupkg"
+    $mcpPackagePath = Join-Path $OutputPath "navlyn-mcp.$mcpVersion.nupkg"
     $manifest = [ordered]@{
         schemaVersion = 'navlyn.release-pack.v1'
         createdUtc = [DateTimeOffset]::UtcNow.ToString('o')
@@ -46,12 +65,14 @@ try {
             [ordered]@{
                 id = 'navlyn'
                 version = $navlynVersion
-                path = (Join-Path $OutputPath "navlyn.$navlynVersion.nupkg").Replace('\', '/')
+                path = ConvertTo-ManifestPath -Path $navlynPackagePath
+                sha256 = Get-FileSha256 -Path $navlynPackagePath
             },
             [ordered]@{
                 id = 'navlyn-mcp'
                 version = $mcpVersion
-                path = (Join-Path $OutputPath "navlyn-mcp.$mcpVersion.nupkg").Replace('\', '/')
+                path = ConvertTo-ManifestPath -Path $mcpPackagePath
+                sha256 = Get-FileSha256 -Path $mcpPackagePath
             }
         )
     }

@@ -86,6 +86,13 @@ if (!($licenseCandidates | Where-Object { Test-Path -LiteralPath $_ })) {
     Add-Issue -Issues $Issues -Code 'NAVLYN-PUBLIC-LICENSE-MISSING' -Message 'No LICENSE file was found.'
 }
 
+foreach ($requiredPublicFile in @('CHANGELOG.md', 'CONTRIBUTING.md', 'SECURITY.md', 'docs/navlyn-distribution.md', 'docs/navlyn-performance.md')) {
+    $requiredPublicPath = Join-Path $RepoRoot $requiredPublicFile
+    if (!(Test-Path -LiteralPath $requiredPublicPath)) {
+        Add-Issue -Issues $Issues -Code 'NAVLYN-PUBLIC-RELEASE-FILE-MISSING' -Path $requiredPublicFile -Message 'A release-readiness public file is missing.'
+    }
+}
+
 $gitIgnorePath = Join-Path $RepoRoot '.gitignore'
 if (!(Test-Path -LiteralPath $gitIgnorePath)) {
     Add-Issue -Issues $Issues -Code 'NAVLYN-PUBLIC-GITIGNORE-MISSING' -Path '.gitignore' -Message '.gitignore is missing.'
@@ -106,12 +113,37 @@ foreach ($projectRelativePath in @('navlyn/navlyn.csproj', 'navlyn.Mcp/navlyn.Mc
     $projectPath = Join-Path $RepoRoot $projectRelativePath
     if (Test-Path -LiteralPath $projectPath) {
         [xml]$projectXml = Get-Content -Raw -LiteralPath $projectPath
-        foreach ($propertyName in @('Authors', 'PackageLicenseExpression', 'Description', 'PackageReadmeFile', 'RepositoryUrl', 'PackageProjectUrl')) {
+        foreach ($propertyName in @('Authors', 'PackageLicenseExpression', 'Description', 'PackageReadmeFile', 'RepositoryUrl', 'RepositoryType', 'PackageProjectUrl', 'PackageIcon', 'PackageTags', 'PackageReleaseNotes', 'Copyright', 'NeutralLanguage', 'PackageRequireLicenseAcceptance')) {
             $propertyNode = $projectXml.SelectSingleNode("//PropertyGroup/$propertyName")
             $value = if ($null -eq $propertyNode) { '' } else { [string]$propertyNode.InnerText }
             if ([string]::IsNullOrWhiteSpace($value)) {
                 Add-Issue -Issues $Issues -Code "NAVLYN-PUBLIC-PACKAGE-$($propertyName.ToUpperInvariant())-MISSING" -Path $projectRelativePath -Message "Package metadata '$propertyName' is missing."
             }
+        }
+
+        $expectedValues = @{
+            Authors = 'furbon.tech'
+            PackageLicenseExpression = 'MIT'
+            PackageReadmeFile = 'README.md'
+            PackageIcon = 'navlyn-icon.png'
+            RepositoryUrl = 'https://github.com/furbon/navlyn'
+            RepositoryType = 'git'
+            PackageProjectUrl = 'https://github.com/furbon/navlyn'
+            NeutralLanguage = 'en-US'
+            PackageRequireLicenseAcceptance = 'false'
+        }
+
+        foreach ($expected in $expectedValues.GetEnumerator()) {
+            $node = $projectXml.SelectSingleNode("//PropertyGroup/$($expected.Key)")
+            $actual = if ($null -eq $node) { '' } else { [string]$node.InnerText }
+            if ($actual -ne $expected.Value) {
+                Add-Issue -Issues $Issues -Code "NAVLYN-PUBLIC-PACKAGE-$($expected.Key.ToUpperInvariant())-UNEXPECTED" -Path $projectRelativePath -Message "Package metadata '$($expected.Key)' should be '$($expected.Value)' but was '$actual'."
+            }
+        }
+
+        $packageIconPath = Join-Path $RepoRoot 'assets/navlyn-icon.png'
+        if (!(Test-Path -LiteralPath $packageIconPath)) {
+            Add-Issue -Issues $Issues -Code 'NAVLYN-PUBLIC-PACKAGE-ICON-MISSING' -Path 'assets/navlyn-icon.png' -Message 'Package icon file is missing.'
         }
     }
 }
@@ -127,6 +159,9 @@ if (Test-Path -LiteralPath $copilotPath) {
 $publicSearchRoots = @(
     'README.md',
     'README_ja.md',
+    'CHANGELOG.md',
+    'CONTRIBUTING.md',
+    'SECURITY.md',
     'AGENTS.md',
     '.github',
     'docs'
