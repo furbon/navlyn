@@ -107,12 +107,28 @@ internal static class ApplicationDomainCommandSupport
 
         if (hasPosition)
         {
+            if (projectFilters.Count > 1)
+            {
+                return ApplicationDomainSubjectResolution.Failed(DiagnosticIds.ParseError, "Source-position mode accepts at most one --project filter.", ExitCodes.UsageError);
+            }
+
+            string? projectFilter = projectFilters.Count == 0 ? null : projectFilters[0];
+            if (!ProjectFilterCommand.TryResolveSingleProject(
+                workspace,
+                projectFilter,
+                out Project? project,
+                out _,
+                out int sourceExitCode))
+            {
+                return ApplicationDomainSubjectResolution.Failed(null, null, sourceExitCode);
+            }
+
             SourceSymbolResolutionResult sourceResult = await new SourceSymbolResolver().ResolveAsync(
                 workspace.Solution,
                 file!,
                 line!.Value,
                 column!.Value,
-                project: null,
+                project,
                 excludeGenerated,
                 cancellationToken);
             if (sourceResult.Error is not null)

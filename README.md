@@ -118,8 +118,8 @@ For a repository-local team install, commit a .NET tool manifest:
 
 ```powershell
 dotnet new tool-manifest
-dotnet tool install navlyn --version 0.2.0
-dotnet tool install navlyn-mcp --version 0.2.0
+dotnet tool install navlyn --version 0.3.0
+dotnet tool install navlyn-mcp --version 0.3.0
 dotnet tool restore
 
 dotnet tool run navlyn -- check --workspace path/to/YourRepo.slnx

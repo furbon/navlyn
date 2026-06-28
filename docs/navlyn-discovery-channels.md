@@ -42,7 +42,7 @@ csharp, dotnet, roslyn, mcp, mcp-server, ai-agents, code-navigation, semantic-se
 Suggested release note opening:
 
 ```text
-Navlyn 0.2.0 gives C#/.NET coding agents a read-only semantic evidence layer: resolve targets, inspect exact Roslyn facts, build bounded context packs, and collect review facts without editing files.
+Navlyn 0.3.0 gives C#/.NET coding agents a read-only semantic evidence layer: resolve targets, inspect exact Roslyn facts, build bounded context packs, and collect review facts without editing files.
 ```
 
 ## VS Code MCP
@@ -88,7 +88,7 @@ Maintainer-owned external work:
 
 ## Lightweight VS Code Extension Decision
 
-Do not build a full editor extension for 0.2.x. If a VS Code extension is later justified, keep it to installer/configurator duties:
+Do not build a full editor extension for 0.3.x. If a VS Code extension is later justified, keep it to installer/configurator duties:
 
 - detect whether `navlyn` and `navlyn-mcp` are installed;
 - locate likely `.slnx`, `.sln`, or `.csproj` workspace files;

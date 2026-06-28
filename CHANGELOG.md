@@ -2,6 +2,15 @@
 
 All notable public release changes for Navlyn are tracked here.
 
+## 0.3.0 - 2026-06-28
+
+Release candidate for synchronized CLI/MCP agent-readiness hardening.
+
+- Tightened source-position `--project` handling for `tests-for-symbol`, dependency-injection subject commands, and application-domain subject commands so Roslyn resolution uses the requested project context.
+- Aligned MCP command-builder validation with CLI source-position and diff-mode semantics for agent-facing calls.
+- Added MCP command-builder regression coverage for invalid source-position fuzzy options, multiple source-position project filters, and diff-mode fuzzy selection options.
+- Updated package metadata, install examples, distribution docs, local tool manifest examples, smoke scripts, and release notes for the synchronized `navlyn` and `navlyn-mcp` `0.3.0` release.
+
 ## 0.2.0 - 2026-06-28
 
 Release candidate for resolve-target anchored agent workflows.

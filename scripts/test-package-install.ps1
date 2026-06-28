@@ -134,7 +134,7 @@ function Invoke-McpInstalledToolSmoke {
                 capabilities = @{}
                 clientInfo = @{
                     name = 'navlyn-package-smoke'
-                    version = '0.2.0'
+                    version = '0.3.0'
                 }
             }
         }

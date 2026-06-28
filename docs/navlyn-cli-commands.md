@@ -630,7 +630,7 @@ Exactly one input mode is required.
 
 Additional options:
 
-- `--project <project>`: production project filter.
+- `--project <project>`: production project filter. In source-position mode, this also selects the Roslyn project context and can be specified at most once.
 - `--test-project <project>`: test project filter.
 - `--exclude-generated`.
 - `--candidate-limit <number>`: defaults to `20`.
@@ -723,7 +723,7 @@ Exactly one input mode is required.
 
 Additional options:
 
-- `--project <project>`.
+- `--project <project>`. In source-position mode, this also selects the Roslyn project context and can be specified at most once.
 - `--exclude-generated`.
 - `--candidate-limit <number>`: defaults to `20`.
 - `--registration-limit <number>`: defaults to `50`.
@@ -748,7 +748,7 @@ Input modes and fuzzy selection options match `where-registered`.
 
 Additional options:
 
-- `--project <project>`.
+- `--project <project>`. In source-position mode, this also selects the Roslyn project context and can be specified at most once.
 - `--exclude-generated`.
 - `--candidate-limit <number>`: defaults to `20`.
 - `--registration-limit <number>`: defaults to `50`.
@@ -768,7 +768,7 @@ Application domain commands return source-level facts for common .NET applicatio
 Common options:
 
 - `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
-- `--project <project>`: optional repeated project context filter.
+- `--project <project>`: optional repeated project context filter. For source-position selected-subject commands in this section, this also selects the Roslyn project context and can be specified at most once.
 - `--exclude-generated`.
 - `--include-snippets`.
 - `--snippet-lines <number>`: defaults to `1`.

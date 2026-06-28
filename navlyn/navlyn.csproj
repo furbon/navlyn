@@ -8,7 +8,7 @@
     <PackAsTool>true</PackAsTool>
     <PackageId>navlyn</PackageId>
     <ToolCommandName>navlyn</ToolCommandName>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Authors>furbon.tech</Authors>
     <Description>Read-only semantic C#/.NET evidence CLI for coding agents, CI, and automation.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -18,7 +18,7 @@
     <RepositoryUrl>https://github.com/furbon/navlyn</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/furbon/navlyn</PackageProjectUrl>
-    <PackageReleaseNotes>0.2.0 adds resolve-target anchoring across CLI, batch, and MCP workflows; updates agent onboarding, installation examples, JSON compatibility notes, and release-readiness documentation.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.3.0 tightens source-position project scoping, aligns MCP input validation with CLI semantics, and refreshes release metadata, examples, and documentation for the synchronized navlyn/navlyn-mcp release.</PackageReleaseNotes>
     <Copyright>Copyright (c) 2026 furbon.tech</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>

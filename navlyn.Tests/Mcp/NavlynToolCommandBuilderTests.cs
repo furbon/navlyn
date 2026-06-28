@@ -100,6 +100,31 @@ public sealed class NavlynToolCommandBuilderTests
     }
 
     [Fact]
+    public void ResolveTarget_SourcePositionRejectsMultipleProjects()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.ResolveTarget(
+            query: null,
+            candidateId: null,
+            file: "Service.cs",
+            line: 12,
+            column: 8,
+            assumeKind: null,
+            assumeKinds: null,
+            match: null,
+            caseSensitive: null,
+            project: null,
+            projects: ["App", "App.Net10"],
+            excludeGenerated: null,
+            limit: null,
+            candidatePolicy: null,
+            minConfidence: null,
+            explainSelection: null);
+
+        Assert.False(result.IsValid);
+        Assert.Equal("Source-position mode accepts at most one project.", result.Error);
+    }
+
+    [Fact]
     public void ReviewDiff_IncludeUnstagedFalseIsForwardedAsBoolValue()
     {
         CommandBuildResult result = NavlynToolCommandBuilder.ReviewDiff(
@@ -165,6 +190,49 @@ public sealed class NavlynToolCommandBuilderTests
 
         Assert.False(result.IsValid);
         Assert.Equal("Diff options require diff: true.", result.Error);
+    }
+
+    [Fact]
+    public void ContextPack_DiffModeRejectsFuzzySelectionOptions()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.ContextPack(
+            query: null,
+            candidateId: null,
+            diff: true,
+            baseRef: null,
+            head: null,
+            staged: null,
+            includeUnstaged: null,
+            goal: null,
+            changeKind: null,
+            budgetTokens: null,
+            itemLimit: null,
+            snippetPolicy: null,
+            snippetLines: null,
+            candidateLimit: 5,
+            memberLimit: null,
+            referenceLimit: null,
+            relationLimit: null,
+            fileLimit: null,
+            diagnosticLimit: null,
+            symbolLimit: null,
+            impactLimit: null,
+            relatedTestLimit: null,
+            depth: null,
+            candidatePolicy: null,
+            minConfidence: null,
+            explainSelection: null,
+            assumeKind: null,
+            assumeKinds: null,
+            match: null,
+            caseSensitive: null,
+            project: null,
+            projects: null,
+            excludeGenerated: null,
+            profile: null);
+
+        Assert.False(result.IsValid);
+        Assert.Equal("Diff context-pack mode cannot be combined with fuzzy selection options.", result.Error);
     }
 
     [Fact]
@@ -461,6 +529,38 @@ public sealed class NavlynToolCommandBuilderTests
     }
 
     [Fact]
+    public void TestsForSymbol_SourcePositionRejectsFuzzyOptions()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.TestsForSymbol(
+            query: null,
+            candidateId: null,
+            file: "Service.cs",
+            line: 12,
+            column: 8,
+            assumeKind: "NamedType",
+            assumeKinds: null,
+            match: null,
+            caseSensitive: null,
+            project: null,
+            projects: null,
+            testProject: null,
+            testProjects: null,
+            excludeGenerated: null,
+            candidateLimit: null,
+            testLimit: null,
+            referenceLimit: null,
+            includeSnippets: null,
+            snippetLines: null,
+            candidatePolicy: null,
+            minConfidence: null,
+            explainSelection: null,
+            profile: null);
+
+        Assert.False(result.IsValid);
+        Assert.Equal("Source-position tests-for-symbol mode cannot be combined with fuzzy options.", result.Error);
+    }
+
+    [Fact]
     public void TestsForDiff_ForwardsDiffAndTestFilters()
     {
         CommandBuildResult result = NavlynToolCommandBuilder.TestsForDiff(
@@ -521,6 +621,39 @@ public sealed class NavlynToolCommandBuilderTests
         Assert.Equal(
             ["--file", "Service.cs", "--line", "12", "--column", "8", "--registration-limit", "3", "--depth", "1"],
             result.Arguments);
+    }
+
+    [Fact]
+    public void DiImpact_SourcePositionRejectsFuzzyOptions()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.DiImpact(
+            query: null,
+            candidateId: null,
+            file: "Service.cs",
+            line: 12,
+            column: 8,
+            assumeKind: null,
+            assumeKinds: null,
+            match: "contains",
+            caseSensitive: null,
+            project: null,
+            projects: null,
+            excludeGenerated: null,
+            candidateLimit: null,
+            registrationLimit: null,
+            consumerLimit: null,
+            dependencyLimit: null,
+            riskLimit: null,
+            depth: null,
+            includeSnippets: null,
+            snippetLines: null,
+            candidatePolicy: null,
+            minConfidence: null,
+            explainSelection: null,
+            profile: null);
+
+        Assert.False(result.IsValid);
+        Assert.Equal("Source-position di-impact mode cannot be combined with fuzzy options.", result.Error);
     }
 
     [Fact]
