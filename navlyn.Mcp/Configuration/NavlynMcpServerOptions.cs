@@ -5,7 +5,7 @@ namespace Navlyn.Mcp.Configuration;
 internal sealed record NavlynMcpServerOptions(
     string Workspace,
     string WorkspaceArgument,
-    string NavlynExecutable,
+    string? NavlynExecutable,
     IReadOnlyList<string> NavlynArguments,
     string WorkingDirectory,
     int TimeoutMilliseconds,
@@ -14,6 +14,8 @@ internal sealed record NavlynMcpServerOptions(
     public const int DefaultTimeoutMilliseconds = 120000;
     public const int DefaultMaxJsonChars = 4000000;
 
+    public bool UseExternalCli => !string.IsNullOrWhiteSpace(NavlynExecutable);
+
     public static bool TryParse(
         IReadOnlyList<string> args,
         out NavlynMcpServerOptions options,
@@ -21,7 +23,7 @@ internal sealed record NavlynMcpServerOptions(
         out bool showHelp)
     {
         string? workspace = null;
-        string navlynExecutable = "navlyn";
+        string? navlynExecutable = null;
         List<string> navlynArguments = [];
         string? workingDirectory = null;
         int timeoutMilliseconds = DefaultTimeoutMilliseconds;
@@ -102,6 +104,13 @@ internal sealed record NavlynMcpServerOptions(
             return false;
         }
 
+        if (navlynExecutable is null && navlynArguments.Count > 0)
+        {
+            options = CreateEmpty();
+            error = "--navlyn-arg requires --navlyn-executable.";
+            return false;
+        }
+
         bool autoWorkspace = string.Equals(workspace.Trim(), "auto", StringComparison.Ordinal);
         string effectiveWorkingDirectory;
         string fullWorkspace;
@@ -147,11 +156,11 @@ internal sealed record NavlynMcpServerOptions(
         builder.AppendLine();
         builder.AppendLine("Options:");
         builder.AppendLine("  --workspace <path|auto>        Required .slnx, .sln, or .csproj path, or auto to discover one.");
-        builder.AppendLine("  --navlyn-executable <command>  Navlyn CLI command or executable. Defaults to navlyn.");
-        builder.AppendLine("  --navlyn-arg <arg>             Prefix argument for local dev, repeatable.");
-        builder.AppendLine("  --working-directory <path>     Child process working directory.");
+        builder.AppendLine("  --navlyn-executable <command>  Legacy external Navlyn CLI command or executable. Omit for standalone in-process execution.");
+        builder.AppendLine("  --navlyn-arg <arg>             Prefix argument for the legacy external CLI path, repeatable.");
+        builder.AppendLine("  --working-directory <path>     Working directory for in-process execution or the legacy child process.");
         builder.AppendLine("  --timeout-ms <number>          Per-tool timeout. Defaults to 120000.");
-        builder.AppendLine("  --max-json-chars <number>      Max CLI stdout JSON chars. Defaults to 4000000.");
+        builder.AppendLine("  --max-json-chars <number>      Max command JSON chars. Defaults to 4000000.");
         return builder.ToString();
     }
 

@@ -58,18 +58,18 @@ try {
     $overviewJson = $overview.Stdout | ConvertFrom-Json
     Assert-Equal -Name 'overview workspace' -Actual $overviewJson.workspace -Expected 'navlyn.slnx'
     Assert-Equal -Name 'overview kind' -Actual $overviewJson.kind -Expected 'solution'
-    Assert-Equal -Name 'overview project count' -Actual @($overviewJson.projects).Count -Expected 3
+    Assert-Equal -Name 'overview project count' -Actual @($overviewJson.projects).Count -Expected 5
     $overviewProject = @($overviewJson.projects | Where-Object { $_.name -eq 'navlyn' })[0]
     Assert-Equal -Name 'overview project name' -Actual $overviewProject.name -Expected 'navlyn'
 
     $symbolAt = Invoke-Navlyn `
         -Name 'symbol-at declaration' `
-        -Arguments @('symbol-at', '--workspace', 'navlyn.slnx', '--file', 'navlyn/Cli/Commands/CheckCommand.cs', '--line', '6', '--column', '23') `
+        -Arguments @('symbol-at', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/Commands/CheckCommand.cs', '--line', '6', '--column', '23') `
         -ExpectedExitCode 0
 
     Assert-Empty -Name 'symbol-at declaration stderr' -Text $symbolAt.Stderr
     $symbolAtJson = $symbolAt.Stdout | ConvertFrom-Json
-    Assert-Equal -Name 'symbol-at file' -Actual $symbolAtJson.file -Expected 'navlyn/Cli/Commands/CheckCommand.cs'
+    Assert-Equal -Name 'symbol-at file' -Actual $symbolAtJson.file -Expected 'Navlyn.CommandLine/Cli/Commands/CheckCommand.cs'
     Assert-Equal -Name 'symbol-at name' -Actual $symbolAtJson.symbol.name -Expected 'CheckCommand'
     Assert-Equal -Name 'symbol-at kind' -Actual $symbolAtJson.symbol.kind -Expected 'NamedType'
 

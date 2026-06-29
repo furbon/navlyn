@@ -8,7 +8,7 @@
     <PackAsTool>true</PackAsTool>
     <PackageId>navlyn-mcp</PackageId>
     <ToolCommandName>navlyn-mcp</ToolCommandName>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <Authors>furbon.tech</Authors>
     <Description>Read-only MCP server for Navlyn semantic C#/.NET evidence workflows.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -18,7 +18,7 @@
     <RepositoryUrl>https://github.com/furbon/navlyn</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/furbon/navlyn</PackageProjectUrl>
-    <PackageReleaseNotes>0.3.0 tightens MCP source-position and diff-mode validation, preserves stable CLI-backed tool execution, and refreshes release metadata, examples, and documentation for the synchronized navlyn/navlyn-mcp release.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.4.0 makes navlyn-mcp standalone by default with in-process execution over the shared Navlyn engine, while preserving the legacy --navlyn-executable escape hatch for compatibility and debugging.</PackageReleaseNotes>
     <Copyright>Copyright (c) 2026 furbon.tech</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
@@ -39,6 +39,10 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
     <PackageReference Include="ModelContextProtocol" Version="1.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Navlyn.CommandLine\Navlyn.CommandLine.csproj" />
   </ItemGroup>
 
 </Project>

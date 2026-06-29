@@ -118,8 +118,8 @@ For a repository-local team install, commit a .NET tool manifest:
 
 ```powershell
 dotnet new tool-manifest
-dotnet tool install navlyn --version 0.3.0
-dotnet tool install navlyn-mcp --version 0.3.0
+dotnet tool install navlyn --version 0.4.0
+dotnet tool install navlyn-mcp --version 0.4.0
 dotnet tool restore
 
 dotnet tool run navlyn -- check --workspace path/to/YourRepo.slnx
@@ -162,7 +162,7 @@ Use `compact` for first scans, `evidence` for review and CI facts, and `full` wh
 
 ## MCP Server
 
-`navlyn-mcp` exposes a focused read-only MCP surface backed by the same CLI contract. Use it when an MCP-capable client should ask semantic C# questions without composing shell commands.
+`navlyn-mcp` exposes a focused read-only MCP surface backed by the same Navlyn engine and CLI JSON contract. Use it when an MCP-capable client should ask semantic C# questions without composing shell commands. Installing `navlyn-mcp` is enough for MCP use; a separate `navlyn` CLI installation is not required.
 
 Typical installed-server configuration:
 

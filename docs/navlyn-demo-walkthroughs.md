@@ -28,7 +28,7 @@ Useful output excerpt:
     "candidateId": "sym:v1:b80453171915c2303ccb9b591fdcebb6",
     "selector": {
       "project": "navlyn",
-      "path": "navlyn/Cli/Commands/CheckCommand.cs",
+      "path": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs",
       "line": 6,
       "column": 23
     }

@@ -13,9 +13,7 @@ public sealed class NavlynMcpStdioTests
     {
         string repoRoot = FindRepositoryRoot();
         string serverDll = Path.Combine(repoRoot, "navlyn.Mcp", "bin", "Debug", "net10.0", "navlyn.Mcp.dll");
-        string cliDll = Path.Combine(repoRoot, "navlyn", "bin", "Debug", "net10.0", "navlyn.dll");
         Assert.True(File.Exists(serverDll), $"MCP server assembly does not exist: {serverDll}");
-        Assert.True(File.Exists(cliDll), $"Navlyn CLI assembly does not exist: {cliDll}");
 
         using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(60));
         StdioClientTransport transport = new(
@@ -26,8 +24,6 @@ public sealed class NavlynMcpStdioTests
                 [
                     serverDll,
                     "--workspace", Path.Combine(repoRoot, "navlyn.slnx"),
-                    "--navlyn-executable", "dotnet",
-                    "--navlyn-arg", cliDll,
                     "--working-directory", repoRoot,
                     "--timeout-ms", "60000",
                     "--max-json-chars", "4000000"
@@ -43,7 +39,7 @@ public sealed class NavlynMcpStdioTests
                 ClientInfo = new Implementation
                 {
                     Name = "navlyn-tests",
-                    Version = "0.3.0"
+                    Version = "0.4.0"
                 }
             },
             NullLoggerFactory.Instance,
@@ -82,6 +78,7 @@ public sealed class NavlynMcpStdioTests
         JsonElement structured = result.StructuredContent.Value;
         Assert.True(structured.GetProperty("ok").GetBoolean());
         Assert.Equal(NavlynMcpTools.WorkspaceSummaryTool, structured.GetProperty("tool").GetString());
+        Assert.Equal("repo-graph", structured.GetProperty("sourceCommand").GetProperty("command").GetString());
         Assert.Equal("repo-graph", structured.GetProperty("result").GetProperty("command").GetString());
 
         ReadResourceResult resourceResult = await client.ReadResourceAsync("navlyn://workspace/summary", cancellationToken: timeout.Token);

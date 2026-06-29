@@ -2,6 +2,17 @@
 
 All notable public release changes for Navlyn are tracked here.
 
+## 0.4.0 - 2026-06-29
+
+Release candidate for standalone MCP execution and shared engine packaging.
+
+- Split the Roslyn/MSBuild resolver implementation into `Navlyn.Core` and the reusable command-line frontend into `Navlyn.CommandLine`, with both tool packages sharing that implementation.
+- Changed `navlyn-mcp` to run Navlyn commands in-process by default, so MCP users only need to install `navlyn-mcp`.
+- Kept `--navlyn-executable` as an explicit legacy external CLI escape hatch for compatibility, debugging, and local development.
+- Preserved MCP `sourceCommand` as the logical Navlyn command behind a tool/resource result, even when no CLI process is launched.
+- Added regression coverage for standalone MCP execution, legacy option parsing, result envelope compatibility, package install shapes, and architecture guardrails.
+- Updated package metadata, install examples, performance guidance, distribution docs, and release notes for the synchronized `navlyn` and `navlyn-mcp` `0.4.0` release.
+
 ## 0.3.0 - 2026-06-28
 
 Release candidate for synchronized CLI/MCP agent-readiness hardening.

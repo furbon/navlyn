@@ -27,10 +27,11 @@ public sealed class RepoGraphResolverComponentTests(ResolverComponentTestFixture
 
         Assert.Equal("repo-graph", result.Command);
         Assert.Contains(result.Projects.Items, project => project.Name == "navlyn" && project.Classification?.Kind == "tooling");
+        Assert.Contains(result.Projects.Items, project => project.Name == "Navlyn.Core" && project.Classification?.Kind == "library");
         Assert.Contains(result.Projects.Items, project => project.Name == "navlyn.Tests" && project.Classification?.Kind == "test");
-        Assert.Contains(result.Edges.PackageReferences, package => package.ProjectId.Contains("navlyn/navlyn.csproj", StringComparison.Ordinal) && package.Name == "System.CommandLine");
-        Assert.Contains(result.Edges.ProjectReferences, edge => edge.FromProjectId.Contains("navlyn.Tests/navlyn.Tests.csproj", StringComparison.Ordinal) && edge.ToProjectId is not null && edge.ToProjectId.Contains("navlyn/navlyn.csproj", StringComparison.Ordinal));
-        Assert.Contains(result.Relationships.Items, relationship => relationship.Kind == "tests" && relationship.FromProjectId.Contains("navlyn.Tests/navlyn.Tests.csproj", StringComparison.Ordinal) && relationship.ToProjectId.Contains("navlyn/navlyn.csproj", StringComparison.Ordinal));
+        Assert.Contains(result.Edges.PackageReferences, package => package.ProjectId.Contains("Navlyn.CommandLine/Navlyn.CommandLine.csproj", StringComparison.Ordinal) && package.Name == "System.CommandLine");
+        Assert.Contains(result.Edges.ProjectReferences, edge => edge.FromProjectId.Contains("navlyn.Tests/navlyn.Tests.csproj", StringComparison.Ordinal) && edge.ToProjectId is not null && edge.ToProjectId.Contains("Navlyn.Core/Navlyn.Core.csproj", StringComparison.Ordinal));
+        Assert.Contains(result.Relationships.Items, relationship => relationship.Kind == "tests" && relationship.FromProjectId.Contains("navlyn.Tests/navlyn.Tests.csproj", StringComparison.Ordinal) && relationship.ToProjectId.Contains("Navlyn.Core/Navlyn.Core.csproj", StringComparison.Ordinal));
         Assert.False(result.Truncated);
     }
 

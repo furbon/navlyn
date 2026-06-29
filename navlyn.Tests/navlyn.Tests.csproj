@@ -17,6 +17,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Navlyn.CommandLine\Navlyn.CommandLine.csproj" />
+    <ProjectReference Include="..\Navlyn.Core\Navlyn.Core.csproj" />
     <ProjectReference Include="..\navlyn.Mcp\navlyn.Mcp.csproj" />
     <ProjectReference Include="..\navlyn\navlyn.csproj" />
   </ItemGroup>

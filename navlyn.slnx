@@ -1,4 +1,6 @@
 <Solution>
+  <Project Path="Navlyn.CommandLine/Navlyn.CommandLine.csproj" />
+  <Project Path="Navlyn.Core/Navlyn.Core.csproj" />
   <Project Path="navlyn/navlyn.csproj" />
   <Project Path="navlyn.Mcp/navlyn.Mcp.csproj" />
   <Project Path="navlyn.Tests/navlyn.Tests.csproj" />

@@ -108,7 +108,7 @@ internal sealed class NavlynCliRunner(NavlynMcpServerOptions options) : INavlynC
     {
         ProcessStartInfo startInfo = new()
         {
-            FileName = options.NavlynExecutable,
+            FileName = options.NavlynExecutable!,
             WorkingDirectory = options.WorkingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,

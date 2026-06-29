@@ -290,11 +290,11 @@ dotnet run --no-launch-profile --project navlyn -- context-pack --workspace navl
 dotnet run --no-launch-profile --project navlyn -- public-api-diff --workspace navlyn.slnx --base HEAD --project navlyn --change-limit 5
 dotnet run --no-launch-profile --project navlyn -- tests-for-symbol --workspace navlyn.slnx --query RepoGraphResolver --assume-kind NamedType --project navlyn --test-project navlyn.Tests --test-limit 5
 dotnet run --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query Check
-dotnet run --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file navlyn/Cli/NavlynCli.cs --line 31
-dotnet run --no-launch-profile --project navlyn -- symbol-at --workspace navlyn.slnx --file navlyn/Cli/Commands/CheckCommand.cs --line 6 --column 23
-dotnet run --no-launch-profile --project navlyn -- definition --workspace navlyn.slnx --file navlyn/Cli/NavlynCli.cs --line 31 --column 37
-dotnet run --no-launch-profile --project navlyn -- references --workspace navlyn.slnx --file navlyn/Cli/NavlynCli.cs --line 31 --column 37
-dotnet run --no-launch-profile --project navlyn -- implementations --workspace navlyn.slnx --file navlyn/Cli/Commands/CheckCommand.cs --line 6 --column 23
-dotnet run --no-launch-profile --project navlyn -- callers --workspace navlyn.slnx --file navlyn/Cli/Commands/CheckCommand.cs --line 8 --column 27
-dotnet run --no-launch-profile --project navlyn -- calls --workspace navlyn.slnx --file navlyn/Cli/NavlynCli.cs --line 28 --column 32
+dotnet run --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53
+dotnet run --no-launch-profile --project navlyn -- symbol-at --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23
+dotnet run --no-launch-profile --project navlyn -- definition --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
+dotnet run --no-launch-profile --project navlyn -- references --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
+dotnet run --no-launch-profile --project navlyn -- implementations --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23
+dotnet run --no-launch-profile --project navlyn -- callers --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 8 --column 27
+dotnet run --no-launch-profile --project navlyn -- calls --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
 ```
