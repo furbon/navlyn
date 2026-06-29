@@ -26,7 +26,7 @@ public sealed class TestImpactResolverComponentTests(ResolverComponentTestFixtur
             CandidateId: null,
             Selection: new FuzzySelectionOptions("fail", "medium", ExplainSelection: false));
         FuzzyCandidateResolution resolution = await new FuzzyDiscoveryResolver().ResolveCandidatesForSelectionAsync(
-            workspace.Solution.Projects.Where(project => project.Name == "navlyn").ToArray(),
+            workspace.Solution.Projects.Where(project => project.Name == "Navlyn.Core").ToArray(),
             query,
             CancellationToken.None);
         Assert.NotNull(resolution.SelectedCandidate);
@@ -44,7 +44,7 @@ public sealed class TestImpactResolverComponentTests(ResolverComponentTestFixtur
             candidate.EndColumn);
         TestImpactResolution impact = await new TestImpactResolver().ResolveForSymbolAsync(
             workspace,
-            workspace.Solution.Projects.Where(project => project.Name == "navlyn").ToArray(),
+            workspace.Solution.Projects.Where(project => project.Name == "Navlyn.Core").ToArray(),
             explicitTestProjects: workspace.Solution.Projects.Where(project => project.Name == "navlyn.Tests").ToArray(),
             subject,
             new TestImpactOptions(TestLimit: 10, ReferenceLimit: 200, IncludeSnippets: false, SnippetLines: 1, ExcludeGenerated: false),

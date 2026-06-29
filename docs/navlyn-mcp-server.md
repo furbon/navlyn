@@ -1,8 +1,10 @@
 # Navlyn MCP Server
 
-Navlyn includes a read-only stdio MCP server in the separate `navlyn.Mcp` project. It gives MCP clients a small, high-level tool surface for C#/.NET repository investigation while preserving the same deterministic CLI JSON contract underneath.
+Navlyn includes a standalone read-only stdio MCP server in the separate `navlyn.Mcp` project. It gives MCP clients a small, high-level tool surface for C#/.NET repository investigation while preserving the same deterministic Navlyn JSON contract used by the CLI.
 
-The server is intentionally facts-only. It does not edit files, execute arbitrary shell commands, call arbitrary Navlyn commands, access the network, or change the configured workspace. Successful tool calls return a Navlyn MCP result envelope with the CLI JSON under `result`; the inner result shapes remain documented in [`navlyn-cli-commands.md`](navlyn-cli-commands.md).
+The server is intentionally facts-only. It does not edit files, execute arbitrary shell commands, call arbitrary Navlyn commands, access the network, or change the configured workspace. Successful tool calls return a Navlyn MCP result envelope with the Navlyn command JSON under `result`; the inner result shapes remain documented in [`navlyn-cli-commands.md`](navlyn-cli-commands.md).
+
+For normal use, install only `navlyn-mcp` for MCP clients. A separate `navlyn` CLI installation is not required. The `navlyn` CLI and `navlyn-mcp` server share the same Navlyn core engine and command runtime.
 
 ## When To Use It
 
@@ -58,7 +60,7 @@ Local development from this repository:
 
 ```powershell
 dotnet build navlyn.slnx
-dotnet run --no-launch-profile --project navlyn.Mcp -- --workspace navlyn.slnx --navlyn-executable dotnet --navlyn-arg navlyn/bin/Debug/net10.0/navlyn.dll
+dotnet run --no-launch-profile --project navlyn.Mcp -- --workspace navlyn.slnx
 ```
 
 Equivalent MCP client configuration for local development:
@@ -69,11 +71,7 @@ Equivalent MCP client configuration for local development:
   "args": [
     "navlyn.Mcp/bin/Debug/net10.0/navlyn.Mcp.dll",
     "--workspace",
-    "navlyn.slnx",
-    "--navlyn-executable",
-    "dotnet",
-    "--navlyn-arg",
-    "navlyn/bin/Debug/net10.0/navlyn.dll"
+    "navlyn.slnx"
   ]
 }
 ```
@@ -87,11 +85,11 @@ Local package smoke testing uses the standard .NET tool flow:
 ## Server Options
 
 - `--workspace <path|auto>`: required `.slnx`, `.sln`, or `.csproj` path, or `auto` to discover one top-level candidate from the working directory/repository root. Tool calls are locked to the resolved workspace.
-- `--navlyn-executable <command>`: Navlyn CLI executable. Defaults to `navlyn`.
-- `--navlyn-arg <arg>`: prefix argument passed before the CLI command. Repeat for local development with `dotnet navlyn.dll`.
-- `--working-directory <path>`: child process working directory. Defaults to the repository root when found.
+- `--navlyn-executable <command>`: legacy external Navlyn CLI command or executable. Omit for standalone in-process execution. Use only for compatibility, debugging, or development investigations.
+- `--navlyn-arg <arg>`: prefix argument passed before the CLI command on the legacy external path. Repeat for local development with `dotnet navlyn.dll`.
+- `--working-directory <path>`: working directory for in-process execution or the legacy child process. Defaults to the repository root when found.
 - `--timeout-ms <number>`: per-tool timeout. Defaults to `120000`.
-- `--max-json-chars <number>`: maximum CLI stdout JSON size accepted by the wrapper. Defaults to `4000000`.
+- `--max-json-chars <number>`: maximum command JSON size accepted by the MCP wrapper. Defaults to `4000000`.
 
 The server writes MCP protocol messages to stdout. Logs and diagnostics go to stderr.
 
@@ -101,7 +99,7 @@ The server writes MCP protocol messages to stdout. Logs and diagnostics go to st
 
 The MCP surface is deliberately small. Prefer the specific high-level tool for the investigation task, and use `navlyn_batch` when the desired command is batch-supported but not exposed as a dedicated MCP tool.
 
-| Tool | Use It For | CLI Backing |
+| Tool | Use It For | Logical Navlyn Command |
 | --- | --- | --- |
 | `navlyn_workspace_summary` | First scan: projects, target frameworks, references, packages, test relationships, MSBuild file facts | `repo-graph` |
 | `navlyn_resolve_target` | Standard first symbol entry from query, `candidateId`, or source position; returns one target envelope and next actions | `resolve-target` |
@@ -123,7 +121,7 @@ The MCP surface is deliberately small. Prefer the specific high-level tool for t
 
 Source-position tool calls such as `navlyn_resolve_target`, `navlyn_tests_for_symbol`, and `navlyn_di_impact` accept at most one project context and reject fuzzy selection-only options. Diff-mode `navlyn_context_pack` rejects fuzzy selection-only options because the diff, not a symbol query, selects the context.
 
-All tools use MCP structured content and advertise the shared Navlyn MCP result envelope as their output schema. The inner `result` object remains the command-specific CLI JSON documented in [`navlyn-cli-commands.md`](navlyn-cli-commands.md).
+All tools use MCP structured content and advertise the shared Navlyn MCP result envelope as their output schema. The inner `result` object remains the command-specific Navlyn JSON documented in [`navlyn-cli-commands.md`](navlyn-cli-commands.md).
 
 For first-run agent setup:
 
@@ -254,44 +252,46 @@ Failure:
 }
 ```
 
-CLI failures preserve the first `NAVLYN####` diagnostic code found on stderr when available. Wrapper failures use `NAVLYN_MCP_*` codes.
+Command failures preserve the first `NAVLYN####` diagnostic code found on stderr when available. Wrapper failures use `NAVLYN_MCP_*` codes.
 
 ## MCP Compatibility
 
 MCP tool results use a stable outer envelope:
 
-- `ok`: `true` for successful wrapper execution, `false` for wrapper or fatal CLI failure.
+- `ok`: `true` for successful wrapper execution, `false` for wrapper or fatal Navlyn command failure.
 - `tool`: the MCP tool name.
-- `sourceCommand`: the allowlisted CLI command and arguments when a CLI process is launched.
+- `sourceCommand`: the allowlisted logical Navlyn command and arguments. In the default in-process path this is not a launched process; it is kept for compatibility and traceability.
 - `workspace`: the configured workspace.
-- `result`: the inner CLI JSON result for successful CLI calls.
-- `error`: a structured error object for wrapper or fatal CLI errors.
+- `result`: the inner Navlyn JSON result for successful calls.
+- `error`: a structured error object for wrapper or fatal Navlyn command errors.
 
 The outer envelope follows additive compatibility: new fields may be added, and clients should ignore unknown fields. The inner `result` follows the CLI compatibility policy in [`navlyn-cli-commands.md`](navlyn-cli-commands.md). MCP does not invent a second command-specific schema for inner results.
 
-MCP wrapper errors use `NAVLYN_MCP_*` codes. CLI errors preserve `NAVLYN####` diagnostics when the CLI writes them to stderr. Per-request `navlyn_batch` failures are represented inside the successful batch `result`, not as outer MCP wrapper failures.
+MCP wrapper errors use `NAVLYN_MCP_*` codes. Navlyn command errors preserve `NAVLYN####` diagnostics when available. Per-request `navlyn_batch` failures are represented inside the successful batch `result`, not as outer MCP wrapper failures.
 
 For `navlyn_batch`, error layering is important:
 
-- `NAVLYN_MCP_INVALID_ARGUMENT` means the MCP wrapper rejected the tool input before launching the CLI.
-- A CLI fatal batch error, such as invalid top-level JSON, returns MCP `ok: false` with a CLI diagnostic such as `NAVLYN1008`.
+- `NAVLYN_MCP_INVALID_ARGUMENT` means the MCP wrapper rejected the tool input before running the logical Navlyn command.
+- A fatal batch error, such as invalid top-level JSON, returns MCP `ok: false` with a Navlyn diagnostic such as `NAVLYN1008`.
 - A per-request batch failure is a successful MCP tool call whose `result.results[]` item has `ok: false` and its own `error`.
 
 ## Boundaries
 
-The MCP server is a thin stdio wrapper over the Navlyn CLI plus MCP-native discovery surfaces. It does not add editing/refactoring tools, arbitrary command execution, warm workspace handles, or a daemon.
+The MCP server is a standalone stdio frontend over the shared Navlyn engine plus MCP-native discovery surfaces. It does not add editing/refactoring tools, arbitrary command execution, file watching, network access, or a daemon.
 
 `navlyn_exact_navigation` is an allowlist tool, not an arbitrary command runner. Its `operation` argument is limited to `definition`, `references`, `callers`, `calls`, `implementations`, `type_hierarchy`, and `symbol_info`, and its target must be either a `candidateId` or an exact `file`/`line`/`column` source position. Reference usage filters (`usageKind`, `usageKinds`) and grouping (`groupBy`) are supported only for `operation: "references"`.
 
-`navlyn_tests_for_symbol`, `navlyn_tests_for_diff`, `navlyn_di_impact`, and `navlyn_public_api_diff` are allowlisted wrappers over their matching CLI commands. They do not run tests, edit files, publish packages, or execute arbitrary shell commands.
+`navlyn_tests_for_symbol`, `navlyn_tests_for_diff`, `navlyn_di_impact`, and `navlyn_public_api_diff` are allowlisted wrappers over their matching logical Navlyn commands. They do not run tests, edit files, publish packages, or execute arbitrary shell commands.
 
-`navlyn_batch` exposes the existing CLI `batch` command only. Batch coverage includes `overview`, `diagnostics`, `symbols`, `symbols-in`, `outline`, `symbol-at`, `symbol-info`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, `calls`, `find`, `resolve-target`, `where-used`, `about`, `related`, `impact`, `entrypoints`, `review-diff`, `review-pack`, `context-pack`, `repo-graph`, `public-api-diff`, `tests-for-symbol`, `tests-for-diff`, `framework-entrypoints`, `di-graph`, `where-registered`, `di-impact`, `route-map`, `route-impact`, `options-graph`, `config-impact`, `where-handled`, `message-flow`, `ef-model`, `entity-impact`, `package-usage`, and `package-impact`. Direct CLI-only facts such as `changed-symbols`, `impact-diff`, `diagnostics-diff`, `scope-at`, `symbol-source`, `signature`, `symbol-diagnostics`, and `diagnostic-pack` are not exposed through `navlyn_batch`. Prefer dedicated MCP tools for a single high-frequency fact and `navlyn_batch` when several batch-supported facts should share one workspace load.
+`navlyn_batch` exposes the existing Navlyn `batch` command only. Batch coverage includes `overview`, `diagnostics`, `symbols`, `symbols-in`, `outline`, `symbol-at`, `symbol-info`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, `calls`, `find`, `resolve-target`, `where-used`, `about`, `related`, `impact`, `entrypoints`, `review-diff`, `review-pack`, `context-pack`, `repo-graph`, `public-api-diff`, `tests-for-symbol`, `tests-for-diff`, `framework-entrypoints`, `di-graph`, `where-registered`, `di-impact`, `route-map`, `route-impact`, `options-graph`, `config-impact`, `where-handled`, `message-flow`, `ef-model`, `entity-impact`, `package-usage`, and `package-impact`. Direct CLI-only facts such as `changed-symbols`, `impact-diff`, `diagnostics-diff`, `scope-at`, `symbol-source`, `signature`, `symbol-diagnostics`, and `diagnostic-pack` are not exposed through `navlyn_batch`. Prefer dedicated MCP tools for a single high-frequency fact and `navlyn_batch` when several batch-supported facts should share one workspace load.
 
 Static impact, framework entrypoint, DI, application domain, and review-pack results are bounded source-level facts. They are useful evidence for agents and reviewers, but they are not complete runtime proofs, runtime route tables, authorization proofs, secret/config value reads, EF runtime models, package compatibility scans, security scans, or replacement review comments.
 
 ## Performance Notes
 
-The MCP server runs the Navlyn CLI as a subprocess per tool call. On large solutions, repeated workspace load cost can dominate tool-call latency. Prefer `navlyn_batch` when an agent needs several batch-supported facts from the same workspace, and use `profile: "compact"` or `profile: "evidence"` when output size is the limiting factor.
+The MCP server runs Navlyn commands in-process by default. This removes the external CLI process requirement and avoids CLI process startup overhead, but each standalone tool call still performs a conservative workspace load. Prefer `navlyn_batch` when an agent needs several batch-supported facts from the same workspace, and use `profile: "compact"` or `profile: "evidence"` when output size is the limiting factor.
+
+When `--navlyn-executable` is explicitly supplied, `navlyn-mcp` uses the legacy external CLI adapter. This escape hatch is useful for compatibility and debugging, not normal MCP installation.
 
 Use `./scripts/measure-navlyn-performance.ps1` from the repository root to compare CLI direct calls, CLI batch, and MCP stdio tool calls for local performance investigation:
 
@@ -302,3 +302,5 @@ Use `./scripts/measure-navlyn-performance.ps1` from the repository root to compa
 The MCP scenario starts `navlyn-mcp`, initializes an MCP stdio session, and measures representative tool calls such as `navlyn_workspace_summary`, `navlyn_resolve_target`, `navlyn_find_symbol`, and `navlyn_context_pack`. Functional MCP behavior is covered by the MCP tests in the solution.
 
 See [`navlyn-performance.md`](navlyn-performance.md) for broader performance guidance and release-readiness measurement notes.
+
+See [`navlyn-architecture.md`](navlyn-architecture.md) for the shared core, CLI frontend, MCP frontend, and legacy external CLI boundaries.

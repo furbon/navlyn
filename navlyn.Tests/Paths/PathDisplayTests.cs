@@ -21,10 +21,10 @@ public sealed class PathDisplayTests
         string repoRoot = FindRepositoryRoot();
 
         IReadOnlyList<string> candidates = PathDisplay.GetInputPathCandidates(
-            "navlyn/Cli/NavlynCli.cs",
+            "Navlyn.CommandLine/Cli/NavlynCli.cs",
             anchorPath: null);
 
-        Assert.Contains(Path.Combine(repoRoot, "navlyn", "Cli", "NavlynCli.cs"), candidates);
+        Assert.Contains(Path.Combine(repoRoot, "Navlyn.CommandLine", "Cli", "NavlynCli.cs"), candidates);
     }
 
     [Fact]
@@ -33,17 +33,17 @@ public sealed class PathDisplayTests
         string repoRoot = FindRepositoryRoot();
 
         IReadOnlyList<string> candidates = PathDisplay.GetInputPathCandidates(
-            @"navlyn\Cli\NavlynCli.cs",
+            @"Navlyn.CommandLine\Cli\NavlynCli.cs",
             anchorPath: null);
 
-        Assert.Contains(Path.Combine(repoRoot, "navlyn", "Cli", "NavlynCli.cs"), candidates);
+        Assert.Contains(Path.Combine(repoRoot, "Navlyn.CommandLine", "Cli", "NavlynCli.cs"), candidates);
     }
 
     [Fact]
     public void FindRepositoryRoot_FindsRootFromNestedFile()
     {
         string repoRoot = FindRepositoryRoot();
-        string nestedPath = Path.Combine(repoRoot, "navlyn", "Cli", "NavlynCli.cs");
+        string nestedPath = Path.Combine(repoRoot, "Navlyn.CommandLine", "Cli", "NavlynCli.cs");
 
         string? actualRoot = PathDisplay.FindRepositoryRoot(nestedPath);
 

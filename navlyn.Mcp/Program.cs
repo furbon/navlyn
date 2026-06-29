@@ -27,7 +27,15 @@ builder.Logging.AddConsole(consoleLogOptions =>
 });
 
 builder.Services.AddSingleton(options);
-builder.Services.AddSingleton<INavlynCommandAdapter, NavlynCliRunner>();
+if (options.UseExternalCli)
+{
+    builder.Services.AddSingleton<INavlynCommandAdapter, NavlynCliRunner>();
+}
+else
+{
+    builder.Services.AddSingleton<INavlynCommandAdapter, NavlynInProcessCommandAdapter>();
+}
+
 builder.Services.AddSingleton<NavlynMcpToolService>();
 builder.Services
     .AddMcpServer()

@@ -118,8 +118,8 @@ navlyn repo-graph --workspace path/to/YourRepo.slnx --profile compact
 
 ```powershell
 dotnet new tool-manifest
-dotnet tool install navlyn --version 0.3.0
-dotnet tool install navlyn-mcp --version 0.3.0
+dotnet tool install navlyn --version 0.4.0
+dotnet tool install navlyn-mcp --version 0.4.0
 dotnet tool restore
 
 dotnet tool run navlyn -- check --workspace path/to/YourRepo.slnx
@@ -162,7 +162,7 @@ navlyn context-pack --workspace navlyn.slnx --diff --goal review --profile compa
 
 ## MCP サーバー
 
-`navlyn-mcp` は、同じ CLI 契約を背後に持つ、読み取り専用の MCP インターフェイスです。MCP 対応クライアントが、シェルコマンドを組み立てずに C# の意味解析上の質問をしたいときに使います。
+`navlyn-mcp` は、同じ Navlyn engine と CLI JSON 契約を背後に持つ、読み取り専用の MCP インターフェイスです。MCP 対応クライアントが、シェルコマンドを組み立てずに C# の意味解析上の質問をしたいときに使います。MCP 用途では `navlyn-mcp` だけをインストールすればよく、別途 `navlyn` CLI を入れる必要はありません。
 
 インストール済みサーバーの典型的な設定:
 

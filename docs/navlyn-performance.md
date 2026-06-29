@@ -5,11 +5,11 @@ Navlyn loads C# workspaces through MSBuild/Roslyn. On large repositories, worksp
 ## Execution Model
 
 - CLI commands load the configured workspace for each process invocation.
-- `navlyn-mcp` is a read-only stdio wrapper that launches the Navlyn CLI as a subprocess per tool call.
+- `navlyn-mcp` is a read-only stdio server that runs Navlyn commands in-process by default through the shared engine.
 - `navlyn_batch` can reduce repeated workspace loads when several batch-supported facts should be collected together.
 - `compact` and `evidence` profiles can reduce output size and downstream token pressure.
 
-Navlyn does not currently include a daemon, persistent workspace handle, on-disk index, telemetry pipeline, or hosted service.
+Navlyn does not currently include a daemon, file watcher, on-disk index, telemetry pipeline, or hosted service. The MCP server reuses its process and command runtime across a stdio session, but it conservatively reloads the workspace for standalone tool calls so file-change behavior matches the CLI contract. Use `navlyn_batch` when several supported facts should share one workspace load.
 
 ## Measure Locally
 
@@ -96,7 +96,7 @@ Prefer batch when the agent already knows it needs several facts:
 Get-Content examples/batch/investigation-loop.json | navlyn batch --workspace navlyn.slnx
 ```
 
-For MCP clients, the equivalent is `navlyn_batch`. The server intentionally starts the CLI per tool call, so batching several supported facts can be more important than adding more dedicated MCP tools.
+For MCP clients, the equivalent is `navlyn_batch`. The server runs in-process by default, so batching several supported facts mainly reduces repeated workspace load and keeps tool selection compact.
 
 Do not interpret faster compact output as better semantic coverage. It is smaller by design. If a compact result warns about truncation or omits the expected file, rerun with higher limits, `evidence`, or `full`.
 
@@ -121,8 +121,7 @@ Keep generated reports under ignored paths such as `artifacts/` or `.docs/perf/`
 
 If repeated measurements show that workspace load dominates real agent workflows, future work can evaluate:
 
-- warm workspace or daemon mode;
-- direct in-process MCP adapter;
+- warm workspace cache with explicit invalidation semantics;
 - on-disk symbol index;
 - benchmark corpus and variance tracking;
 - CI performance budgets after baseline variance is understood.

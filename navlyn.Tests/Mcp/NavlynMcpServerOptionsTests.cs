@@ -5,7 +5,7 @@ namespace Navlyn.Tests.Mcp;
 public sealed class NavlynMcpServerOptionsTests
 {
     [Fact]
-    public void TryParse_RequiredWorkspace_UsesRepositoryRootAsWorkingDirectory()
+    public void TryParse_RequiredWorkspace_UsesRepositoryRootAsWorkingDirectoryAndInProcessByDefault()
     {
         string repoRoot = FindRepositoryRoot();
         string workspace = Path.Combine(repoRoot, "navlyn.slnx");
@@ -22,7 +22,8 @@ public sealed class NavlynMcpServerOptionsTests
         Assert.Equal(workspace, options.Workspace);
         Assert.Equal("navlyn.slnx", options.WorkspaceArgument);
         Assert.Equal(repoRoot, options.WorkingDirectory);
-        Assert.Equal("navlyn", options.NavlynExecutable);
+        Assert.Null(options.NavlynExecutable);
+        Assert.False(options.UseExternalCli);
     }
 
     [Fact]
@@ -46,9 +47,25 @@ public sealed class NavlynMcpServerOptionsTests
         Assert.True(valid);
         Assert.Null(error);
         Assert.Equal("dotnet", options.NavlynExecutable);
+        Assert.True(options.UseExternalCli);
         Assert.Equal(["navlyn.dll", "--no-build"], options.NavlynArguments);
         Assert.Equal(30000, options.TimeoutMilliseconds);
         Assert.Equal(1000, options.MaxJsonChars);
+    }
+
+    [Fact]
+    public void TryParse_NavlynArgWithoutExternalExecutableReturnsUsageError()
+    {
+        string repoRoot = FindRepositoryRoot();
+
+        bool valid = NavlynMcpServerOptions.TryParse(
+            ["--workspace", Path.Combine(repoRoot, "navlyn.slnx"), "--navlyn-arg", "navlyn.dll"],
+            out _,
+            out string? error,
+            out _);
+
+        Assert.False(valid);
+        Assert.Equal("--navlyn-arg requires --navlyn-executable.", error);
     }
 
     [Fact]
