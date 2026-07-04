@@ -1,6 +1,8 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using Navlyn.Paths;
+using Navlyn.Workspaces;
 
 namespace Navlyn.Symbols;
 
@@ -67,11 +69,19 @@ internal sealed class OutlineResolver
             return null;
         }
 
+        Project project = sourceDocument.Document.Project;
+        SymbolFacts facts = SymbolFactsBuilder.Create(symbol, project.Name);
+
+        OutlineCandidateTarget candidateTarget = CreateCandidateTarget(symbol, facts, project, sourceDocument, lineSpan);
         return new OutlineEntry(
             Name: symbol.Name,
             Kind: symbol.Kind.ToString(),
             Container: SymbolNavigationFacts.GetContainer(symbol),
-            Facts: SymbolFactsBuilder.Create(symbol, sourceDocument.Document.Project.Name),
+            Facts: facts,
+            CandidateId: candidateTarget.CandidateId,
+            CandidatePath: candidateTarget.Path,
+            CandidateLine: candidateTarget.Line,
+            CandidateColumn: candidateTarget.Column,
             Path: sourceDocument.DisplayPath,
             Line: lineSpan.StartLinePosition.Line + 1,
             Column: lineSpan.StartLinePosition.Character + 1,
@@ -100,6 +110,39 @@ internal sealed class OutlineResolver
     private static bool IsFieldVariable(SyntaxNode node)
     {
         return node.Parent?.Parent is BaseFieldDeclarationSyntax;
+    }
+
+    private static OutlineCandidateTarget CreateCandidateTarget(
+        ISymbol symbol,
+        SymbolFacts facts,
+        Project project,
+        SourceDocumentResolution sourceDocument,
+        FileLinePositionSpan lineSpan)
+    {
+        SymbolSourceLocation? sourceLocation = SymbolNavigationFacts.GetSourceLocations(symbol).FirstOrDefault();
+        string path = sourceLocation?.Path ?? PathDisplay.FromRepositoryRoot(sourceDocument.DisplayPath);
+        int line = sourceLocation?.Line ?? lineSpan.StartLinePosition.Line + 1;
+        int column = sourceLocation?.Column ?? lineSpan.StartLinePosition.Character + 1;
+        FuzzyCandidateSelector selector = new(
+            Version: 1,
+            Kind: symbol.Kind.ToString(),
+            Name: symbol.Name,
+            Container: SymbolNavigationFacts.GetContainer(symbol),
+            FullyQualifiedName: facts.FullyQualifiedName,
+            DocumentationCommentId: facts.DocumentationCommentId,
+            Project: facts.Project,
+            TargetFramework: ProjectContextFacts.GetTargetFramework(project),
+            Path: path,
+            Line: line,
+            Column: column,
+            EndLine: sourceLocation?.EndLine ?? lineSpan.EndLinePosition.Line + 1,
+            EndColumn: sourceLocation?.EndColumn ?? lineSpan.EndLinePosition.Character + 1);
+
+        return new OutlineCandidateTarget(
+            CandidateId: FuzzyCandidateIdentity.CreateCandidateId(selector),
+            Path: path,
+            Line: line,
+            Column: column);
     }
 }
 
@@ -130,10 +173,16 @@ internal sealed record OutlineEntry(
     string Kind,
     string? Container,
     SymbolFacts Facts,
+    string CandidateId,
+    string CandidatePath,
+    int CandidateLine,
+    int CandidateColumn,
     string Path,
     int Line,
     int Column,
     int EndLine,
     int EndColumn);
+
+internal sealed record OutlineCandidateTarget(string CandidateId, string Path, int Line, int Column);
 
 internal sealed record OutlineResolutionError(int DiagnosticId, string Message, int ExitCode);

@@ -66,6 +66,10 @@ Breaking changes require documentation updates and contract-test updates. Renami
 
 Profiled workflow output uses `schemaVersion: "navlyn.workflow.v1"`. That schema version covers the shared workflow envelope (`schemaVersion`, `navlynVersion`, `workspace`, `kind`, `command`, `profile`, `configuration`, `reproCommand`, summaries, limits, warnings, and next actions), not every command's rich inner domain facts. A future `navlyn.workflow.v2` would be used for incompatible envelope changes.
 
+The published envelope schemas live under [`docs/schemas`](schemas/). `navlyn-workflow-envelope.schema.json` covers the profiled workflow envelope only; command-specific domain facts remain documented in this file and validated by component, CLI-contract, and representative golden snapshot tests. Snapshot tests scrub nondeterministic fields such as `navlynVersion` and intentionally focus on envelope and important shape, not every semantic detail.
+
+`nextActions` are conditional follow-up hints, not a required checklist. Consumers should pick at most the fact needed for the current question and may ignore the array entirely when the current result is sufficient. MCP results expose additive `recommendedNextAction` and `optionalFollowUps` wrapper fields when inner CLI JSON contains `nextActions`; those wrappers add `when`, `costClass`, and `runByDefault: false` without changing the inner CLI result.
+
 ## Output Profiles
 
 High-level workflow commands support `--profile compact|evidence|full`. The default is `full`.
@@ -84,15 +88,15 @@ Profile compatibility:
 Profiled workflow output uses `schemaVersion: "navlyn.workflow.v1"`. The supported direct commands are `repo-graph`, `changed-symbols`, `impact-diff`, `diagnostics-diff`, `review-diff`, `review-pack`, `context-pack`, `public-api-diff`, `tests-for-symbol`, `tests-for-diff`, `framework-entrypoints`, `di-graph`, `where-registered`, `di-impact`, `route-map`, `route-impact`, `options-graph`, `config-impact`, `where-handled`, `message-flow`, `ef-model`, `entity-impact`, `package-usage`, and `package-impact`.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- review-diff --workspace navlyn.slnx --profile evidence
-dotnet run --no-launch-profile --project navlyn -- review-pack --workspace navlyn.slnx --profile evidence
-dotnet run --no-launch-profile --project navlyn -- context-pack --workspace navlyn.slnx --diff --profile compact
-dotnet run --no-launch-profile --project navlyn -- repo-graph --workspace navlyn.slnx --profile compact
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review-diff --workspace navlyn.slnx --profile evidence
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review-pack --workspace navlyn.slnx --profile evidence
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- context-pack --workspace navlyn.slnx --diff --profile compact
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- repo-graph --workspace navlyn.slnx --profile compact
 ```
 
 ## MCP Server
 
-The separate `navlyn.Mcp` project exposes a read-only stdio MCP server for agent clients. MCP tool results wrap existing CLI JSON in `{ ok, tool, sourceCommand, workspace, result, error }`; the inner `result` shapes remain the CLI contract documented here.
+The separate `navlyn.Mcp` project exposes a read-only stdio MCP server for agent clients. MCP tool results wrap existing CLI JSON in `{ ok, tool, sourceCommand, workspace, metadata, result, error }`; `metadata` is additive and optional, and the inner `result` shapes remain the CLI contract documented here.
 
 See [`navlyn-mcp-server.md`](navlyn-mcp-server.md) for setup, tool names, result envelope, and boundaries.
 
@@ -121,6 +125,8 @@ Navlyn uses the Roslyn project/document context loaded by MSBuild. Conditional c
 
 Multi-targeted projects are loaded as separate Roslyn projects when MSBuild exposes them that way. Their names commonly include the target framework, such as `MyProject(net10.0)`, and `overview` reports `targetFramework` when Navlyn can determine it. Use the exact project name to select a target-specific context. Filtering by a `.csproj` path can be ambiguous when the same project file expands to multiple target frameworks, and returns `NAVLYN1007`.
 
+`--workspace` accepts `.code-workspace`, `.slnx`, `.sln`, and `.csproj` paths. The special value `auto` searches the current repository root or current directory for one top-level candidate, preferring `.code-workspace`, then `.slnx`, then `.sln`, then `.csproj`. A `.code-workspace` file is treated as a discovery container: Navlyn reads its `folders` array, finds `.slnx`, `.sln`, or `.csproj` candidates in those folders, loads the single best candidate, and reports `NAVLYN1106` when that selection is ambiguous. Folders outside the repository root are allowed and reported as workspace-load warnings on stderr.
+
 Linked files are matched and emitted by physical repository-relative path. When one physical file is linked into multiple projects, use `--project` to choose the intended semantic context. Without `--project`, Navlyn chooses a deterministic first matching document; returned symbol facts identify the project that produced a symbol when one is available.
 
 ## Generated Code
@@ -139,7 +145,7 @@ Fuzzy commands are official agent-oriented shortcuts over the precise semantic p
 
 Common options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - `--query <text>`: required fuzzy symbol query.
 - `--assume-kind <kind>`: optional repeated Roslyn symbol kind used for ranking.
 - `--match smart|exact|contains|regex`: defaults to `smart`.
@@ -181,7 +187,7 @@ When `--candidate-id` is used, `--query`, `--assume-kind`, `--match`, and `--cas
 Finds source symbols that plausibly match a compact query.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- find --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- find --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType
 ```
 
 `find` returns the common fuzzy envelope and candidate list. It does not return references or relation summaries. Use its `candidateId` values to re-query selected-candidate workflows without repeating fuzzy selection.
@@ -191,9 +197,9 @@ dotnet run --no-launch-profile --project navlyn -- find --workspace navlyn.slnx 
 Resolves the first target an agent should anchor on from a fuzzy query, a previous `candidateId`, or an exact source position. Use it as a small standard entrypoint when the caller wants one selected target plus next actions. Use `find` instead when the caller wants a full candidate list for manual choice.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- resolve-target --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType
-dotnet run --no-launch-profile --project navlyn -- resolve-target --workspace navlyn.slnx --candidate-id sym:v1:...
-dotnet run --no-launch-profile --project navlyn -- resolve-target --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- resolve-target --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- resolve-target --workspace navlyn.slnx --candidate-id sym:v1:...
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- resolve-target --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23
 ```
 
 Input modes:
@@ -244,7 +250,7 @@ Future work candidates such as fully qualified name input, XML documentation com
 Resolves a fuzzy query and lists source references for the selected candidate. References include semantic `containingSymbol` context by default.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- where-used --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --limit 100
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- where-used --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --limit 100
 ```
 
 Additional options:
@@ -270,7 +276,7 @@ Ambiguous output omits `selectedCandidate` and may include `candidateResults`, w
 Resolves a fuzzy query and returns a compact semantic summary of the selected symbol.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- about --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- about --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType
 ```
 
 Additional options:
@@ -293,7 +299,7 @@ Selected-candidate output may include:
 Resolves a fuzzy query and returns files likely related to the selected symbol for investigation.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- related --workspace navlyn.slnx --query CheckCommand --include references,calls,callers,hierarchy --limit 50
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- related --workspace navlyn.slnx --query CheckCommand --include references,calls,callers,hierarchy --limit 50
 ```
 
 Additional options:
@@ -309,7 +315,7 @@ Output adds `totalFiles`, `limit`, `truncated`, and `files`, ordered by reason p
 Resolves a fuzzy query and estimates static source areas likely affected by changing the selected symbol. This is static source navigation, not a complete runtime behavior graph.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- impact --workspace navlyn.slnx --query CheckCommand --depth 2
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- impact --workspace navlyn.slnx --query CheckCommand --depth 2
 ```
 
 Additional options:
@@ -326,7 +332,7 @@ Output is file-first like `related`, but file entries may include `impactLevel` 
 Resolves a fuzzy query and traces bounded static caller chains upstream from selected members.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- entrypoints --workspace navlyn.slnx --query CheckCommand --depth 3
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- entrypoints --workspace navlyn.slnx --query CheckCommand --depth 3
 ```
 
 Additional options:
@@ -344,8 +350,8 @@ Output adds `totalChains`, `limit`, `truncated`, and `chains`. Each chain contai
 Discovers framework-aware .NET entrypoint declarations in the workspace.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- framework-entrypoints --workspace navlyn.slnx
-dotnet run --no-launch-profile --project navlyn -- framework-entrypoints --workspace navlyn.slnx --framework aspnetcore --project WebApp
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- framework-entrypoints --workspace navlyn.slnx
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- framework-entrypoints --workspace navlyn.slnx --framework aspnetcore --project WebApp
 ```
 
 Additional options:
@@ -369,7 +375,7 @@ Diff workflow commands are review-oriented entrypoints for agents. They read Git
 
 Common options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - `--base <ref>`: compare from this Git ref. With `--head`, compares base to head; without `--head`, compares base to the working tree.
 - `--head <ref>`: compare to this Git ref. Requires `--base`.
 - `--staged`: use staged changes.
@@ -395,8 +401,8 @@ Invalid diff option combinations produce `NAVLYN1503` on stderr, exit code `2`, 
 Extracts current source symbols touched by a diff.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- changed-symbols --workspace navlyn.slnx
-dotnet run --no-launch-profile --project navlyn -- changed-symbols --workspace navlyn.slnx --staged --symbol-limit 100
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- changed-symbols --workspace navlyn.slnx
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- changed-symbols --workspace navlyn.slnx --staged --symbol-limit 100
 ```
 
 Additional options:
@@ -415,7 +421,7 @@ Each changed symbol reports symbol facts, source span, `changeKinds`, bounded `c
 Returns bounded static impact facts for changed symbols.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- impact-diff --workspace navlyn.slnx --impact-limit 100 --depth 2
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- impact-diff --workspace navlyn.slnx --impact-limit 100 --depth 2
 ```
 
 Additional options:
@@ -434,7 +440,7 @@ Output adds `changedSymbols`, `unresolvedChanges`, and `impact`. Impact items in
 Returns current compiler diagnostics scoped to changed and affected files.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- diagnostics-diff --workspace navlyn.slnx --diagnostic-limit 100
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- diagnostics-diff --workspace navlyn.slnx --diagnostic-limit 100
 ```
 
 Additional options:
@@ -452,8 +458,8 @@ Output adds `changedSymbols`, `unresolvedChanges`, `diagnosticsScope`, and `diag
 Creates a one-shot review facts pack for AI review workflows.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- review-diff --workspace navlyn.slnx
-dotnet run --no-launch-profile --project navlyn -- review-diff --workspace navlyn.slnx --staged --include-snippets
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review-diff --workspace navlyn.slnx
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review-diff --workspace navlyn.slnx --staged --include-snippets
 ```
 
 Additional options:
@@ -475,9 +481,9 @@ Output adds `changedSymbols`, `unresolvedChanges`, `publicContractChanges`, `imp
 Runs deterministic review packs that return evidence-backed signals for AI review workflows. This is not a complete analyzer or security scanner, and it does not generate review comments.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- review-pack --workspace navlyn.slnx
-dotnet run --no-launch-profile --project navlyn -- review-pack --workspace navlyn.slnx --scope workspace --pack async --pack security --profile evidence
-dotnet run --no-launch-profile --project navlyn -- review-pack --workspace navlyn.slnx --pack architecture --architecture-config .navlyn.yml
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review-pack --workspace navlyn.slnx
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review-pack --workspace navlyn.slnx --scope workspace --pack async --pack security --profile evidence
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review-pack --workspace navlyn.slnx --pack architecture --architecture-config .navlyn.yml
 ```
 
 Additional options:
@@ -524,13 +530,13 @@ Invalid pack values, invalid limits, invalid diff option combinations, and expli
 `public-api-diff` compares source-level public / protected API surface between a base Git ref and either the current working tree or a head Git ref. It is not a NuGet package diff, reference assembly diff, or IL/binary scanner.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- public-api-diff --workspace navlyn.slnx --base main
-dotnet run --no-launch-profile --project navlyn -- public-api-diff --workspace navlyn.slnx --base main --head HEAD --project navlyn
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- public-api-diff --workspace navlyn.slnx --base main
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- public-api-diff --workspace navlyn.slnx --base main --head HEAD --project "navlyn(net10.0)"
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - `--base <ref>`: Git ref to compare from.
 
 Optional options:
@@ -615,9 +621,9 @@ Risk values are `breaking`, `risk`, or `compatible` and are reported separately 
 Finds tests related to a selected symbol.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- tests-for-symbol --workspace navlyn.slnx --query RepoGraphResolver --assume-kind NamedType
-dotnet run --no-launch-profile --project navlyn -- tests-for-symbol --workspace navlyn.slnx --candidate-id sym:v1:...
-dotnet run --no-launch-profile --project navlyn -- tests-for-symbol --workspace navlyn.slnx --file Navlyn.Core/RepoGraph/RepoGraphResolver.cs --line 7 --column 23
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- tests-for-symbol --workspace navlyn.slnx --query RepoGraphResolver --assume-kind NamedType
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- tests-for-symbol --workspace navlyn.slnx --candidate-id sym:v1:...
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- tests-for-symbol --workspace navlyn.slnx --file Navlyn.Core/RepoGraph/RepoGraphResolver.cs --line 7 --column 23
 ```
 
 Input modes:
@@ -649,8 +655,8 @@ Output includes `selectionInput`, optional fuzzy `selection`, `subject`, `testPr
 Finds tests related to changed symbols in a diff.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- tests-for-diff --workspace navlyn.slnx --base main
-dotnet run --no-launch-profile --project navlyn -- tests-for-diff --workspace navlyn.slnx --staged --test-limit 20
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- tests-for-diff --workspace navlyn.slnx --base main
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- tests-for-diff --workspace navlyn.slnx --staged --test-limit 20
 ```
 
 Diff options:
@@ -682,8 +688,8 @@ DI commands return source-level `Microsoft.Extensions.DependencyInjection` regis
 Reports source-level service registrations, constructor dependency edges, and conservative risk facts.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- di-graph --workspace navlyn.slnx
-dotnet run --no-launch-profile --project navlyn -- di-graph --workspace navlyn.slnx --project WebApp --registration-limit 200
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- di-graph --workspace navlyn.slnx
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- di-graph --workspace navlyn.slnx --project WebApp --registration-limit 200
 ```
 
 Additional options:
@@ -708,9 +714,9 @@ Supported patterns include direct `AddSingleton`, `AddScoped`, `AddTransient`, `
 Finds DI registrations for a selected type.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- where-registered --workspace navlyn.slnx --query WidgetService --assume-kind NamedType
-dotnet run --no-launch-profile --project navlyn -- where-registered --workspace navlyn.slnx --candidate-id sym:v1:...
-dotnet run --no-launch-profile --project navlyn -- where-registered --workspace navlyn.slnx --file src/App/WidgetService.cs --line 7 --column 21
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- where-registered --workspace navlyn.slnx --query WidgetService --assume-kind NamedType
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- where-registered --workspace navlyn.slnx --candidate-id sym:v1:...
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- where-registered --workspace navlyn.slnx --file src/App/WidgetService.cs --line 7 --column 21
 ```
 
 Input modes:
@@ -741,7 +747,7 @@ Output includes `selectionInput`, optional fuzzy `selection`, `subject`, `limits
 Returns DI registrations, constructor dependencies, consumers, and conservative risk facts for a selected type.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- di-impact --workspace navlyn.slnx --query IWidgetStore --assume-kind NamedType --depth 2
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- di-impact --workspace navlyn.slnx --query IWidgetStore --assume-kind NamedType --depth 2
 ```
 
 Input modes and fuzzy selection options match `where-registered`.
@@ -767,7 +773,7 @@ Application domain commands return source-level facts for common .NET applicatio
 
 Common options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - `--project <project>`: optional repeated project context filter. For source-position selected-subject commands in this section, this also selects the Roslyn project context and can be specified at most once.
 - `--exclude-generated`.
 - `--include-snippets`.
@@ -781,8 +787,8 @@ Common output includes `workspace`, `kind`, `command`, optional `projects`, `lim
 Reports source-level ASP.NET Core controller action and Minimal API route/auth facts.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- route-map --workspace src/Web/Web.csproj
-dotnet run --no-launch-profile --project navlyn -- route-map --workspace src/Web/Web.csproj --route orders --auth required
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- route-map --workspace src/Web/Web.csproj
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- route-map --workspace src/Web/Web.csproj --route orders --auth required
 ```
 
 Additional options:
@@ -800,7 +806,7 @@ Output includes a `routes` section. Route items include `endpointKind`, `httpMet
 Reports route-map facts for routes matching one pattern fragment.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- route-impact --workspace src/Web/Web.csproj --route /orders
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- route-impact --workspace src/Web/Web.csproj --route /orders
 ```
 
 Required options:
@@ -814,8 +820,8 @@ Additional options match `route-map` limits and snippet/generated options. Outpu
 Reports source-level options/configuration facts.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- options-graph --workspace src/App/App.csproj
-dotnet run --no-launch-profile --project navlyn -- options-graph --workspace src/App/App.csproj --query PaymentOptions
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- options-graph --workspace src/App/App.csproj
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- options-graph --workspace src/App/App.csproj --query PaymentOptions
 ```
 
 Additional options:
@@ -833,7 +839,7 @@ Output includes `options`, `bindings`, `consumers`, and `validations`. Supported
 Reports options/configuration facts filtered by a required query.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- config-impact --workspace src/App/App.csproj --query Payments
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- config-impact --workspace src/App/App.csproj --query Payments
 ```
 
 Required options:
@@ -847,9 +853,9 @@ Limits and output sections match `options-graph`.
 Finds source-level MediatR handlers for a selected request or notification type.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- where-handled --workspace src/App/App.csproj --query CreateOrderCommand --assume-kind NamedType
-dotnet run --no-launch-profile --project navlyn -- where-handled --workspace src/App/App.csproj --candidate-id sym:v1:...
-dotnet run --no-launch-profile --project navlyn -- where-handled --workspace src/App/App.csproj --file src/App/CreateOrderCommand.cs --line 6 --column 22
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- where-handled --workspace src/App/App.csproj --query CreateOrderCommand --assume-kind NamedType
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- where-handled --workspace src/App/App.csproj --candidate-id sym:v1:...
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- where-handled --workspace src/App/App.csproj --file src/App/CreateOrderCommand.cs --line 6 --column 22
 ```
 
 Input modes:
@@ -873,7 +879,7 @@ Output includes `selectionInput`, optional fuzzy `selection`, `subject`, `handle
 Reports bounded MediatR handler and `Send` / `Publish` call-site facts for a selected request or notification type.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- message-flow --workspace src/App/App.csproj --query CreateOrderCommand --assume-kind NamedType
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- message-flow --workspace src/App/App.csproj --query CreateOrderCommand --assume-kind NamedType
 ```
 
 Input modes and fuzzy selection options match `where-handled`.
@@ -892,8 +898,8 @@ Output includes `handlers` and `callSites`. Call-site facts are source-level and
 Reports source-level EF Core model facts.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- ef-model --workspace src/App/App.csproj
-dotnet run --no-launch-profile --project navlyn -- ef-model --workspace src/App/App.csproj --entity Order
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- ef-model --workspace src/App/App.csproj
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- ef-model --workspace src/App/App.csproj --entity Order
 ```
 
 Additional options:
@@ -911,7 +917,7 @@ Output includes `dbContexts`, `entities`, `dbSets`, `configurations`, and `query
 Reports EF source facts for a selected entity type.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- entity-impact --workspace src/App/App.csproj --query Order --assume-kind NamedType
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- entity-impact --workspace src/App/App.csproj --query Order --assume-kind NamedType
 ```
 
 Input modes and fuzzy selection options match `where-handled`.
@@ -930,8 +936,8 @@ Output includes matching `dbSets`, `configurations`, and `querySites`.
 Reports source-level package reference and usage facts.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- package-usage --workspace navlyn.slnx --package Microsoft.CodeAnalysis.CSharp.Workspaces
-dotnet run --no-launch-profile --project navlyn -- package-usage --workspace src/App/App.csproj --package Microsoft.EntityFrameworkCore --namespace Microsoft.EntityFrameworkCore
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- package-usage --workspace navlyn.slnx --package Microsoft.CodeAnalysis.CSharp.Workspaces
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- package-usage --workspace src/App/App.csproj --package Microsoft.EntityFrameworkCore --namespace Microsoft.EntityFrameworkCore
 ```
 
 Required options:
@@ -952,7 +958,7 @@ Output includes `packageReferences` from project files and `usages` from source 
 Reports the same package reference and source usage facts as `package-usage`, positioned for package change/upgrade impact investigation.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- package-impact --workspace src/App/App.csproj --package Microsoft.EntityFrameworkCore --namespace Microsoft.EntityFrameworkCore
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- package-impact --workspace src/App/App.csproj --package Microsoft.EntityFrameworkCore --namespace Microsoft.EntityFrameworkCore
 ```
 
 Required and optional options match `package-usage`.
@@ -969,7 +975,7 @@ The command returns deterministic JSON facts, ranked context items, budget infor
 
 Common options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - `--project <project>`: optional repeated project context filter.
 - `--exclude-generated`: excludes generated declarations, diagnostics, and snippets where applicable.
 - `--goal review|modify|understand`: ranking profile. Defaults to `understand` in query mode and `review` in diff mode.
@@ -986,9 +992,9 @@ Budgeting uses the deterministic `chars-div-4-v1` estimator: `charLimit = budget
 Resolves a fuzzy symbol query or a previous `candidateId` and returns selected-symbol context.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- context-pack --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType
-dotnet run --no-launch-profile --project navlyn -- context-pack --workspace navlyn.slnx --query CheckCommand --goal modify --snippet-policy signature
-dotnet run --no-launch-profile --project navlyn -- context-pack --workspace navlyn.slnx --candidate-id sym:v1:...
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- context-pack --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- context-pack --workspace navlyn.slnx --query CheckCommand --goal modify --snippet-policy signature
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- context-pack --workspace navlyn.slnx --candidate-id sym:v1:...
 ```
 
 Query options:
@@ -1017,8 +1023,8 @@ Ambiguous or unmatched queries exit successfully with candidates, no selected ca
 Builds a review-oriented context pack from diff workflow facts.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- context-pack --workspace navlyn.slnx --diff
-dotnet run --no-launch-profile --project navlyn -- context-pack --workspace navlyn.slnx --diff --staged --budget-tokens 8000
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- context-pack --workspace navlyn.slnx --diff
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- context-pack --workspace navlyn.slnx --diff --staged --budget-tokens 8000
 ```
 
 Diff options:
@@ -1076,12 +1082,12 @@ Invalid mode combinations such as missing all of `--query`, `--candidate-id`, an
 Validates that a workspace can be loaded.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- check --workspace navlyn.slnx
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- check --workspace navlyn.slnx
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 
 Result shape:
 
@@ -1099,12 +1105,12 @@ Result shape:
 Reports a compact workspace overview.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- overview --workspace navlyn.slnx
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- overview --workspace navlyn.slnx
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 
 Result shape:
 
@@ -1114,7 +1120,7 @@ Result shape:
   "kind": "solution",
   "projects": [
     {
-      "name": "navlyn",
+      "name": "navlyn(net10.0)",
       "path": "navlyn/navlyn.csproj",
       "language": "C#",
       "assemblyName": "navlyn",
@@ -1133,14 +1139,14 @@ Result shape:
 Reports deterministic repository, project, package, and relationship facts for agent investigation.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- repo-graph --workspace navlyn.slnx
-dotnet run --no-launch-profile --project navlyn -- repo-graph --workspace navlyn.slnx --project navlyn
-dotnet run --no-launch-profile --project navlyn -- repo-graph --workspace navlyn.slnx --relationship-limit 50
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- repo-graph --workspace navlyn.slnx
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- repo-graph --workspace navlyn.slnx --project "navlyn(net10.0)"
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- repo-graph --workspace navlyn.slnx --relationship-limit 50
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 
 Optional options:
 
@@ -1163,12 +1169,12 @@ Result shape:
     "items": [
       {
         "id": "project:navlyn/navlyn.csproj:net10.0",
-        "name": "navlyn",
+        "name": "navlyn(net10.0)",
         "path": "navlyn/navlyn.csproj",
         "language": "C#",
         "assemblyName": "navlyn",
         "targetFramework": "net10.0",
-        "targetFrameworks": ["net10.0"],
+        "targetFrameworks": ["net10.0", "net8.0"],
         "outputType": "Exe",
         "sdk": "Microsoft.NET.Sdk",
         "nullable": "enable",
@@ -1217,13 +1223,13 @@ Project classification is heuristic and evidence-backed. Known kinds are `test`,
 Reports compiler diagnostics for the loaded workspace.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- diagnostics --workspace navlyn.slnx
-dotnet run --no-launch-profile --project navlyn -- diagnostics --workspace navlyn.slnx --project navlyn
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- diagnostics --workspace navlyn.slnx
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- diagnostics --workspace navlyn.slnx --project "navlyn(net10.0)"
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 
 Optional options:
 
@@ -1246,7 +1252,7 @@ Result shape:
   "diagnostics": [
     {
       "project": {
-        "name": "navlyn",
+        "name": "navlyn(net10.0)",
         "path": "navlyn/navlyn.csproj",
         "targetFramework": "net10.0"
       },
@@ -1280,13 +1286,13 @@ Ambiguous `--project` values produce `NAVLYN1007` on stderr, exit code `2`, and 
 Runs multiple machine-readable requests through one workspace load. This command is intended for agents that need several navigation or search facts from the same workspace.
 
 ```powershell
-Get-Content ./batch-request.json | dotnet run --no-launch-profile --project navlyn -- batch --workspace navlyn.slnx
-dotnet run --no-launch-profile --project navlyn -- batch --workspace navlyn.slnx --input ./batch-request.json
+Get-Content ./batch-request.json | dotnet run --framework net10.0 --no-launch-profile --project navlyn -- batch --workspace navlyn.slnx
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- batch --workspace navlyn.slnx --input ./batch-request.json
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 
 Optional options:
 
@@ -1297,7 +1303,7 @@ Input shape:
 ```json
 {
   "defaults": {
-    "project": "navlyn",
+    "project": "navlyn(net10.0)",
     "excludeGenerated": false
   },
   "requests": [
@@ -1430,19 +1436,19 @@ Unsupported request commands are reported as per-request `ok: false` items with 
 Finds C# source symbol declarations by name.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query Check
-dotnet run --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query CheckCommand --match exact
-dotnet run --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query "^Check.*Command$" --match regex
-dotnet run --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query check --case-sensitive
-dotnet run --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query Command --limit 5
-dotnet run --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query Command --kind NamedType
-dotnet run --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query CheckCommand --project navlyn
-dotnet run --no-launch-profile --project navlyn -- symbols --workspace tests/fixtures/MultiProjectFixture/MultiProjectFixture.slnx --query SharedWidget --project Library
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query Check
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query CheckCommand --match exact
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query "^Check.*Command$" --match regex
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query check --case-sensitive
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query Command --limit 5
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query Command --kind NamedType
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query CheckCommand --project "navlyn(net10.0)"
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols --workspace tests/fixtures/MultiProjectFixture/MultiProjectFixture.slnx --query SharedWidget --project Library
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - `--query <text>`: symbol name query.
 
 Optional options:
@@ -1474,8 +1480,8 @@ Result shape:
   "accessibilities": ["Public"],
   "projects": [
     {
-      "filter": "navlyn",
-      "name": "navlyn",
+      "filter": "navlyn(net10.0)",
+      "name": "navlyn(net10.0)",
       "path": "navlyn/navlyn.csproj",
       "targetFramework": "net10.0"
     }
@@ -1517,13 +1523,13 @@ Partial declarations produce one match per source declaration.
 Lists C# symbols resolved from identifier tokens on a source line or column span. This is an exploratory helper for choosing an exact position before calling `symbol-at`, `definition`, or `references`.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53
-dotnet run --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --start-column 37 --end-column 49 --project Navlyn.CommandLine
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --start-column 37 --end-column 49 --project Navlyn.CommandLine
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - `--file <path>`: C# source file in the workspace.
 - `--line <number>`: 1-based source line.
 
@@ -1543,8 +1549,8 @@ Result shape:
   "startColumn": 1,
   "endColumn": 60,
   "project": {
-    "filter": "navlyn",
-    "name": "navlyn",
+    "filter": "navlyn(net10.0)",
+    "name": "navlyn(net10.0)",
     "path": "navlyn/navlyn.csproj"
   },
   "symbols": [
@@ -1580,12 +1586,12 @@ Generated source files with `--exclude-generated` produce `NAVLYN1307` on stderr
 Returns a semantic outline for one C# source file.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- outline --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- outline --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - `--file <path>`: C# source file in the workspace.
 
 Optional options:
@@ -1608,6 +1614,7 @@ Result shape:
         "accessibility": "Public",
         "isStatic": true
       },
+      "candidateId": "sym:v1:7dd2f1e57cdb5d232bc5131f2dd5a6f0",
       "path": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs",
       "line": 8,
       "column": 5,
@@ -1618,19 +1625,19 @@ Result shape:
 }
 ```
 
-Outline entries include namespaces, types, delegates, enum members, constructors, methods, properties, events, fields, indexers, operators, and local functions. Lambda expressions and local variables are intentionally not part of the outline contract.
+Outline entries include additive `candidateId` values that can be reused with candidate-id accepting commands such as `symbol-source`, `definition`, `references`, `callers`, `calls`, `implementations`, `type-hierarchy`, `symbol-info`, and MCP tools. Outline entries include namespaces, types, delegates, enum members, constructors, methods, properties, events, fields, indexers, operators, and local functions. Lambda expressions and local variables are intentionally not part of the outline contract.
 
 ## `symbol-at`
 
 Resolves the C# symbol at a source position.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- symbol-at --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23 --project Navlyn.CommandLine
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-at --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23 --project Navlyn.CommandLine
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -1646,8 +1653,8 @@ Result shape:
   "line": 6,
   "column": 23,
   "project": {
-    "filter": "navlyn",
-    "name": "navlyn",
+    "filter": "navlyn(net10.0)",
+    "name": "navlyn(net10.0)",
     "path": "navlyn/navlyn.csproj"
   },
   "symbol": {
@@ -1681,12 +1688,12 @@ Generated source files with `--exclude-generated` produce `NAVLYN1307` on stderr
 Returns the selected symbol plus expression and binding facts at a source position. This command is additive exploration; it does not change the single-symbol contract of `symbol-at`, `definition`, or `references`.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- symbol-info --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-info --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -1733,12 +1740,12 @@ When applicable, `symbol-info` may include `invocation`, `attribute`, `return`, 
 Returns enclosing C# scope facts for a source position. Unlike `symbol-at`, this command is useful on positions inside a member body because it reports the surrounding namespace, type, member, local function, lambda, or top-level statement stack.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- scope-at --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- scope-at --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -1754,7 +1761,7 @@ Result shape:
   "line": 53,
   "column": 37,
   "projectContext": {
-    "name": "navlyn",
+    "name": "navlyn(net10.0)",
     "path": "navlyn/navlyn.csproj",
     "targetFramework": "net10.0",
     "languageVersion": "CSharp14",
@@ -1793,12 +1800,12 @@ Scopes are ordered outer-to-inner. `scope-at` reports source-level syntax/semant
 Returns bounded source slices for the selected C# symbol. This is for reading a selected declaration safely; it is not an arbitrary file-range dump.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- symbol-source --workspace navlyn.slnx --candidate-id sym:v1:... --view declaration
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-source --workspace navlyn.slnx --candidate-id sym:v1:... --view declaration
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -1846,12 +1853,12 @@ Metadata-only symbols return an empty `slices` array with `metadata-only-symbol`
 Returns API-shape facts for one selected C# symbol.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- signature --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 8 --column 27
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- signature --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 8 --column 27
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -1897,12 +1904,12 @@ Result shape:
 Returns compiler diagnostics whose source span intersects the selected symbol declaration span.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- symbol-diagnostics --workspace tests/fixtures/DiagnosticFixture/DiagnosticFixture.csproj --file tests/fixtures/DiagnosticFixture/BrokenCode.cs --line 5 --column 24 --limit 10
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-diagnostics --workspace tests/fixtures/DiagnosticFixture/DiagnosticFixture.csproj --file tests/fixtures/DiagnosticFixture/BrokenCode.cs --line 5 --column 24 --limit 10
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -1952,8 +1959,8 @@ This is source-span scoped, not a guarantee that every diagnostic causally relat
 Creates a bounded facts pack around compiler diagnostics. It can start from a diagnostic id or a diagnostic source position.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- diagnostic-pack --workspace tests/fixtures/DiagnosticFixture/DiagnosticFixture.csproj --id CS0246 --limit 5
-dotnet run --no-launch-profile --project navlyn -- diagnostic-pack --workspace tests/fixtures/DiagnosticFixture/DiagnosticFixture.csproj --file tests/fixtures/DiagnosticFixture/BrokenCode.cs --line 5 --column 12
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- diagnostic-pack --workspace tests/fixtures/DiagnosticFixture/DiagnosticFixture.csproj --id CS0246 --limit 5
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- diagnostic-pack --workspace tests/fixtures/DiagnosticFixture/DiagnosticFixture.csproj --file tests/fixtures/DiagnosticFixture/BrokenCode.cs --line 5 --column 12
 ```
 
 Input modes:
@@ -2003,12 +2010,12 @@ Result shape:
 Finds source implementations for the C# symbol at a source position. The covered source cases include interface types, interface members, explicit interface implementations, generic interface member implementations, and abstract or virtual method overrides. Non-applicable symbols return an empty `implementations` array.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- implementations --workspace tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj --file tests/fixtures/SymbolNavigationFixture/FixtureCode.cs --line 50 --column 18
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- implementations --workspace tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj --file tests/fixtures/SymbolNavigationFixture/FixtureCode.cs --line 50 --column 18
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -2068,12 +2075,12 @@ Generated source files with `--exclude-generated` produce `NAVLYN1307` on stderr
 Explores source type and member inheritance relationships. This is source navigation support, not a complete runtime dispatch graph.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- type-hierarchy --workspace tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj --file tests/fixtures/SymbolNavigationFixture/FixtureCode.cs --line 50 --column 18
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- type-hierarchy --workspace tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj --file tests/fixtures/SymbolNavigationFixture/FixtureCode.cs --line 50 --column 18
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -2121,12 +2128,12 @@ Source results include locations. Metadata-only related symbols can still be rep
 Finds source callers for the C# symbol at a source position. This is static source navigation, not a complete runtime dispatch graph. Navlyn includes direct source callers and related implementation or override symbols where Roslyn can resolve them reliably. Property and event accessor positions are normalized to the associated property or event before caller lookup.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- callers --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 8 --column 27
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- callers --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 8 --column 27
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -2202,12 +2209,12 @@ Generated source files with `--exclude-generated` produce `NAVLYN1307` on stderr
 Finds source callees from the containing C# member at a source position. The requested position selects the containing source member; it does not need to be on a specific invocation expression.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- calls --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- calls --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -2285,12 +2292,12 @@ Generated source files with `--exclude-generated` produce `NAVLYN1307` on stderr
 Finds source definitions for the C# symbol at a source position.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- definition --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37 --project Navlyn.CommandLine
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- definition --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37 --project Navlyn.CommandLine
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -2307,8 +2314,8 @@ Result shape:
   "line": 53,
   "column": 37,
   "project": {
-    "filter": "navlyn",
-    "name": "navlyn",
+    "filter": "navlyn(net10.0)",
+    "name": "navlyn(net10.0)",
     "path": "navlyn/navlyn.csproj"
   },
   "symbol": {
@@ -2351,12 +2358,12 @@ Generated source files with `--exclude-generated` produce `NAVLYN1307` on stderr
 Finds source references for the C# symbol at a source position. Declaration locations are not included unless Roslyn reports them as reference locations for that symbol kind.
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- references --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37 --project Navlyn.CommandLine
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- references --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37 --project Navlyn.CommandLine
 ```
 
 Required options:
 
-- `--workspace <path>`: `.slnx`, `.sln`, or `.csproj`.
+- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -2386,8 +2393,8 @@ Result shape:
     }
   ],
   "project": {
-    "filter": "navlyn",
-    "name": "navlyn",
+    "filter": "navlyn(net10.0)",
+    "name": "navlyn(net10.0)",
     "path": "navlyn/navlyn.csproj"
   },
   "symbol": {

@@ -12,6 +12,9 @@ $PackageOutput = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $Output))
 $ToolPath = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot 'artifacts/package-smoke/tools'))
 $NavlynOnlyToolPath = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot 'artifacts/package-smoke/tools-navlyn-only'))
 $McpOnlyToolPath = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot 'artifacts/package-smoke/tools-mcp-only'))
+$TargetFrameworkScript = Join-Path $RepoRoot 'scripts/lib/navlyn-target-framework.ps1'
+
+. $TargetFrameworkScript
 
 function Get-ProjectVersion {
     param([string]$ProjectPath)
@@ -23,8 +26,7 @@ function Get-ProjectVersion {
 function Get-ProjectTargetFramework {
     param([string]$ProjectPath)
 
-    [xml]$projectXml = Get-Content -Raw -LiteralPath $ProjectPath
-    return [string]$projectXml.Project.PropertyGroup.TargetFramework
+    return Get-NavlynPreferredTargetFramework -ProjectPath $ProjectPath
 }
 
 function Get-ToolExecutable {
@@ -138,7 +140,7 @@ function Invoke-McpInstalledToolSmoke {
                 capabilities = @{}
                 clientInfo = @{
                     name = 'navlyn-package-smoke'
-                    version = '0.4.0'
+                    version = '0.5.0'
                 }
             }
         }

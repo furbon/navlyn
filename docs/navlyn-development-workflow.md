@@ -37,7 +37,7 @@ The repository includes `.editorconfig` and `.gitattributes` for editor and Git 
 Navlyn uses separate validation layers so small changes can be checked quickly while release preparation still has a full quality gate.
 
 - Quick validation: `./scripts/test-quick.ps1`
-- CLI contract validation: `./scripts/test-cli-contract.ps1`
+- CLI contract validation: `./scripts/test-cli-contract.ps1 -Suite core` for the regular loop, `./scripts/test-cli-contract.ps1 -Suite all` for release validation.
 - xUnit component tests: `dotnet test navlyn.slnx`
 - Focused fixture validation:
   - `./scripts/test-symbol-navigation.ps1`
@@ -54,7 +54,7 @@ PowerShell process tests own the public CLI boundary: real process invocation, s
 
 The xUnit resolver component suite covers representative behavior for definition, references, source-position lookup, symbol info, implementation and hierarchy relationships, fuzzy candidate selection, fuzzy reference summaries, workspace diagnostics filtering, diff symbol resolution, repository graph facts, public API comparison, context pack budgeting, test impact, framework entrypoint detection, and dependency injection registration facts. These tests use controlled Roslyn fixture projects and source marker helpers, so they should be the first place to add coverage for resolver internals, binding edge cases, ranking choices, or diagnostic filtering that can be asserted without spawning the CLI.
 
-CI runs build, xUnit, quick validation, CLI contract validation, and focused fixture validation on Windows, Ubuntu, and macOS through `pwsh`. Keep script examples compatible with PowerShell Core and prefer `./scripts/...` plus `/` path separators in command examples so they work across all CI operating systems.
+CI runs restore, build, xUnit, C# file format validation, quick validation without duplicate xUnit, and the CLI contract core suite on Windows, Ubuntu, and macOS through `pwsh`. Release validation keeps the full CLI contract suite and focused fixture scripts. Keep script examples compatible with PowerShell Core and prefer `./scripts/...` plus `/` path separators in command examples so they work across all CI operating systems.
 
 ## Standard Local Checks
 
@@ -64,7 +64,7 @@ For a typical code change:
 dotnet restore navlyn.slnx
 dotnet build navlyn.slnx
 dotnet test navlyn.slnx --no-build
-./scripts/test-quick.ps1 -NoBuild
+./scripts/test-quick.ps1 -NoBuild -SkipDotnetTest
 ```
 
 For release preparation or a large refactor:
@@ -73,18 +73,23 @@ For release preparation or a large refactor:
 ./scripts/test-release.ps1
 ```
 
-`test-release.ps1` restores and builds once, runs xUnit, checks C# file format, runs quick validation, runs CLI contract validation, runs focused fixture scripts with `-NoBuild`, runs the public readiness audit, and runs local package install smoke when feasible.
+`test-release.ps1` restores and builds once, runs xUnit, checks C# file format, runs quick validation without rerunning xUnit, runs the full CLI contract suite, runs focused fixture scripts with `-NoBuild`, runs the public readiness audit, and runs local package install smoke when feasible.
 
 Release publication and package ownership details live in `docs/navlyn-distribution.md`. Performance smoke guidance lives in `docs/navlyn-performance.md`.
 
 ## Test Selection Rules
 
 - Docs-only change: `git diff --check`. For public workflow docs, inspect command names and examples.
-- C# pure logic change: `dotnet build navlyn.slnx --no-restore`, `dotnet test navlyn.slnx --no-build`, and `./scripts/test-quick.ps1 -NoBuild`.
-- CLI option, JSON shape, stdout/stderr, or exit code change: quick validation, `./scripts/test-cli-contract.ps1 -NoBuild`, and an affected command manual check.
+- C# pure logic change: `dotnet build navlyn.slnx --no-restore`, `dotnet test navlyn.slnx --no-build`, and `./scripts/test-quick.ps1 -NoBuild -SkipDotnetTest`.
+- CLI option, JSON shape, stdout/stderr, or exit code change: quick validation, `./scripts/test-cli-contract.ps1 -NoBuild -Suite core` for command wiring, `./scripts/test-cli-contract.ps1 -NoBuild -Suite all` when broad workflow/domain contract changed, and an affected command manual check.
 - MCP server change: `dotnet test navlyn.slnx --no-build --filter "FullyQualifiedName~Navlyn.Tests.Mcp"`, quick validation, and a manual `navlyn.Mcp --help` or stdio client smoke when the process boundary changed.
-- Review workflow, review pack, context pack, repository graph, public API diff, test impact, framework entrypoint, or DI command contract change: quick validation, `./scripts/test-cli-contract.ps1 -NoBuild`, affected component tests, and an affected command manual check.
-- Symbol, definition, references, implementations, callers, or calls change: `dotnet test navlyn.slnx --no-build`, quick validation, and `./scripts/test-symbol-navigation.ps1 -NoBuild`.
+- Workflow envelope, MCP envelope, schema, or golden snapshot change: `dotnet test navlyn.slnx --no-build --filter "FullyQualifiedName~Navlyn.Tests.Contracts"`, quick validation, full CLI contract validation when public JSON shape changed, and manual inspection of one affected JSON result.
+- Review workflow, review pack, context pack, repository graph, public API diff, test impact, framework entrypoint, or DI command contract change: quick validation, `./scripts/test-cli-contract.ps1 -NoBuild -Suite all`, affected component tests, and an affected command manual check.
+- Symbol lookup, source-position, or outline change: `dotnet test navlyn.slnx --no-build`, quick validation, and `./scripts/test-symbol-navigation.ps1 -NoBuild -Suite lookup`.
+- Definition change: `dotnet test navlyn.slnx --no-build`, quick validation, and `./scripts/test-symbol-navigation.ps1 -NoBuild -Suite definition`.
+- References change: `dotnet test navlyn.slnx --no-build`, quick validation, and `./scripts/test-symbol-navigation.ps1 -NoBuild -Suite references`.
+- Implementations, callers, or calls change: `dotnet test navlyn.slnx --no-build`, quick validation, and `./scripts/test-symbol-navigation.ps1 -NoBuild -Suite edges`.
+- Symbol source, signature, hierarchy, symbol-info, or scope change: `dotnet test navlyn.slnx --no-build`, quick validation, and `./scripts/test-symbol-navigation.ps1 -NoBuild -Suite source`.
 - Fuzzy discovery change: `dotnet test navlyn.slnx --no-build`, quick validation, and `./scripts/test-fuzzy-discovery.ps1 -NoBuild`.
 - Project filter or multi-project change: quick validation and `./scripts/test-multi-project-navigation.ps1 -NoBuild`.
 - Workspace loading, conditional compilation, multi-targeting, or linked-file change: quick validation and `./scripts/test-workspace-semantics.ps1 -NoBuild`.
@@ -99,21 +104,31 @@ Release publication and package ownership details live in `docs/navlyn-distribut
 ```powershell
 ./scripts/test-quick.ps1
 ./scripts/test-quick.ps1 -NoBuild
+./scripts/test-quick.ps1 -NoBuild -SkipDotnetTest
 ./scripts/test-quick.ps1 -NoBuild -ShowOutput
 ```
 
-The quick script verifies C# file format, builds the solution unless `-NoBuild` is provided, runs xUnit, then checks representative CLI behavior for `check`, `overview`, a source-position command, and a stable usage error.
+The quick script verifies C# file format, builds the solution unless `-NoBuild` is provided, runs xUnit unless `-SkipDotnetTest` is provided, then checks representative CLI behavior for `check`, `overview`, a source-position command, and a stable usage error. Use `-SkipDotnetTest` only in a validation chain that already ran `dotnet test navlyn.slnx --no-build`.
 
 ### CLI Contract Validation
 
 ```powershell
 ./scripts/test-cli-contract.ps1
 ./scripts/test-cli-contract.ps1 -NoBuild
+./scripts/test-cli-contract.ps1 -NoBuild -Suite core
+./scripts/test-cli-contract.ps1 -NoBuild -Suite all
 ./scripts/test-cli-contract.ps1 -NoBuild -ShowOutput
 ```
 
-The CLI contract script runs representative command wiring and JSON shape checks for workspace commands, source-position commands, fuzzy discovery commands, batch input, and stable error behavior. It should stay broad enough to catch broken command registration, serialization drift, and common contract regressions without becoming the full semantic fixture suite.
-Use a 600 second automation timeout for this script. It can exceed 300 seconds on slower local runs even when healthy.
+The CLI contract script defaults to `-Suite all` for backward compatibility. The `core` suite covers root help, required-option failures, workspace commands, top-level JSON shape, path normalization from subdirectories, diagnostics shape, and stable workspace errors. The `all` suite adds representative workflow, domain, fuzzy, source-position, batch, and invalid-input checks. Use a 600 second automation timeout for the `all` suite. It can exceed 300 seconds on slower local runs even when healthy.
+
+### Contract Schemas And Golden Snapshots
+
+```powershell
+dotnet test navlyn.slnx --no-build --filter "FullyQualifiedName~Navlyn.Tests.Contracts"
+```
+
+Envelope schemas live in `docs/schemas`. Golden snapshots live under `navlyn.Tests/Contracts/GoldenSnapshots` and cover representative envelope shape after scrubbing nondeterministic fields. Update snapshots only when the public contract intentionally changes; keep command-specific semantic assertions in focused resolver or CLI tests.
 
 ### Performance Measurement
 
@@ -143,6 +158,11 @@ Use focused fixture scripts for behavior that depends on controlled C# source la
 
 ```powershell
 ./scripts/test-symbol-navigation.ps1 -NoBuild
+./scripts/test-symbol-navigation.ps1 -NoBuild -Suite lookup
+./scripts/test-symbol-navigation.ps1 -NoBuild -Suite definition
+./scripts/test-symbol-navigation.ps1 -NoBuild -Suite references
+./scripts/test-symbol-navigation.ps1 -NoBuild -Suite edges
+./scripts/test-symbol-navigation.ps1 -NoBuild -Suite source
 ./scripts/test-fuzzy-discovery.ps1 -NoBuild
 ./scripts/test-multi-project-navigation.ps1 -NoBuild
 ./scripts/test-workspace-semantics.ps1 -NoBuild
@@ -155,7 +175,7 @@ Use xUnit component tests for resolver changes when the assertion is about inter
 
 The focused fixture scripts cover these areas:
 
-- `test-symbol-navigation.ps1`: type, method, property, parameter, local, alias, partial-declaration, generated-code, semantic edge-case, implementation, and call hierarchy scenarios.
+- `test-symbol-navigation.ps1`: type, method, property, parameter, local, alias, partial-declaration, generated-code, semantic edge-case, implementation, and call hierarchy scenarios. It supports `-Suite lookup|definition|references|edges|source|all`; release validation uses `all`.
 - `test-fuzzy-discovery.ps1`: fuzzy candidate selection, ambiguity, generated-code exclusion, reference context, snippets, related and impact file summaries, static entrypoint chains, and fuzzy batch requests.
 - `test-multi-project-navigation.ps1`: deterministic project context and navigation across a project reference.
 - `test-workspace-semantics.ps1`: conditional compilation, multi-target project identity, target-specific source-position behavior, ambiguous multi-target project path filtering, and linked-file project context selection.
@@ -281,20 +301,20 @@ Before finishing a change, review these points:
 When changing CLI behavior, inspect the affected command directly as well as running the relevant scripts:
 
 ```powershell
-dotnet run --no-launch-profile --project navlyn -- check --workspace navlyn.slnx
-dotnet run --no-launch-profile --project navlyn -- overview --workspace navlyn.slnx
-dotnet run --no-launch-profile --project navlyn -- diagnostics --workspace navlyn.slnx
-dotnet run --no-launch-profile --project navlyn -- repo-graph --workspace navlyn.slnx --profile compact
-dotnet run --no-launch-profile --project navlyn -- review-diff --workspace navlyn.slnx --profile evidence --symbol-limit 1 --impact-limit 1 --diagnostic-limit 1 --related-test-limit 1 --depth 1
-dotnet run --no-launch-profile --project navlyn -- context-pack --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --profile compact --budget-tokens 2000
-dotnet run --no-launch-profile --project navlyn -- public-api-diff --workspace navlyn.slnx --base HEAD --project navlyn --change-limit 5
-dotnet run --no-launch-profile --project navlyn -- tests-for-symbol --workspace navlyn.slnx --query RepoGraphResolver --assume-kind NamedType --project navlyn --test-project navlyn.Tests --test-limit 5
-dotnet run --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query Check
-dotnet run --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53
-dotnet run --no-launch-profile --project navlyn -- symbol-at --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23
-dotnet run --no-launch-profile --project navlyn -- definition --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
-dotnet run --no-launch-profile --project navlyn -- references --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
-dotnet run --no-launch-profile --project navlyn -- implementations --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23
-dotnet run --no-launch-profile --project navlyn -- callers --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 8 --column 27
-dotnet run --no-launch-profile --project navlyn -- calls --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- check --workspace navlyn.slnx
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- overview --workspace navlyn.slnx
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- diagnostics --workspace navlyn.slnx
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- repo-graph --workspace navlyn.slnx --profile compact
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review-diff --workspace navlyn.slnx --profile evidence --symbol-limit 1 --impact-limit 1 --diagnostic-limit 1 --related-test-limit 1 --depth 1
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- context-pack --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --profile compact --budget-tokens 2000
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- public-api-diff --workspace navlyn.slnx --base HEAD --project "navlyn(net10.0)" --change-limit 5
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- tests-for-symbol --workspace navlyn.slnx --query RepoGraphResolver --assume-kind NamedType --project "Navlyn.Core(net10.0)" --test-project navlyn.Tests --test-limit 5
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query Check
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-at --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- definition --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- references --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- implementations --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- callers --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 8 --column 27
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- calls --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
 ```

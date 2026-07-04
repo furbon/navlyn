@@ -110,6 +110,26 @@ public sealed class NavlynMcpServerOptionsTests
     }
 
     [Fact]
+    public void TryParse_WorkspaceAuto_PrefersCodeWorkspaceOverSlnx()
+    {
+        using TemporaryDirectory temp = TemporaryDirectory.Create();
+        string workspace = Path.Combine(temp.Path, "sample.code-workspace");
+        File.WriteAllText(workspace, """{"folders":[{"path":"."}]}""");
+        File.WriteAllText(Path.Combine(temp.Path, "sample.slnx"), "");
+
+        bool valid = NavlynMcpServerOptions.TryParse(
+            ["--workspace", "auto", "--working-directory", temp.Path],
+            out NavlynMcpServerOptions options,
+            out string? error,
+            out _);
+
+        Assert.True(valid);
+        Assert.Null(error);
+        Assert.Equal(workspace, options.Workspace);
+        Assert.Equal("sample.code-workspace", options.WorkspaceArgument);
+    }
+
+    [Fact]
     public void TryParse_WorkspaceAuto_NoCandidatesReturnsUsageError()
     {
         using TemporaryDirectory temp = TemporaryDirectory.Create();

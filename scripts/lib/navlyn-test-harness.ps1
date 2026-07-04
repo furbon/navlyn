@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param()
 
+. $PSScriptRoot/navlyn-target-framework.ps1
+
 function Initialize-NavlynTestHarness {
     param(
         [Parameter(Mandatory = $true)]
@@ -15,8 +17,7 @@ function Initialize-NavlynTestHarness {
     $script:NavlynTestProjectDir = Join-Path $script:NavlynTestRepoRoot 'navlyn'
     $script:NavlynTestShowOutput = $ShowOutput
 
-    [xml]$projectXml = Get-Content -Raw -LiteralPath $script:NavlynTestProjectPath
-    $targetFramework = [string]$projectXml.Project.PropertyGroup.TargetFramework
+    $targetFramework = Get-NavlynPreferredTargetFramework -ProjectPath $script:NavlynTestProjectPath
     $script:NavlynTestTargetFramework = $targetFramework
     $script:NavlynTestDll = Join-Path $script:NavlynTestProjectDir "bin/Debug/$targetFramework/navlyn.dll"
 }

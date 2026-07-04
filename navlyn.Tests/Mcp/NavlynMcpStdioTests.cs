@@ -12,10 +12,10 @@ public sealed class NavlynMcpStdioTests
     public async Task StdioServer_ListsToolsAndMapsSuccessAndCliErrors()
     {
         string repoRoot = FindRepositoryRoot();
-        string serverDll = Path.Combine(repoRoot, "navlyn.Mcp", "bin", "Debug", "net10.0", "navlyn.Mcp.dll");
+        string serverDll = Path.Combine(repoRoot, "navlyn.Mcp", "bin", "Debug", GetCurrentTargetFramework(), "navlyn.Mcp.dll");
         Assert.True(File.Exists(serverDll), $"MCP server assembly does not exist: {serverDll}");
 
-        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(60));
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(90));
         StdioClientTransport transport = new(
             new StdioClientTransportOptions
             {
@@ -39,7 +39,7 @@ public sealed class NavlynMcpStdioTests
                 ClientInfo = new Implementation
                 {
                     Name = "navlyn-tests",
-                    Version = "0.4.0"
+                    Version = "0.5.0"
                 }
             },
             NullLoggerFactory.Instance,
@@ -49,6 +49,10 @@ public sealed class NavlynMcpStdioTests
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.WorkspaceSummaryTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.ResolveTargetTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.FindSymbolTool);
+        Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.FileOutlineTool);
+        Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.SymbolSourceTool);
+        Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.SymbolEdgesTool);
+        Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.InspectFileTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.ExactNavigationTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.BatchTool);
         McpClientTool workspaceTool = Assert.Single(tools, tool => tool.Name == NavlynMcpTools.WorkspaceSummaryTool);
@@ -68,18 +72,60 @@ public sealed class NavlynMcpStdioTests
             NavlynMcpTools.WorkspaceSummaryTool,
             new Dictionary<string, object?>
             {
-                ["project"] = "navlyn",
+                ["project"] = "navlyn(net10.0)",
                 ["relationshipLimit"] = 20
             },
             cancellationToken: timeout.Token);
 
-        Assert.False(result.IsError);
+        Assert.False(result.IsError, result.StructuredContent?.ToString());
         Assert.NotNull(result.StructuredContent);
         JsonElement structured = result.StructuredContent.Value;
         Assert.True(structured.GetProperty("ok").GetBoolean());
         Assert.Equal(NavlynMcpTools.WorkspaceSummaryTool, structured.GetProperty("tool").GetString());
         Assert.Equal("repo-graph", structured.GetProperty("sourceCommand").GetProperty("command").GetString());
         Assert.Equal("repo-graph", structured.GetProperty("result").GetProperty("command").GetString());
+
+        CallToolResult outlineResult = await client.CallToolAsync(
+            NavlynMcpTools.FileOutlineTool,
+            new Dictionary<string, object?>
+            {
+                ["file"] = "Navlyn.CommandLine/Cli/Commands/OutlineCommand.cs"
+            },
+            cancellationToken: timeout.Token);
+
+        Assert.False(outlineResult.IsError, outlineResult.StructuredContent?.ToString());
+        JsonElement outlineStructured = outlineResult.StructuredContent!.Value;
+        Assert.True(outlineStructured.GetProperty("ok").GetBoolean());
+        Assert.Equal("direct", outlineStructured.GetProperty("metadata").GetProperty("executionPath").GetString());
+        Assert.False(outlineStructured.GetProperty("metadata").GetProperty("workspaceCacheHit").GetBoolean());
+        Assert.Equal("warm", outlineStructured.GetProperty("metadata").GetProperty("indexStatus").GetString());
+        Assert.Equal("cheap-file-first", outlineStructured.GetProperty("metadata").GetProperty("costClass").GetString());
+        Assert.Equal(
+            outlineStructured.GetProperty("metadata").GetProperty("workspaceFingerprint").GetString(),
+            outlineStructured.GetProperty("metadata").GetProperty("snapshotId").GetString());
+        JsonElement outlineEntry = outlineStructured
+            .GetProperty("result")
+            .GetProperty("entries")
+            .EnumerateArray()
+            .First(entry => entry.GetProperty("name").GetString() == "OutlineCommand");
+        string candidateId = outlineEntry.GetProperty("candidateId").GetString()!;
+        Assert.StartsWith("sym:v1:", candidateId, StringComparison.Ordinal);
+
+        CallToolResult sourceResult = await client.CallToolAsync(
+            NavlynMcpTools.SymbolSourceTool,
+            new Dictionary<string, object?>
+            {
+                ["candidateId"] = candidateId,
+                ["view"] = "declaration"
+            },
+            cancellationToken: timeout.Token);
+
+        Assert.False(sourceResult.IsError, sourceResult.StructuredContent?.ToString());
+        JsonElement sourceStructured = sourceResult.StructuredContent!.Value;
+        Assert.True(sourceStructured.GetProperty("ok").GetBoolean());
+        Assert.Equal("direct", sourceStructured.GetProperty("metadata").GetProperty("executionPath").GetString());
+        Assert.True(sourceStructured.GetProperty("metadata").GetProperty("workspaceCacheHit").GetBoolean());
+        Assert.Equal("candidateId", sourceStructured.GetProperty("result").GetProperty("selectionInput").GetProperty("mode").GetString());
 
         ReadResourceResult resourceResult = await client.ReadResourceAsync("navlyn://workspace/summary", cancellationToken: timeout.Token);
         Assert.NotEmpty(resourceResult.Contents);
@@ -129,5 +175,16 @@ public sealed class NavlynMcpStdioTests
         }
 
         throw new InvalidOperationException("Could not find repository root.");
+    }
+
+    private static string GetCurrentTargetFramework()
+    {
+        string? frameworkName = AppContext.TargetFrameworkName;
+        if (frameworkName is not null && frameworkName.Contains("Version=v8.0", StringComparison.Ordinal))
+        {
+            return "net8.0";
+        }
+
+        return "net10.0";
     }
 }

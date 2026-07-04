@@ -14,12 +14,14 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $OutputPath = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $Output))
 [System.IO.Directory]::CreateDirectory($OutputPath) | Out-Null
+$TargetFrameworkScript = Join-Path $RepoRoot 'scripts/lib/navlyn-target-framework.ps1'
+
+. $TargetFrameworkScript
 
 function Get-ProjectTargetFramework {
     param([string]$ProjectPath)
 
-    [xml]$projectXml = Get-Content -Raw -LiteralPath $ProjectPath
-    return [string]$projectXml.Project.PropertyGroup.TargetFramework
+    return Get-NavlynPreferredTargetFramework -ProjectPath $ProjectPath
 }
 
 if ($NavlynPrefixArguments.Count -eq 0 -and $NavlynExecutable -eq 'dotnet') {

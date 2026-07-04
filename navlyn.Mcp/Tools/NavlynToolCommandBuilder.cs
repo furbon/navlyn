@@ -16,6 +16,8 @@ internal static class NavlynToolCommandBuilder
     private static readonly string[] ProfileValues = ["compact", "evidence", "full"];
     private static readonly string[] ExactNavigationOperations = ["definition", "references", "callers", "calls", "implementations", "type_hierarchy", "symbol_info"];
     private static readonly string[] FilteredExactNavigationOperations = ["references", "callers", "calls", "implementations"];
+    private static readonly string[] SymbolEdgeOperations = ["references", "callers", "calls", "implementations"];
+    private static readonly string[] SourceViewValues = ["signature", "declaration", "body", "members", "xml-doc", "attributes"];
     private static readonly string[] ReferenceUsageKindValues = ["read", "write", "invoke", "construct", "inherit", "implement", "override", "attribute", "nameof", "typeof"];
     private static readonly string[] ReferenceGroupByValues = ["file", "project", "containing-symbol", "usage-kind", "test-vs-production"];
 
@@ -478,6 +480,107 @@ internal static class NavlynToolCommandBuilder
         }
 
         return CommandBuildResult.Valid("context-pack", args);
+    }
+
+    public static CommandBuildResult FileOutline(
+        string file,
+        string? project,
+        bool? excludeGenerated)
+    {
+        if (string.IsNullOrWhiteSpace(file))
+        {
+            return CommandBuildResult.Invalid("file is required.");
+        }
+
+        List<string> args = ["--file", file.Trim()];
+        AddOptionalValue(args, "--project", project);
+        AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+        return CommandBuildResult.Valid("outline", args);
+    }
+
+    public static CommandBuildResult SymbolSource(
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        string? project,
+        bool? excludeGenerated,
+        string? view,
+        int? maxLines,
+        int? budgetTokens)
+    {
+        List<string> args = [];
+        if (!TryAddExactNavigationTarget(args, candidateId, file, line, column, out string? error) ||
+            !TryAddAllowedValue(args, "--view", view, SourceViewValues, out error) ||
+            !TryAddPositiveInt(args, "--max-lines", maxLines, out error) ||
+            !TryAddPositiveInt(args, "--budget-tokens", budgetTokens, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        AddOptionalValue(args, "--project", project);
+        AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+        return CommandBuildResult.Valid("symbol-source", args);
+    }
+
+    public static CommandBuildResult SymbolEdges(
+        string operation,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        string? project,
+        bool? excludeGenerated,
+        string? resultProject,
+        string[]? resultProjects,
+        string? resultPath,
+        string[]? resultPaths,
+        string? resultKind,
+        string[]? resultKinds,
+        string? usageKind,
+        string[]? usageKinds,
+        string[]? groupBy,
+        int? limit,
+        bool? includeMetadata)
+    {
+        if (string.IsNullOrWhiteSpace(operation))
+        {
+            return CommandBuildResult.Invalid("operation is required.");
+        }
+
+        string normalizedOperation = operation.Trim();
+        if (!SymbolEdgeOperations.Contains(normalizedOperation, StringComparer.Ordinal))
+        {
+            return CommandBuildResult.Invalid($"operation must be one of: {string.Join(", ", SymbolEdgeOperations)}.");
+        }
+
+        return ExactNavigation(
+            normalizedOperation,
+            candidateId,
+            file,
+            line,
+            column,
+            project,
+            excludeGenerated,
+            resultProject,
+            resultProjects,
+            resultPath,
+            resultPaths,
+            resultKind,
+            resultKinds,
+            usageKind,
+            usageKinds,
+            groupBy,
+            limit,
+            includeMetadata);
+    }
+
+    public static CommandBuildResult InspectFile(
+        string file,
+        string? project,
+        bool? excludeGenerated)
+    {
+        return FileOutline(file, project, excludeGenerated);
     }
 
     public static CommandBuildResult ExactNavigation(

@@ -49,8 +49,8 @@ try {
         -ExpectedExitCode 0 | Out-Null
 
     & $FormatCheckScript -Quiet
-    & $QuickScript -NoBuild -ShowOutput:$ShowOutput
-    & $CliContractScript -NoBuild -ShowOutput:$ShowOutput
+    & $QuickScript -NoBuild -SkipDotnetTest -ShowOutput:$ShowOutput
+    & $CliContractScript -NoBuild -Suite all -ShowOutput:$ShowOutput
 
     foreach ($scriptName in $FocusedScripts) {
         $scriptPath = Join-Path $PSScriptRoot $scriptName

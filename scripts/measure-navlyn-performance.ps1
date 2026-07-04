@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Workspace,
 
-    [ValidateSet('quick', 'agent-loop', 'diff', 'mcp', 'all')]
+    [ValidateSet('quick', 'file-first', 'agent-loop', 'diff', 'mcp', 'all')]
     [string]$Scenario = 'quick',
 
     [ValidateSet('compact', 'evidence', 'full')]
@@ -29,6 +29,12 @@ param(
 
     [string]$AssumeKind = 'NamedType',
 
+    [string]$SourceFile = 'Navlyn.CommandLine/Cli/Commands/CheckCommand.cs',
+
+    [int]$SourceLine = 6,
+
+    [int]$SourceColumn = 23,
+
     [string]$Base = $null,
 
     [string]$Head = $null
@@ -50,6 +56,10 @@ if ($TimeoutSeconds -lt 1) {
 }
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$TargetFrameworkScript = Join-Path $repoRoot 'scripts/lib/navlyn-target-framework.ps1'
+
+. $TargetFrameworkScript
+
 $workspacePath = if ([System.IO.Path]::IsPathRooted($Workspace)) {
     [System.IO.Path]::GetFullPath($Workspace)
 }
@@ -63,8 +73,7 @@ if (!(Test-Path -LiteralPath $workspacePath)) {
 function Get-ProjectTargetFramework {
     param([string]$ProjectPath)
 
-    [xml]$projectXml = Get-Content -Raw -LiteralPath $ProjectPath
-    return [string]$projectXml.Project.PropertyGroup.TargetFramework
+    return Get-NavlynPreferredTargetFramework -ProjectPath $ProjectPath
 }
 
 if ([string]::IsNullOrWhiteSpace($NavlynDll)) {
@@ -172,6 +181,10 @@ function Get-TruncatedFlag {
         return $false
     }
 
+    if ($Value -is [string] -or $Value.GetType().IsPrimitive -or $Value -is [decimal]) {
+        return $false
+    }
+
     if ($Value.PSObject.Properties.Name -contains 'truncated' -and $Value.truncated -eq $true) {
         return $true
     }
@@ -264,8 +277,14 @@ function Invoke-MeasuredProcess {
             if ($parsed.PSObject.Properties.Name -contains 'warnings') {
                 $warnings = @($parsed.warnings)
             }
-            $counts = Get-JsonCounts -Value $parsed
-            $truncated = Get-TruncatedFlag -Value $parsed
+            try {
+                $counts = Get-JsonCounts -Value $parsed
+                $truncated = Get-TruncatedFlag -Value $parsed
+            }
+            catch {
+                $counts = [pscustomobject]@{}
+                $truncated = $false
+            }
         }
         catch {
             $jsonValid = $false
@@ -420,7 +439,7 @@ function Invoke-McpToolScenario {
                 capabilities = @{}
                 clientInfo = @{
                     name = 'navlyn-performance'
-                    version = '0.4.0'
+                    version = '0.5.0'
                 }
             }
         }
@@ -456,6 +475,7 @@ function Invoke-McpToolScenario {
             $counts = [pscustomobject]@{}
             $truncated = $false
             $warnings = @()
+            $metadata = $null
             try {
                 $parsed = $responseJson | ConvertFrom-Json -Depth 100
                 $jsonValid = $true
@@ -470,6 +490,9 @@ function Invoke-McpToolScenario {
                     }
 
                     $structured = $parsed.result.structuredContent
+                    if ($structured.PSObject.Properties.Name -contains 'metadata') {
+                        $metadata = $structured.metadata
+                    }
                     if ($structured.PSObject.Properties.Name -contains 'result') {
                         $inner = $structured.result
                         if ($inner.PSObject.Properties.Name -contains 'command') {
@@ -481,8 +504,14 @@ function Invoke-McpToolScenario {
                         if ($inner.PSObject.Properties.Name -contains 'warnings') {
                             $warnings = @($inner.warnings)
                         }
-                        $counts = Get-JsonCounts -Value $inner
-                        $truncated = Get-TruncatedFlag -Value $inner
+                        try {
+                            $counts = Get-JsonCounts -Value $inner
+                            $truncated = Get-TruncatedFlag -Value $inner
+                        }
+                        catch {
+                            $counts = [pscustomobject]@{}
+                            $truncated = $false
+                        }
                     }
                 }
             }
@@ -514,6 +543,7 @@ function Invoke-McpToolScenario {
                 counts = $counts
                 truncated = $truncated
                 warnings = $warnings
+                metadata = $metadata
                 timedOut = $false
                 skipped = $false
             })
@@ -562,6 +592,11 @@ function Get-ScenarioCommands {
             $commands += New-CliCommand -Name 'find' -Arguments @('find', '--workspace', $workspaceArg, '--query', $Query, '--assume-kind', $AssumeKind, '--limit', '20')
             $commands += New-CliCommand -Name 'context-pack' -Arguments (Add-ProfileArgument -Arguments @('context-pack', '--workspace', $workspaceArg, '--query', $Query, '--assume-kind', $AssumeKind, '--budget-tokens', '2000'))
         }
+        'file-first' {
+            $commands += New-CliCommand -Name 'outline' -Arguments @('outline', '--workspace', $workspaceArg, '--file', $SourceFile)
+            $commands += New-CliCommand -Name 'symbol-source' -Arguments @('symbol-source', '--workspace', $workspaceArg, '--file', $SourceFile, '--line', $SourceLine.ToString([System.Globalization.CultureInfo]::InvariantCulture), '--column', $SourceColumn.ToString([System.Globalization.CultureInfo]::InvariantCulture), '--view', 'declaration', '--max-lines', '80', '--budget-tokens', '2000')
+            $commands += New-CliCommand -Name 'calls' -Arguments @('calls', '--workspace', $workspaceArg, '--file', $SourceFile, '--line', $SourceLine.ToString([System.Globalization.CultureInfo]::InvariantCulture), '--column', $SourceColumn.ToString([System.Globalization.CultureInfo]::InvariantCulture), '--limit', '30')
+        }
         'agent-loop' {
             $commands += New-CliCommand -Name 'repo-graph' -Arguments (Add-ProfileArgument -Arguments @('repo-graph', '--workspace', $workspaceArg))
             $commands += New-CliCommand -Name 'find' -Arguments @('find', '--workspace', $workspaceArg, '--query', $Query, '--assume-kind', $AssumeKind, '--limit', '20')
@@ -602,16 +637,23 @@ function Get-ScenarioCommands {
                 relationshipLimit = 50
                 profile = $Profile
             }
-            $commands += New-McpToolCall -Name 'navlyn_find_symbol' -Arguments @{
-                query = $Query
-                assumeKind = $AssumeKind
-                limit = 20
+            $commands += New-McpToolCall -Name 'navlyn_file_outline' -Arguments @{
+                file = $SourceFile
             }
-            $commands += New-McpToolCall -Name 'navlyn_context_pack' -Arguments @{
-                query = $Query
-                assumeKind = $AssumeKind
+            $commands += New-McpToolCall -Name 'navlyn_symbol_source' -Arguments @{
+                file = $SourceFile
+                line = $SourceLine
+                column = $SourceColumn
+                view = 'declaration'
+                maxLines = 80
                 budgetTokens = 2000
-                profile = $Profile
+            }
+            $commands += New-McpToolCall -Name 'navlyn_symbol_edges' -Arguments @{
+                operation = 'calls'
+                file = $SourceFile
+                line = $SourceLine
+                column = $SourceColumn
+                limit = 30
             }
         }
     }
@@ -621,7 +663,7 @@ function Get-ScenarioCommands {
 
 function Get-ScenarioNames {
     if ($Scenario -eq 'all') {
-        return @('quick', 'agent-loop', 'diff', 'mcp')
+        return @('quick', 'file-first', 'agent-loop', 'diff', 'mcp')
     }
 
     return @($Scenario)

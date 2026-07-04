@@ -19,6 +19,8 @@ if (showHelp)
     return 0;
 }
 
+Directory.SetCurrentDirectory(options.WorkingDirectory);
+
 HostApplicationBuilder builder = Host.CreateApplicationBuilder([]);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole(consoleLogOptions =>
@@ -36,6 +38,8 @@ else
     builder.Services.AddSingleton<INavlynCommandAdapter, NavlynInProcessCommandAdapter>();
 }
 
+builder.Services.AddSingleton<NavlynMcpWorkspaceCache>();
+builder.Services.AddSingleton<NavlynMcpDirectToolRunner>();
 builder.Services.AddSingleton<NavlynMcpToolService>();
 builder.Services
     .AddMcpServer()

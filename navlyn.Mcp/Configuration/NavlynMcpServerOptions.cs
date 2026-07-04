@@ -1,5 +1,7 @@
 ﻿using System.Text;
 
+using Navlyn.Workspaces;
+
 namespace Navlyn.Mcp.Configuration;
 
 internal sealed record NavlynMcpServerOptions(
@@ -119,7 +121,7 @@ internal sealed record NavlynMcpServerOptions(
             effectiveWorkingDirectory = string.IsNullOrWhiteSpace(workingDirectory)
                 ? FindRepositoryRoot(Directory.GetCurrentDirectory()) ?? Directory.GetCurrentDirectory()
                 : Path.GetFullPath(workingDirectory);
-            if (!TryResolveAutoWorkspace(effectiveWorkingDirectory, out fullWorkspace, out error))
+            if (!WorkspaceLoader.TryResolveAutoWorkspace(effectiveWorkingDirectory, out fullWorkspace, out error))
             {
                 options = CreateEmpty();
                 return false;
@@ -155,7 +157,7 @@ internal sealed record NavlynMcpServerOptions(
         builder.AppendLine("Usage: navlyn-mcp --workspace <path|auto> [options]");
         builder.AppendLine();
         builder.AppendLine("Options:");
-        builder.AppendLine("  --workspace <path|auto>        Required .slnx, .sln, or .csproj path, or auto to discover one.");
+        builder.AppendLine("  --workspace <path|auto>        Required .code-workspace, .slnx, .sln, or .csproj path, or auto to discover one.");
         builder.AppendLine("  --navlyn-executable <command>  Legacy external Navlyn CLI command or executable. Omit for standalone in-process execution.");
         builder.AppendLine("  --navlyn-arg <arg>             Prefix argument for the legacy external CLI path, repeatable.");
         builder.AppendLine("  --working-directory <path>     Working directory for in-process execution or the legacy child process.");
@@ -225,71 +227,6 @@ internal sealed record NavlynMcpServerOptions(
         }
 
         return null;
-    }
-
-    private static bool TryResolveAutoWorkspace(
-        string searchDirectory,
-        out string workspace,
-        out string? error)
-    {
-        workspace = "";
-        if (!Directory.Exists(searchDirectory))
-        {
-            error = $"--workspace auto search directory does not exist: {searchDirectory}.";
-            return false;
-        }
-
-        IReadOnlyList<string> candidates = FindWorkspaceCandidates(searchDirectory);
-        if (candidates.Count == 0)
-        {
-            error = $"--workspace auto could not find a .slnx, .sln, or .csproj in {searchDirectory}.";
-            return false;
-        }
-
-        int bestRank = candidates.Min(GetWorkspaceCandidateRank);
-        IReadOnlyList<string> bestCandidates = [.. candidates.Where(candidate => GetWorkspaceCandidateRank(candidate) == bestRank)];
-        if (bestCandidates.Count > 1)
-        {
-            string candidateList = string.Join(", ", bestCandidates.Select(candidate => Path.GetRelativePath(searchDirectory, candidate).Replace('\\', '/')));
-            error = $"--workspace auto found multiple workspace candidates: {candidateList}. Pass --workspace explicitly.";
-            return false;
-        }
-
-        workspace = bestCandidates[0];
-        error = null;
-        return true;
-    }
-
-    private static IReadOnlyList<string> FindWorkspaceCandidates(string searchDirectory)
-    {
-        return [.. Directory.EnumerateFiles(searchDirectory, "*", SearchOption.TopDirectoryOnly)
-            .Where(IsWorkspaceCandidate)
-            .OrderBy(GetWorkspaceCandidateRank)
-            .ThenBy(path => Path.GetRelativePath(searchDirectory, path), StringComparer.OrdinalIgnoreCase)];
-    }
-
-    private static bool IsWorkspaceCandidate(string path)
-    {
-        string extension = Path.GetExtension(path);
-        return extension.Equals(".slnx", StringComparison.OrdinalIgnoreCase) ||
-            extension.Equals(".sln", StringComparison.OrdinalIgnoreCase) ||
-            extension.Equals(".csproj", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static int GetWorkspaceCandidateRank(string path)
-    {
-        string extension = Path.GetExtension(path);
-        if (extension.Equals(".slnx", StringComparison.OrdinalIgnoreCase))
-        {
-            return 0;
-        }
-
-        if (extension.Equals(".sln", StringComparison.OrdinalIgnoreCase))
-        {
-            return 1;
-        }
-
-        return 2;
     }
 
     private static NavlynMcpServerOptions CreateEmpty()

@@ -24,7 +24,7 @@ public sealed class NavlynInProcessCommandAdapterTests
         NavlynToolResult result = await adapter.RunAsync(
             NavlynMcpTools.WorkspaceSummaryTool,
             "repo-graph",
-            ["--project", "Navlyn.Core", "--relationship-limit", "10", "--profile", "compact"],
+            ["--project", "Navlyn.Core(net10.0)", "--relationship-limit", "10", "--profile", "compact"],
             standardInput: null,
             CancellationToken.None);
 
@@ -59,7 +59,7 @@ public sealed class NavlynInProcessCommandAdapterTests
         NavlynToolResult result = await adapter.RunAsync(
             NavlynMcpTools.WorkspaceSummaryTool,
             "repo-graph",
-            ["--project", "Navlyn.Core", "--relationship-limit", "10"],
+            ["--project", "Navlyn.Core(net10.0)", "--relationship-limit", "10"],
             standardInput: null,
             CancellationToken.None);
 

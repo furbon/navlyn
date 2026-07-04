@@ -2,6 +2,17 @@
 
 All notable public release changes for Navlyn are tracked here.
 
+## 0.5.0 - 2026-07-04
+
+Release candidate for agent-facing performance, workspace, contract, and OSS readiness.
+
+- Added MCP file-first tools for `navlyn_file_outline`, `navlyn_symbol_source`, `navlyn_symbol_edges`, and `navlyn_inspect_file`, with outline `candidateId` flow into source lookup.
+- Added direct warm-path MCP execution for selected file-first tools with session-local workspace reuse, workspace fingerprint metadata, snapshot id, cache status, index status, and cost class.
+- Added .NET 8 and .NET 10 tool assets for `navlyn` and `navlyn-mcp`.
+- Added `.code-workspace` loading, `--workspace auto` support for clear top-level workspace candidates, and diagnostics for invalid, empty, ambiguous, or external-root workspace files.
+- Hardened automation-facing contracts with workflow and MCP envelope schemas plus representative golden output snapshots.
+- Refreshed README, demos, client setup, tool-selection eval guidance, performance docs, known limits, issue templates, package metadata, and release identity for the synchronized `0.5.0` release.
+
 ## 0.4.0 - 2026-06-29
 
 Release candidate for standalone MCP execution and shared engine packaging.

@@ -15,9 +15,11 @@ $FixtureProjectPath = Join-Path $RepoRoot 'tests/fixtures/DiagnosticFixture/Diag
 $FixtureDisplayPath = 'tests/fixtures/DiagnosticFixture/BrokenCode.cs'
 $GeneratedFixtureDisplayPath = 'tests/fixtures/DiagnosticFixture/GeneratedBroken.g.cs'
 $FixtureProjectDisplayPath = 'tests/fixtures/DiagnosticFixture/DiagnosticFixture.csproj'
+$TargetFrameworkScript = Join-Path $RepoRoot 'scripts/lib/navlyn-target-framework.ps1'
 
-[xml]$ProjectXml = Get-Content -Raw -LiteralPath $ProjectPath
-$TargetFramework = [string]$ProjectXml.Project.PropertyGroup.TargetFramework
+. $TargetFrameworkScript
+
+$TargetFramework = Get-NavlynPreferredTargetFramework -ProjectPath $ProjectPath
 $NavlynDll = Join-Path $ProjectDir "bin/Debug/$TargetFramework/navlyn.dll"
 
 function Invoke-CheckedProcess {

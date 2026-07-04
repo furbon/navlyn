@@ -5,6 +5,7 @@ namespace Navlyn.Mcp.Tools;
 
 internal sealed class NavlynMcpToolService(
     INavlynCommandAdapter commandAdapter,
+    NavlynMcpDirectToolRunner directToolRunner,
     NavlynMcpServerOptions options)
 {
     public async Task<NavlynToolResult> RunAsync(
@@ -19,6 +20,11 @@ internal sealed class NavlynMcpToolService(
                 sourceCommand: null,
                 workspace: options.WorkspaceArgument,
                 new NavlynToolError("NAVLYN_MCP_INVALID_ARGUMENT", command.Error ?? "Invalid tool arguments."));
+        }
+
+        if (!options.UseExternalCli && directToolRunner.CanRun(command))
+        {
+            return await directToolRunner.RunAsync(toolName, command, cancellationToken);
         }
 
         return await commandAdapter.RunAsync(

@@ -28,7 +28,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Restore
         run: dotnet restore navlyn.slnx
@@ -45,28 +47,8 @@ jobs:
 
       - name: Quick validation
         shell: pwsh
-        run: ./scripts/test-quick.ps1 -NoBuild
+        run: ./scripts/test-quick.ps1 -NoBuild -SkipDotnetTest
 
-      - name: CLI contract validation
+      - name: CLI contract core validation
         shell: pwsh
-        run: ./scripts/test-cli-contract.ps1 -NoBuild
-
-      - name: Symbol navigation fixture validation
-        shell: pwsh
-        run: ./scripts/test-symbol-navigation.ps1 -NoBuild
-
-      - name: Fuzzy discovery fixture validation
-        shell: pwsh
-        run: ./scripts/test-fuzzy-discovery.ps1 -NoBuild
-
-      - name: Multi-project navigation fixture validation
-        shell: pwsh
-        run: ./scripts/test-multi-project-navigation.ps1 -NoBuild
-
-      - name: Workspace semantics fixture validation
-        shell: pwsh
-        run: ./scripts/test-workspace-semantics.ps1 -NoBuild
-
-      - name: Diagnostics fixture validation
-        shell: pwsh
-        run: ./scripts/test-diagnostics.ps1 -NoBuild
+        run: ./scripts/test-cli-contract.ps1 -NoBuild -Suite core

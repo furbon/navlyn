@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "navlyn.workflow.v1",
+  "navlynVersion": "<version>",
+  "workspace": "navlyn.slnx",
+  "kind": "solution",
+  "command": "review-diff",
+  "profile": "compact",
+  "configuration": {},
+  "reproCommand": {
+    "executable": "navlyn",
+    "arguments": [
+      "review-diff",
+      "--workspace",
+      "navlyn.slnx",
+      "--profile",
+      "compact"
+    ]
+  },
+  "summary": {
+    "changedSymbols": {
+      "limit": 20,
+      "totalSymbols": 1,
+      "truncated": false
+    },
+    "truncated": false
+  },
+  "highlights": {
+    "findings": [
+      {
+        "ruleId": "sample.rule",
+        "severity": "info",
+        "claim": "Sample finding"
+      }
+    ]
+  },
+  "profileLimits": {
+    "itemLimit": 10,
+    "evidenceLimit": 3,
+    "omitsSourceSnippets": true
+  },
+  "limits": {
+    "symbolLimit": 20,
+    "impactLimit": 20
+  },
+  "truncated": false,
+  "warnings": [],
+  "nextActions": [
+    {
+      "command": "context-pack",
+      "query": "Sample finding"
+    }
+  ]
+}

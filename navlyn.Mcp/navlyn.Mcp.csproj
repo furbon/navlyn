@@ -2,13 +2,13 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackAsTool>true</PackAsTool>
     <PackageId>navlyn-mcp</PackageId>
     <ToolCommandName>navlyn-mcp</ToolCommandName>
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
     <Authors>furbon.tech</Authors>
     <Description>Read-only MCP server for Navlyn semantic C#/.NET evidence workflows.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -18,7 +18,7 @@
     <RepositoryUrl>https://github.com/furbon/navlyn</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/furbon/navlyn</PackageProjectUrl>
-    <PackageReleaseNotes>0.4.0 makes navlyn-mcp standalone by default with in-process execution over the shared Navlyn engine, while preserving the legacy --navlyn-executable escape hatch for compatibility and debugging.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.5.0 adds file-first MCP tools, direct warm-path workspace reuse with freshness metadata, .NET 8 and .NET 10 tool assets, .code-workspace loading, envelope schemas, golden contract snapshots, and need-triggered agent guidance.</PackageReleaseNotes>
     <Copyright>Copyright (c) 2026 furbon.tech</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>

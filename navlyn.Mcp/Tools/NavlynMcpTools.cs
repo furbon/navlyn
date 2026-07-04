@@ -12,6 +12,10 @@ internal static class NavlynMcpTools
     public const string WorkspaceSummaryTool = "navlyn_workspace_summary";
     public const string FindSymbolTool = "navlyn_find_symbol";
     public const string ResolveTargetTool = "navlyn_resolve_target";
+    public const string FileOutlineTool = "navlyn_file_outline";
+    public const string SymbolSourceTool = "navlyn_symbol_source";
+    public const string SymbolEdgesTool = "navlyn_symbol_edges";
+    public const string InspectFileTool = "navlyn_inspect_file";
     public const string AboutSymbolTool = "navlyn_about_symbol";
     public const string RelatedFilesTool = "navlyn_related_files";
     public const string ImpactTool = "navlyn_impact";
@@ -26,7 +30,7 @@ internal static class NavlynMcpTools
     public const string BatchTool = "navlyn_batch";
 
     private const string WorkspaceSummaryDescription =
-        "Use first when starting in a C#/.NET repository and you need projects, target frameworks, references, packages, test relationships, or MSBuild file facts. Do not use for specific symbol lookup, comments, strings, docs, or non-C# files. Returns repo-graph JSON with CLI truncation fields and next actions; use profile compact for small first scans. Follow with navlyn_find_symbol, navlyn_context_pack, or navlyn_review_diff.";
+        "Use only when project structure, target frameworks, package references, test relationships, or MSBuild file facts would change the answer. Do not run as a default first step for single-file review, specific symbol lookup, comments, strings, docs, or non-C# files. Returns repo-graph JSON; use profile compact when a small workspace map is enough.";
 
     private const string FindSymbolDescription =
         "Use when you have an approximate C# symbol name and need deterministic candidates or candidate ids. Do not use for comments, strings, markdown, generated artifacts, or non-C# content. Ambiguous results are returned as candidates; do not merge them. Follow with navlyn_about_symbol, navlyn_related_files, or navlyn_impact using candidateId.";
@@ -34,26 +38,38 @@ internal static class NavlynMcpTools
     private const string ResolveTargetDescription =
         "Use as the standard first symbol entry when an agent has an approximate C# name, a candidateId, or an exact source position and needs one small target envelope with recommended next actions. Prefer navlyn_find_symbol when the user explicitly wants a candidate list. Do not use for comments, strings, docs, non-C# files, or arbitrary command execution.";
 
+    private const string FileOutlineDescription =
+        "Use for a semantic outline of one known C# source file when a file map is useful before deeper symbol inspection. Returns outline entries with reusable candidateId values. Do not use for tests, impact analysis, repository overview, comments, strings, docs, non-C# files, or arbitrary command execution.";
+
+    private const string SymbolSourceDescription =
+        "Use when one selected C# symbol needs bounded source text by candidateId or exact file/line/column. Prefer this over navlyn_context_pack for a single declaration, body, members, XML doc, or attributes view. Do not use for broad file reading, impact analysis, tests, or diff review.";
+
+    private const string SymbolEdgesDescription =
+        "Use when one selected C# symbol needs direct relationship edges: references, callers, calls, or implementations. Prefer candidateId from navlyn_file_outline, navlyn_find_symbol, or navlyn_resolve_target. Use filters and limits for noisy symbols. Do not use for definition lookup, source text, test discovery, or static risk analysis.";
+
+    private const string InspectFileDescription =
+        "Use for a compact semantic inspection of one known C# source file. It returns the same bounded outline facts as navlyn_file_outline and does not include tests, impact, diagnostics, context packs, or raw file text.";
+
     private const string AboutSymbolDescription =
-        "Use when you need selected-symbol facts such as definition, member outline, reference summary, and relations. Prefer candidateId from navlyn_find_symbol when possible. Do not use for diff review; use navlyn_review_diff or navlyn_context_pack diff mode. Ambiguous queries return CLI candidate information without synthesized combined facts.";
+        "Use when one selected C# symbol needs a compact summary: definition, member outline, reference summary, and shallow relations. Prefer candidateId from navlyn_find_symbol or navlyn_resolve_target. Do not use for diff review or as a repository overview; ambiguous queries return candidate information without synthesized combined facts.";
 
     private const string RelatedFilesDescription =
         "Use when you need a file-first map of files related to a selected C# symbol. Do not use for change-risk analysis; use navlyn_impact. Results are bounded by CLI limits and preserve truncation fields. Follow with navlyn_about_symbol or navlyn_impact.";
 
     private const string ImpactDescription =
-        "Use before editing a C# symbol or when asked for static impact/risk. Returns references, callers, calls, implementations, affected files, and optional entrypoint chains. Do not claim runtime, reflection, DI, or config certainty from this static bounded analysis. Follow with navlyn_context_pack before non-trivial edits.";
+        "Use before editing a selected C# symbol or when static source impact/risk is explicitly needed. Returns bounded references, callers, calls, implementations, affected files, and optional entrypoint chains. Do not claim runtime, reflection, DI, or config certainty from this static analysis. Escalate to navlyn_context_pack only when the agent needs a reading queue.";
 
     private const string EntrypointsDescription =
         "Use to understand how a symbol can be reached from static callers or to inspect framework-discovered entrypoints. Symbol mode calls entrypoints; framework mode calls framework-entrypoints. Do not use for full impact; use navlyn_impact. Results are heuristic and bounded.";
 
     private const string ExactNavigationDescription =
-        "Use after navlyn_find_symbol or when you already have an exact C# source position and need precise Roslyn-backed navigation. Supports allowlist operations: definition, references, callers, calls, implementations, type_hierarchy, and symbol_info. For references, use usageKind/usageKinds and groupBy to separate reads, writes, construction, invocation, files, projects, or test-vs-production. Prefer candidateId from fuzzy results when available. Do not use for broad repository search, diff review, or arbitrary CLI execution; use navlyn_find_symbol, navlyn_review_diff, or navlyn_context_pack instead.";
+        "Use after navlyn_find_symbol or when you already have an exact C# source position and need precise lower-level Roslyn navigation. Supports allowlist operations: definition, references, callers, calls, implementations, type_hierarchy, and symbol_info. Prefer navlyn_symbol_edges for references/callers/calls/implementations and navlyn_symbol_source for bounded source text. Do not use for broad repository search, diff review, or arbitrary CLI execution.";
 
     private const string TestsForSymbolDescription =
-        "Use before editing a selected C# symbol when you need source-level related test candidates. Prefer candidateId from navlyn_find_symbol, or provide an exact file/line/column. Do not use as a test runner; Navlyn reports static facts only. Use navlyn_tests_for_diff for changed-symbol test impact.";
+        "Use only when planning or reviewing an edit and related test candidates are needed for a selected C# symbol. Prefer candidateId from navlyn_find_symbol or an exact file/line/column. Do not use for first-pass comprehension, and do not treat this as a test runner; Navlyn reports static facts only.";
 
     private const string TestsForDiffDescription =
-        "Use for PR or working-tree investigation when you need tests related to changed C# symbols in a Git diff. Do not use as a test runner or when there is no diff. Use profile compact or evidence when output budgets are tight.";
+        "Use only for PR or working-tree investigation when related tests for changed C# symbols are explicitly useful. Do not use for first-pass code reading, as a test runner, or when there is no diff. Use profile compact or evidence when output budgets are tight.";
 
     private const string DiImpactDescription =
         "Use before changing a DI service or implementation type when you need source-level Microsoft.Extensions.DependencyInjection registrations, consumers, constructor dependencies, and risk facts. Do not treat this as runtime container proof; reflection, configuration, and custom containers can be incomplete.";
@@ -62,13 +78,13 @@ internal static class NavlynMcpTools
         "Use for release or review checks when you need source-level public/protected API changes between Git refs. Requires base. Do not use for runtime binary compatibility proof; this reports Navlyn's source-level public API facts.";
 
     private const string ReviewDiffDescription =
-        "Use for code review or PR/diff investigation. Returns changed symbols, impact facts, diagnostics, related tests, findings, and next actions. Do not use when there is no Git diff or when prose review comments are requested; Navlyn returns facts only. Use profile evidence for review facts or compact when output budgets are tight. Follow with navlyn_context_pack diff mode for bounded reading material.";
+        "Use only for Git diff, PR, staged, or working-tree change investigation. Returns changed symbols, impact facts, diagnostics, related tests, findings, and next actions. Do not use for single-file review, general code review with no diff, or prose review comments; Navlyn returns facts only. Escalate to navlyn_context_pack diff mode only when bounded reading material is needed.";
 
     private const string ContextPackDescription =
-        "Use when an agent needs a bounded reading queue before reviewing, modifying, or understanding C# code. Supports query, candidateId, or diff mode, plus changeKind for edit-oriented ranking hints. Do not use just to list candidates; use navlyn_find_symbol. Respects CLI budgets, output profiles, and truncation fields; lower budgetTokens, limits, or profile if output is too large.";
+        "Use as an escalation tool when normal file reads or smaller Navlyn facts are not enough and the agent needs a bounded reading queue before review, modification, or explanation. Supports query, candidateId, or diff mode, plus changeKind ranking hints. Do not use just to list candidates or as a default first step; use navlyn_find_symbol, navlyn_resolve_target, or exact navigation first.";
 
     private const string BatchDescription =
-        "Use when you need multiple existing Navlyn batch-supported facts from the fixed workspace in one MCP call. Accepts the CLI batch defaults/requests shape only, including request-level profile for workflow commands. Prefer this for public-api-diff, tests-for-diff, framework-entrypoints, and DI facts when avoiding repeated workspace loads.";
+        "Use only after deciding that several batch-supported Navlyn facts are needed from the same fixed workspace. It is an optimization and orchestration tool, not a default discovery step. Accepts the CLI batch defaults/requests shape only, including request-level profile for workflow commands.";
 
     [McpServerTool(Name = WorkspaceSummaryTool, Title = "Navlyn Workspace Summary", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
     [Description(WorkspaceSummaryDescription)]
@@ -142,6 +158,91 @@ internal static class NavlynMcpTools
             services,
             ResolveTargetTool,
             NavlynToolCommandBuilder.ResolveTarget(query, candidateId, file, line, column, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, limit, candidatePolicy, minConfidence, explainSelection),
+            cancellationToken);
+    }
+
+    [McpServerTool(Name = FileOutlineTool, Title = "Navlyn File Outline", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(FileOutlineDescription)]
+    public static Task<CallToolResult> FileOutline(
+        IServiceProvider services,
+        [Description("C# source file to outline. Required.")] string file,
+        [Description("Input project context by project name or repository-relative .csproj path.")] string? project = null,
+        [Description("Exclude generated source files.")] bool? excludeGenerated = null,
+        CancellationToken cancellationToken = default)
+    {
+        return RunAsync(
+            services,
+            FileOutlineTool,
+            NavlynToolCommandBuilder.FileOutline(file, project, excludeGenerated),
+            cancellationToken);
+    }
+
+    [McpServerTool(Name = SymbolSourceTool, Title = "Navlyn Symbol Source", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(SymbolSourceDescription)]
+    public static Task<CallToolResult> SymbolSource(
+        IServiceProvider services,
+        [Description("Candidate id returned by navlyn_file_outline, navlyn_find_symbol, or navlyn_resolve_target. Mutually exclusive with file/line/column.")] string? candidateId = null,
+        [Description("C# source file target. Must be provided with line and column when candidateId is omitted.")] string? file = null,
+        [Description("1-based source line. Must be provided with file and column when candidateId is omitted.")] int? line = null,
+        [Description("1-based source column. Must be provided with file and line when candidateId is omitted.")] int? column = null,
+        [Description("Input project context by project name or repository-relative .csproj path.")] string? project = null,
+        [Description("Exclude generated source files.")] bool? excludeGenerated = null,
+        [Description("Source view: signature, declaration, body, members, xml-doc, or attributes.")] string? view = null,
+        [Description("Maximum source lines per slice. Must be 1 or greater.")] int? maxLines = null,
+        [Description("Approximate token budget per slice. Must be 1 or greater.")] int? budgetTokens = null,
+        CancellationToken cancellationToken = default)
+    {
+        return RunAsync(
+            services,
+            SymbolSourceTool,
+            NavlynToolCommandBuilder.SymbolSource(candidateId, file, line, column, project, excludeGenerated, view, maxLines, budgetTokens),
+            cancellationToken);
+    }
+
+    [McpServerTool(Name = SymbolEdgesTool, Title = "Navlyn Symbol Edges", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(SymbolEdgesDescription)]
+    public static Task<CallToolResult> SymbolEdges(
+        IServiceProvider services,
+        [Description("Relationship operation: references, callers, calls, or implementations.")] string operation,
+        [Description("Candidate id returned by navlyn_file_outline, navlyn_find_symbol, or navlyn_resolve_target. Mutually exclusive with file/line/column.")] string? candidateId = null,
+        [Description("C# source file target. Must be provided with line and column when candidateId is omitted.")] string? file = null,
+        [Description("1-based source line. Must be provided with file and column when candidateId is omitted.")] int? line = null,
+        [Description("1-based source column. Must be provided with file and line when candidateId is omitted.")] int? column = null,
+        [Description("Input project context by project name or repository-relative .csproj path.")] string? project = null,
+        [Description("Exclude generated source files and generated result locations where the CLI operation supports it.")] bool? excludeGenerated = null,
+        [Description("Single result project filter. Mutually exclusive with resultProjects.")] string? resultProject = null,
+        [Description("Result project filters. Mutually exclusive with resultProject.")] string[]? resultProjects = null,
+        [Description("Single result path fragment filter. Mutually exclusive with resultPaths.")] string? resultPath = null,
+        [Description("Result path fragment filters. Mutually exclusive with resultPath.")] string[]? resultPaths = null,
+        [Description("Single result symbol kind filter. Mutually exclusive with resultKinds.")] string? resultKind = null,
+        [Description("Result symbol kind filters. Mutually exclusive with resultKind.")] string[]? resultKinds = null,
+        [Description("Single reference usage kind filter for operation references. Mutually exclusive with usageKinds.")] string? usageKind = null,
+        [Description("Reference usage kind filters for operation references. Mutually exclusive with usageKind.")] string[]? usageKinds = null,
+        [Description("Grouped reference summaries for operation references. Values: file, project, containing-symbol, usage-kind, test-vs-production.")] string[]? groupBy = null,
+        [Description("Result limit. Must be 1 or greater.")] int? limit = null,
+        [Description("Include metadata-only symbol facts where supported by calls.")] bool? includeMetadata = null,
+        CancellationToken cancellationToken = default)
+    {
+        return RunAsync(
+            services,
+            SymbolEdgesTool,
+            NavlynToolCommandBuilder.SymbolEdges(operation, candidateId, file, line, column, project, excludeGenerated, resultProject, resultProjects, resultPath, resultPaths, resultKind, resultKinds, usageKind, usageKinds, groupBy, limit, includeMetadata),
+            cancellationToken);
+    }
+
+    [McpServerTool(Name = InspectFileTool, Title = "Navlyn Inspect File", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(InspectFileDescription)]
+    public static Task<CallToolResult> InspectFile(
+        IServiceProvider services,
+        [Description("C# source file to inspect. Required.")] string file,
+        [Description("Input project context by project name or repository-relative .csproj path.")] string? project = null,
+        [Description("Exclude generated source files.")] bool? excludeGenerated = null,
+        CancellationToken cancellationToken = default)
+    {
+        return RunAsync(
+            services,
+            InspectFileTool,
+            NavlynToolCommandBuilder.InspectFile(file, project, excludeGenerated),
             cancellationToken);
     }
 

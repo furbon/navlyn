@@ -2,13 +2,13 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackAsTool>true</PackAsTool>
     <PackageId>navlyn</PackageId>
     <ToolCommandName>navlyn</ToolCommandName>
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
     <Authors>furbon.tech</Authors>
     <Description>Read-only semantic C#/.NET evidence CLI for coding agents, CI, and automation.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -18,7 +18,7 @@
     <RepositoryUrl>https://github.com/furbon/navlyn</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/furbon/navlyn</PackageProjectUrl>
-    <PackageReleaseNotes>0.4.0 introduces the shared Navlyn engine used by both navlyn and navlyn-mcp, keeps the CLI contract stable, and enables standalone in-process MCP execution without requiring an external navlyn CLI installation.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.5.0 adds MCP file-first navigation tools, direct warm-path workspace reuse, .NET 8 and .NET 10 tool assets, .code-workspace loading, envelope schemas, golden contract snapshots, and refreshed OSS onboarding docs.</PackageReleaseNotes>
     <Copyright>Copyright (c) 2026 furbon.tech</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>

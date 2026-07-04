@@ -19,9 +19,11 @@ $ConditionalDisplayPath = 'tests/fixtures/WorkspaceSemanticsFixture/Conditional/
 $MultiTargetDisplayPath = 'tests/fixtures/WorkspaceSemanticsFixture/MultiTarget/TargetSpecificCode.cs'
 $LinkedDisplayPath = 'tests/fixtures/WorkspaceSemanticsFixture/Shared/LinkedContext.cs'
 $MultiTargetProjectDisplayPath = 'tests/fixtures/WorkspaceSemanticsFixture/MultiTarget/MultiTarget.csproj'
+$TargetFrameworkScript = Join-Path $RepoRoot 'scripts/lib/navlyn-target-framework.ps1'
 
-[xml]$ProjectXml = Get-Content -Raw -LiteralPath $ProjectPath
-$TargetFramework = [string]$ProjectXml.Project.PropertyGroup.TargetFramework
+. $TargetFrameworkScript
+
+$TargetFramework = Get-NavlynPreferredTargetFramework -ProjectPath $ProjectPath
 $NavlynDll = Join-Path $ProjectDir "bin/Debug/$TargetFramework/navlyn.dll"
 
 function Invoke-CheckedProcess {

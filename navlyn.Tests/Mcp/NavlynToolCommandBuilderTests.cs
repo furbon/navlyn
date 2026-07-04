@@ -323,6 +323,128 @@ public sealed class NavlynToolCommandBuilderTests
     }
 
     [Fact]
+    public void FileOutline_BuildsOutlineCommand()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.FileOutline(
+            file: "src/Service.cs",
+            project: "App",
+            excludeGenerated: true);
+
+        Assert.True(result.IsValid);
+        Assert.Equal("outline", result.Command);
+        Assert.Equal(["--file", "src/Service.cs", "--project", "App", "--exclude-generated"], result.Arguments);
+    }
+
+    [Fact]
+    public void SymbolSource_CandidateBuildsCliCommand()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.SymbolSource(
+            candidateId: "sym:v1:00000000000000000000000000000000",
+            file: null,
+            line: null,
+            column: null,
+            project: "App",
+            excludeGenerated: true,
+            view: "body",
+            maxLines: 40,
+            budgetTokens: 1200);
+
+        Assert.True(result.IsValid);
+        Assert.Equal("symbol-source", result.Command);
+        Assert.Equal(
+            ["--candidate-id", "sym:v1:00000000000000000000000000000000", "--view", "body", "--max-lines", "40", "--budget-tokens", "1200", "--project", "App", "--exclude-generated"],
+            result.Arguments);
+    }
+
+    [Fact]
+    public void SymbolSource_RejectsMissingTarget()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.SymbolSource(
+            candidateId: null,
+            file: "src/Service.cs",
+            line: 12,
+            column: null,
+            project: null,
+            excludeGenerated: null,
+            view: null,
+            maxLines: null,
+            budgetTokens: null);
+
+        Assert.False(result.IsValid);
+        Assert.Equal("Specify exactly one target: candidateId or file with line and column.", result.Error);
+    }
+
+    [Fact]
+    public void SymbolEdges_ReferencesForwardsFilters()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.SymbolEdges(
+            operation: "references",
+            candidateId: "sym:v1:00000000000000000000000000000000",
+            file: null,
+            line: null,
+            column: null,
+            project: null,
+            excludeGenerated: null,
+            resultProject: null,
+            resultProjects: ["App"],
+            resultPath: null,
+            resultPaths: ["src"],
+            resultKind: null,
+            resultKinds: ["Method"],
+            usageKind: "invoke",
+            usageKinds: null,
+            groupBy: ["file"],
+            limit: 25,
+            includeMetadata: null);
+
+        Assert.True(result.IsValid);
+        Assert.Equal("references", result.Command);
+        Assert.Equal(
+            ["--candidate-id", "sym:v1:00000000000000000000000000000000", "--result-project", "App", "--result-path", "src", "--result-kind", "Method", "--usage-kind", "invoke", "--group-by", "file", "--limit", "25"],
+            result.Arguments);
+    }
+
+    [Fact]
+    public void SymbolEdges_RejectsNonEdgeOperation()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.SymbolEdges(
+            operation: "definition",
+            candidateId: "sym:v1:00000000000000000000000000000000",
+            file: null,
+            line: null,
+            column: null,
+            project: null,
+            excludeGenerated: null,
+            resultProject: null,
+            resultProjects: null,
+            resultPath: null,
+            resultPaths: null,
+            resultKind: null,
+            resultKinds: null,
+            usageKind: null,
+            usageKinds: null,
+            groupBy: null,
+            limit: null,
+            includeMetadata: null);
+
+        Assert.False(result.IsValid);
+        Assert.Equal("operation must be one of: references, callers, calls, implementations.", result.Error);
+    }
+
+    [Fact]
+    public void InspectFile_BuildsOutlineCommand()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.InspectFile(
+            file: "src/Service.cs",
+            project: null,
+            excludeGenerated: null);
+
+        Assert.True(result.IsValid);
+        Assert.Equal("outline", result.Command);
+        Assert.Equal(["--file", "src/Service.cs"], result.Arguments);
+    }
+
+    [Fact]
     public void ExactNavigation_CandidateDefinitionBuildsCliCommand()
     {
         CommandBuildResult result = NavlynToolCommandBuilder.ExactNavigation(

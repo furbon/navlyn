@@ -8,7 +8,7 @@ internal static class SharedOptions
     {
         return new Option<FileInfo>("--workspace")
         {
-            Description = "Path to a .slnx, .sln, or .csproj workspace.",
+            Description = "Path to a .code-workspace, .slnx, .sln, or .csproj workspace, or auto.",
             Required = true
         };
     }
