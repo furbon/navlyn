@@ -1,6 +1,9 @@
 # Navlyn Distribution
 
-This document is the release packaging and publication runbook for Navlyn.
+This document explains how Navlyn is packaged, installed, validated, and published. It is useful for two audiences:
+
+- users who want to know what gets installed and which runtime assets are included;
+- maintainers who need the release packaging and publication runbook.
 
 Discovery-channel copy, GitHub About/topics suggestions, VS Code MCP install-link notes, and registry boundaries live in [`navlyn-discovery-channels.md`](navlyn-discovery-channels.md).
 
@@ -10,6 +13,8 @@ Navlyn is distributed as two separate .NET tool packages:
 - `navlyn-mcp`: the standalone read-only stdio MCP server.
 
 Keeping the packages separate lets CLI users install only `navlyn` and MCP users install only `navlyn-mcp`. The two packages share the same Navlyn core engine; `navlyn-mcp` does not require a separate `navlyn` CLI installation for normal use.
+
+The installed tools are local .NET tools. They do not install a background service, browser extension, editor plugin, or hosted component.
 
 Both tool packages include `net8.0` and `net10.0` assets. The .NET SDK selects the compatible tool asset during install or restore. Semantic workspace loading still requires an installed .NET SDK/MSBuild that can load the target repository.
 
@@ -28,6 +33,14 @@ Installed command names are:
 
 - `navlyn`
 - `navlyn-mcp`
+
+First smoke after install:
+
+```powershell
+navlyn check --workspace path/to/YourRepo.slnx
+navlyn repo-graph --workspace path/to/YourRepo.slnx --profile compact
+navlyn-mcp --help
+```
 
 ## Repository-Local Tool Manifest
 

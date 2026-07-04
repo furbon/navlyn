@@ -1,6 +1,6 @@
 # Navlyn Architecture
 
-Navlyn 0.5.0 is split into shared implementation assemblies and two tool frontends.
+Navlyn 0.5.0 is split into shared implementation assemblies and two tool frontends. The split is meant to keep the public promise boring and inspectable: one engine, deterministic JSON, read-only facts, and no hidden edit or network surface.
 
 ## Projects
 

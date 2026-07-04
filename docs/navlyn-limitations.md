@@ -1,6 +1,8 @@
 # Navlyn Known Limits
 
-Navlyn is intentionally a local, read-only, source-level evidence tool. These limits are part of the contract rather than hidden behavior.
+Navlyn is intentionally a local, read-only, source-level evidence tool. These limits are part of the product contract, not footnotes. They are listed here so agents, automation, and human reviewers know when to trust Navlyn and when to ask for another kind of proof.
+
+Short version: Navlyn is strong at C# source identity and bounded Roslyn/MSBuild facts. It is not a runtime, security, package-compatibility, or editing authority.
 
 ## Current Limits
 

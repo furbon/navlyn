@@ -1,6 +1,14 @@
 # Navlyn Agent Recipes
 
-These recipes are decision guides for agents, MCP clients, CI jobs, and local automation. They keep Navlyn in facts-provider mode: commands return deterministic JSON evidence, and the agent or human reviewer decides what to do with it.
+These recipes teach agents how to use Navlyn without turning it into a broad checklist. Navlyn is a facts provider: commands return deterministic JSON evidence, and the agent or human reviewer decides what to do with it.
+
+The core habit is simple:
+
+1. use `rg` or normal file reads when text is enough;
+2. use one Navlyn call when C# semantic identity matters;
+3. reuse `candidateId`;
+4. stop when the returned facts answer the question;
+5. escalate to impact, tests, context, or batch only when the smaller fact shows it is needed.
 
 Use `compact` for first scans, `evidence` for review and CI facts, and `full` when downstream tooling expects the richest command result.
 

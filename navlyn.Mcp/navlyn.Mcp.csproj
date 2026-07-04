@@ -10,7 +10,7 @@
     <ToolCommandName>navlyn-mcp</ToolCommandName>
     <Version>0.5.0</Version>
     <Authors>furbon.tech</Authors>
-    <Description>Read-only MCP server for Navlyn semantic C#/.NET evidence workflows.</Description>
+    <Description>Read-only MCP server that gives coding agents C#/.NET semantic evidence before they edit.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>navlyn-icon.png</PackageIcon>

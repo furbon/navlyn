@@ -1,23 +1,37 @@
 # Navlyn MCP Server
 
-Navlyn includes a standalone read-only stdio MCP server in the separate `navlyn.Mcp` project. It gives MCP clients a small, high-level tool surface for C#/.NET repository investigation while preserving the same deterministic Navlyn JSON contract used by the CLI.
+`navlyn-mcp` gives MCP clients a read-only C#/.NET semantic evidence surface. It is designed for agents that should inspect code with Roslyn/MSBuild facts before they edit, review, or explain it.
 
-The server is intentionally facts-only. It does not edit files, execute arbitrary shell commands, call arbitrary Navlyn commands, access the network, or change the configured workspace. Successful tool calls return a Navlyn MCP result envelope with the Navlyn command JSON under `result`; the inner result shapes remain documented in [`navlyn-cli-commands.md`](navlyn-cli-commands.md).
+The server is intentionally facts-only:
+
+- no file edits;
+- no arbitrary shell execution;
+- no network access;
+- no arbitrary raw file server;
+- no workspace mutation;
+- no hidden review-comment publishing.
+
+Successful tool calls return a Navlyn MCP result envelope with the Navlyn command JSON under `result`; the inner result shapes remain documented in [`navlyn-cli-commands.md`](navlyn-cli-commands.md).
 
 For normal use, install only `navlyn-mcp` for MCP clients. A separate `navlyn` CLI installation is not required. The `navlyn` CLI and `navlyn-mcp` server share the same Navlyn core engine and command runtime.
 
 ## When To Use It
 
-Use `navlyn-mcp` when an agent client should ask semantic C# questions through MCP instead of composing CLI commands itself:
+Use `navlyn-mcp` when an agent needs a semantic C# fact that text search cannot safely provide:
 
-- request project, package, target framework, and test relationship facts when they affect the answer;
-- resolve approximate symbol names into deterministic candidates and `candidateId` values;
-- gather selected-symbol summaries, related files, static impact, and entrypoint chains;
-- collect PR or working-tree review facts from a Git diff;
-- request bounded reading material when smaller facts are not enough before review, modification, or explanation work;
-- run several already-needed batch-supported facts in one MCP tool call.
+| Need | Start With |
+| --- | --- |
+| "Which symbol did the user mean?" | `navlyn_resolve_target` |
+| "What is in this C# file?" | `navlyn_file_outline` |
+| "Show the exact source for this symbol." | `navlyn_symbol_source` |
+| "Who references or calls this selected symbol?" | `navlyn_symbol_edges` |
+| "What workspace/project context matters?" | `navlyn_workspace_summary` |
+| "What does this actual Git diff affect?" | `navlyn_review_diff` in `review` profile |
+| "What should the agent read before editing?" | `navlyn_context_pack` only after smaller facts show it is needed |
 
 Use `rg`, normal file reads, or editor tools for comments, prose docs, strings, generated artifacts, and non-C# content. Navlyn's MCP server is a semantic C#/.NET facts provider, not a general repository search server.
+
+The default `reader` profile is deliberately narrow so agents do not treat Navlyn as a checklist. Broader review, edit, and full profiles are opt-in.
 
 ## Starting The Server
 

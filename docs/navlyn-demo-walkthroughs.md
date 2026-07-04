@@ -1,8 +1,8 @@
 # Navlyn Demo Walkthroughs
 
-These demos show Navlyn as a read-only semantic evidence layer. They use this repository and committed fixtures so the commands stay reproducible.
+These demos show the moment Navlyn is meant for: an agent is about to reason about C# code, and plain text search is not enough.
 
-Navlyn reports static source-level facts. It does not prove runtime behavior, write review comments, run tests, or replace human judgment.
+Each walkthrough is reproducible from this repository or committed fixtures. Each one starts from a realistic failure mode, then shows the smallest Navlyn facts that reduce that failure. Navlyn reports static source-level evidence; it does not prove runtime behavior, write review comments, run tests, or replace human judgment.
 
 ## One-Minute Copy/Paste Demo
 
@@ -14,7 +14,15 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-so
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review-diff --workspace navlyn.slnx --base HEAD --head HEAD --profile compact --symbol-limit 3 --impact-limit 3 --diagnostic-limit 3 --related-test-limit 3
 ```
 
-Check that stdout is JSON for each command and stderr is empty or diagnostic-only. The first two commands demonstrate fuzzy-to-exact symbol investigation. The third command demonstrates the review envelope on an explicit Git range; replace the refs with PR refs or omit them on a dirty branch to inspect a real diff.
+Check that stdout is JSON for each command and stderr is empty or diagnostic-only. The first two commands demonstrate fuzzy-to-exact symbol investigation. The third command demonstrates a bounded review envelope on an explicit Git range; replace the refs with PR refs or omit them on a dirty branch to inspect a real diff.
+
+If you are evaluating Navlyn from a package install rather than this repository, run the same shape against your solution:
+
+```powershell
+navlyn check --workspace path/to/YourRepo.slnx
+navlyn resolve-target --workspace path/to/YourRepo.slnx --query PaymentService --assume-kind NamedType
+navlyn references --workspace path/to/YourRepo.slnx --candidate-id sym:v1:... --group-by file --limit 50
+```
 
 ## Demo 1: Symbol Investigation
 

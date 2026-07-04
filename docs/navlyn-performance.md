@@ -1,6 +1,16 @@
 # Navlyn Performance
 
-Navlyn loads C# workspaces through MSBuild/Roslyn. On large repositories, workspace load cost can dominate command latency. This document explains how to measure that behavior and how to choose lower-cost workflows.
+Navlyn loads C# workspaces through MSBuild/Roslyn, so performance depends on repository size, restore/build health, SDKs, and the workflow you choose. This document explains the cost model, the faster paths, and the local measurement commands that make performance visible instead of mysterious.
+
+Practical rule: use one precise fact first, reuse returned `candidateId` values, and escalate only when the returned evidence shows the next fact is needed.
+
+| Workflow | Best For | Cost Shape |
+| --- | --- | --- |
+| Direct CLI command | Human asks for one fact. | One process and one workspace load per command. |
+| MCP reader tools | Agent repeatedly inspects files or selected symbols. | Session-local warm workspace and document index for selected direct tools. |
+| CLI `batch` / MCP `navlyn_batch` | Several known facts from one workspace. | One command envelope for multiple supported facts. |
+| `compact` profile | First scans and LLM context. | Smaller JSON and less downstream token pressure. |
+| `evidence` profile | Review/CI facts. | Enough detail for inspection without full output size. |
 
 ## Execution Model
 

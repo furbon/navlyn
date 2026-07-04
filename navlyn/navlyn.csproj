@@ -10,7 +10,7 @@
     <ToolCommandName>navlyn</ToolCommandName>
     <Version>0.5.0</Version>
     <Authors>furbon.tech</Authors>
-    <Description>Read-only semantic C#/.NET evidence CLI for coding agents, CI, and automation.</Description>
+    <Description>Read-only C#/.NET semantic evidence CLI that helps coding agents avoid wrong-symbol edits.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>navlyn-icon.png</PackageIcon>

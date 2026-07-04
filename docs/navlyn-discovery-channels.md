@@ -12,7 +12,7 @@ Package IDs:
 Suggested package description:
 
 ```text
-Read-only semantic C#/.NET evidence CLI for coding agents, CI, and automation.
+Read-only C#/.NET semantic evidence for coding agents before they edit the wrong symbol.
 ```
 
 Suggested tags:
@@ -28,7 +28,7 @@ Publishing is gated by the release runbook in [`navlyn-distribution.md`](navlyn-
 Suggested description:
 
 ```text
-Read-only semantic C#/.NET evidence layer for coding agents, CI, and MCP workflows.
+Read-only C#/.NET semantic evidence for coding agents before they edit the wrong symbol.
 ```
 
 Suggested topics:
@@ -40,7 +40,7 @@ csharp, dotnet, roslyn, mcp, mcp-server, ai-agents, code-navigation, semantic-se
 Suggested release note opening:
 
 ```text
-Navlyn 0.5.0 gives C#/.NET coding agents a read-only semantic evidence layer: resolve targets, inspect exact Roslyn facts, build bounded context packs, and collect review facts without editing files. The `navlyn` CLI and standalone `navlyn-mcp` server share the same Navlyn engine.
+Navlyn 0.5.0 helps C#/.NET coding agents avoid wrong-symbol edits. It resolves fuzzy intent into stable Roslyn-backed targets, opens bounded source and relationship facts, builds compact context packs, and collects review evidence without editing files. The `navlyn` CLI and standalone `navlyn-mcp` server share the same Navlyn engine.
 ```
 
 ## VS Code MCP
