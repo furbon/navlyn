@@ -5,6 +5,13 @@ using Navlyn.Workspaces;
 
 namespace Navlyn.Tests.Mcp;
 
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class InProcessCliTestCollection
+{
+    public const string Name = "In-process CLI tests";
+}
+
+[Collection(InProcessCliTestCollection.Name)]
 public sealed class NavlynInProcessCommandAdapterTests
 {
     [Fact]
@@ -39,7 +46,7 @@ public sealed class NavlynInProcessCommandAdapterTests
             standardInput: null,
             CancellationToken.None);
 
-        Assert.True(result.Ok);
+        Assert.True(result.Ok, FormatError(result));
         Assert.Equal("repo-graph", result.SourceCommand?.Command);
         Assert.NotNull(result.Result);
         Assert.Equal("repo-graph", result.Result.Value.GetProperty("command").GetString());
@@ -108,5 +115,19 @@ public sealed class NavlynInProcessCommandAdapterTests
         }
 
         throw new InvalidOperationException("Could not find repository root.");
+    }
+
+    private static string FormatError(NavlynToolResult result)
+    {
+        if (result.Error is null)
+        {
+            return "Expected the in-process command to succeed.";
+        }
+
+        return string.Join(
+            Environment.NewLine,
+            result.Error.Code,
+            result.Error.Message,
+            result.Error.Stderr ?? "");
     }
 }
