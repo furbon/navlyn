@@ -38,8 +38,11 @@ jobs:
       - name: Build
         run: dotnet build navlyn.slnx --no-restore
 
-      - name: Test
-        run: dotnet test navlyn.slnx --no-build
+      - name: Test net8.0
+        run: dotnet test navlyn.slnx --no-build --framework net8.0
+
+      - name: Test net10.0
+        run: dotnet test navlyn.slnx --no-build --framework net10.0
 
       - name: C# file format validation
         shell: pwsh

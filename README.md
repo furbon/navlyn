@@ -105,11 +105,11 @@ Do not use Navlyn for comments, strings, Markdown, generated artifacts, non-C# f
 | How is this reached at runtime boundaries? | `entrypoints --framework-aware` | `route-map`, `where-handled`, `di-impact` |
 | How should an MCP client ask this? | `navlyn_resolve_target` | `navlyn_exact_navigation`, `navlyn_context_pack` |
 
-For repeated MCP or batch calls, use `navlyn_batch` only after deciding that several supported facts are needed from the same workspace. It is an optimization, not a first-step checklist.
+For repeated MCP or batch calls, use `navlyn_batch` in `--tool-profile full` only after deciding that several supported facts are needed from the same workspace. It is an optimization, not a first-step checklist.
 
 ## Quick Start
 
-Navlyn tool packages target .NET 8 and .NET 10 and load `.code-workspace`, `.slnx`, `.sln`, and `.csproj` workspaces through MSBuild/Roslyn. Use `--workspace auto` only when the repository has one clear top-level workspace candidate.
+Navlyn tool packages target .NET 8 and .NET 10 and load `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, and `.csproj` workspaces through MSBuild/Roslyn. Use `navlyn.workspace.json` for shared workspace candidates, generated/test exclusion, and root policy; use `--workspace auto` only when the repository has one clear top-level workspace candidate.
 
 From this repository:
 
@@ -181,7 +181,7 @@ Typical installed-server configuration:
 ```json
 {
   "command": "navlyn-mcp",
-  "args": ["--workspace", "path/to/YourRepo.slnx"]
+  "args": ["--workspace", "path/to/navlyn.workspace.json", "--tool-profile", "reader"]
 }
 ```
 
@@ -190,11 +190,11 @@ For repositories with exactly one top-level workspace candidate, the server can 
 ```json
 {
   "command": "navlyn-mcp",
-  "args": ["--workspace", "auto"]
+  "args": ["--workspace", "auto", "--tool-profile", "reader"]
 }
 ```
 
-The MCP server exposes high-level tools such as `navlyn_workspace_summary`, `navlyn_resolve_target`, `navlyn_find_symbol`, `navlyn_file_outline`, `navlyn_symbol_source`, `navlyn_symbol_edges`, `navlyn_exact_navigation`, `navlyn_review_diff`, `navlyn_context_pack`, and `navlyn_batch`, plus bounded resources and prompts. Tool descriptions are written to be need-triggered: use file/source/edge tools for one known file or symbol, workspace summary for project context, review diff only for an actual Git diff, context pack as escalation, and batch only when multiple facts are already needed. See [`docs/navlyn-mcp-server.md`](docs/navlyn-mcp-server.md).
+The MCP server uses startup-fixed tool profiles and defaults workspace expansion to `--workspace-root-policy repo-relative`. The default `reader` profile exposes file-first and selected-symbol tools such as `navlyn_file_outline`, `navlyn_resolve_target`, `navlyn_symbol_source`, and `navlyn_symbol_edges`. Use `--tool-profile review` for actual Git diff review, `edit` for symbol edit planning, and `full` for the complete compatibility surface including `navlyn_batch`. Tool descriptions are written to be need-triggered: use file/source/edge tools for one known file or symbol, workspace summary for project context, review diff only for an actual Git diff, context pack as escalation, and batch only when multiple facts are already needed. See [`docs/navlyn-mcp-server.md`](docs/navlyn-mcp-server.md).
 
 ## How Navlyn Fits
 

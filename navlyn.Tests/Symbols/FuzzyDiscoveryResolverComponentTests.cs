@@ -144,6 +144,125 @@ public sealed class FuzzyDiscoveryResolverComponentTests(ResolverComponentTestFi
     }
 
     [Fact]
+    public async Task AboutAsync_LightProfile_OmitsHeavyReferenceAndRelationFacts()
+    {
+        FuzzyAboutResult about = await new FuzzyDiscoveryResolver().AboutAsync(
+            fixture.FuzzyDiscoveryWorkspace,
+            new FuzzyQueryOptions(
+                Query: "EnemyManagerTools",
+                AssumeKinds: ["NamedType"],
+                Match: "auto",
+                CaseSensitive: null,
+                ExcludeGenerated: true,
+                Limit: null),
+            new FuzzyAboutOptions(
+                MemberLimit: 10,
+                ReferenceLimit: 10,
+                RelationLimit: 10,
+                IncludeSnippets: false,
+                SnippetLines: 0,
+                ExcludeGenerated: true,
+                NavigationSearchOptions: new SymbolNavigationSearchOptions(SymbolNavigationSearchScopes.File, 10),
+                Profile: "light"),
+            Projects(),
+            projectFilters: null,
+            CancellationToken.None);
+
+        Assert.Equal("high", about.Confidence);
+        Assert.Equal("light", about.Profile);
+        Assert.NotNull(about.Definition);
+        Assert.NotNull(about.Members);
+        Assert.Null(about.References);
+        Assert.Null(about.Relations);
+    }
+
+    [Fact]
+    public async Task AboutAsync_CandidateId_UsesRecordedCandidateWithoutAdditionalEnrichment()
+    {
+        DeclarationIndex declarationIndex = await DeclarationIndexProvider.GetOrCreateAsync(
+            fixture.FuzzyDiscoveryWorkspace.Solution,
+            CancellationToken.None);
+        FuzzyFindResult find = await new FuzzyDiscoveryResolver().FindAsync(
+            fixture.FuzzyDiscoveryWorkspace,
+            new FuzzyQueryOptions(
+                Query: "EnemyManagerTools",
+                AssumeKinds: ["NamedType"],
+                Match: "auto",
+                CaseSensitive: null,
+                ExcludeGenerated: true,
+                Limit: null),
+            Projects(),
+            projectFilters: null,
+            CancellationToken.None);
+        int enrichmentCount = declarationIndex.SemanticEnrichmentCount;
+        int candidateRecordCount = declarationIndex.CandidateRecordCount;
+
+        string candidateId = find.SelectedCandidate!.CandidateId!;
+        FuzzyAboutResult about = await new FuzzyDiscoveryResolver().AboutAsync(
+            fixture.FuzzyDiscoveryWorkspace,
+            new FuzzyQueryOptions(
+                Query: candidateId,
+                AssumeKinds: [],
+                Match: "smart",
+                CaseSensitive: null,
+                ExcludeGenerated: true,
+                Limit: null,
+                CandidateId: candidateId),
+            new FuzzyAboutOptions(
+                MemberLimit: 10,
+                ReferenceLimit: 10,
+                RelationLimit: 10,
+                IncludeSnippets: false,
+                SnippetLines: 0,
+                ExcludeGenerated: true),
+            Projects(),
+            projectFilters: null,
+            CancellationToken.None);
+
+        Assert.Equal("high", about.Confidence);
+        Assert.Equal(candidateId, about.SelectedCandidate!.CandidateId);
+        Assert.Equal(enrichmentCount, declarationIndex.SemanticEnrichmentCount);
+        Assert.Equal(candidateRecordCount, declarationIndex.CandidateRecordCount);
+    }
+
+    [Fact]
+    public async Task FindAsync_ReusesDeclarationIndexSemanticEnrichmentForSameQuery()
+    {
+        DeclarationIndex declarationIndex = await DeclarationIndexProvider.GetOrCreateAsync(
+            fixture.FuzzyDiscoveryWorkspace.Solution,
+            CancellationToken.None);
+
+        await new FuzzyDiscoveryResolver().FindAsync(
+            fixture.FuzzyDiscoveryWorkspace,
+            new FuzzyQueryOptions(
+                Query: "EnemyManagerTools",
+                AssumeKinds: ["NamedType"],
+                Match: "auto",
+                CaseSensitive: null,
+                ExcludeGenerated: true,
+                Limit: null),
+            Projects(),
+            projectFilters: null,
+            CancellationToken.None);
+        int enrichmentCount = declarationIndex.SemanticEnrichmentCount;
+
+        await new FuzzyDiscoveryResolver().FindAsync(
+            fixture.FuzzyDiscoveryWorkspace,
+            new FuzzyQueryOptions(
+                Query: "EnemyManagerTools",
+                AssumeKinds: ["NamedType"],
+                Match: "auto",
+                CaseSensitive: null,
+                ExcludeGenerated: true,
+                Limit: null),
+            Projects(),
+            projectFilters: null,
+            CancellationToken.None);
+
+        Assert.Equal(enrichmentCount, declarationIndex.SemanticEnrichmentCount);
+    }
+
+    [Fact]
     public async Task AboutAsync_ExcludeGenerated_ExcludesGeneratedReferenceSummary()
     {
         FuzzyAboutResult includeGenerated = await AboutSpawnAsync(excludeGenerated: false);

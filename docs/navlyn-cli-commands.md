@@ -9,6 +9,7 @@ Navlyn commands are grouped by investigation style:
 | Family | Commands | Purpose |
 | --- | --- | --- |
 | Workspace facts | `check`, `overview`, `repo-graph`, `diagnostics`, `symbol-diagnostics`, `diagnostic-pack` | Load workspaces and report deterministic repository, project, package, and compiler facts. |
+| Workspace lifecycle | `workspace-status`, `workspace-refresh`, `serve` | Report workspace freshness, manage the opt-in `.navlyn/cache` manifest, and run a local read-only daemon. |
 | Fuzzy investigations | `find`, `resolve-target`, `where-used`, `about`, `related`, `impact`, `entrypoints` | Resolve approximate symbol intent into candidates, selected target envelopes, selected-symbol summaries, related files, impact, and entrypoint chains. |
 | Diff and review | `changed-symbols`, `impact-diff`, `diagnostics-diff`, `review-diff`, `review-pack` | Produce evidence-first facts for Git diffs and review workflows. |
 | Context and batching | `context-pack`, `batch` | Build bounded agent reading material and run multiple machine-readable requests through one workspace load. |
@@ -64,9 +65,11 @@ Not guaranteed:
 
 Breaking changes require documentation updates and contract-test updates. Renaming or removing documented fields, changing exit behavior, moving diagnostics to stdout, changing path normalization, or changing profile semantics is breaking. Deprecation should be additive first: keep the old field, add a replacement or warning when practical, document the transition, and remove only in an intentional breaking release.
 
-Profiled workflow output uses `schemaVersion: "navlyn.workflow.v1"`. That schema version covers the shared workflow envelope (`schemaVersion`, `navlynVersion`, `workspace`, `kind`, `command`, `profile`, `configuration`, `reproCommand`, summaries, limits, warnings, and next actions), not every command's rich inner domain facts. A future `navlyn.workflow.v2` would be used for incompatible envelope changes.
+Profiled workflow output uses `schemaVersion: "navlyn.workflow.v1"`. That schema version covers the shared workflow envelope (`schemaVersion`, `navlynVersion`, `workspace`, `kind`, `command`, `profile`, `configuration`, `reproCommand`, summaries, limits, warnings, and next actions), not every command's rich inner domain facts. Incompatible envelope changes require a new schema version such as `navlyn.workflow.v2`.
 
 The published envelope schemas live under [`docs/schemas`](schemas/). `navlyn-workflow-envelope.schema.json` covers the profiled workflow envelope only; command-specific domain facts remain documented in this file and validated by component, CLI-contract, and representative golden snapshot tests. Snapshot tests scrub nondeterministic fields such as `navlynVersion` and intentionally focus on envelope and important shape, not every semantic detail.
+
+Focused schemas also cover high-risk automation surfaces: `navlyn-resolve-target-result.schema.json` defines the standard target-selection entrypoint, `navlyn-file-outline-result.schema.json` and `navlyn-symbol-source-result.schema.json` define the file-first source-reading path, `navlyn-workspace-status-result.schema.json` defines workspace status/refresh freshness and cache fields, and `navlyn-symbol-search-metadata.schema.json` defines scoped reverse-edge `search` metadata. Candidate IDs and workspace fingerprints remain opaque strings; clients may compare them for equality within the documented freshness boundary, but must not parse their internals. Partial reverse-edge results are successful JSON results with `search.partial: true`, `truncationReason`, and `rerunHints`, not failures.
 
 `nextActions` are conditional follow-up hints, not a required checklist. Consumers should pick at most the fact needed for the current question and may ignore the array entirely when the current result is sufficient. MCP results expose additive `recommendedNextAction` and `optionalFollowUps` wrapper fields when inner CLI JSON contains `nextActions`; those wrappers add `when`, `costClass`, and `runByDefault: false` without changing the inner CLI result.
 
@@ -84,6 +87,8 @@ Profile compatibility:
 - `evidence` and `compact` are stable workflow profiles, but intentionally omit or trim deep details. Consumers should rely on their summaries, warnings, limits, truncation flags, and highlights instead of expecting every field from `full`.
 - A command may add new compact/evidence highlights, warning codes, or next actions without a schema-version bump.
 - If a profile truncates data, it reports truncation through `truncated`, section-level `truncated`, profile limits, command limits, warnings, or a combination documented by the command.
+
+Fuzzy `about` and `impact` also have a command-local `--profile light|full`. That profile controls heavy selected-symbol facts, not the `navlyn.workflow.v1` envelope.
 
 Profiled workflow output uses `schemaVersion: "navlyn.workflow.v1"`. The supported direct commands are `repo-graph`, `changed-symbols`, `impact-diff`, `diagnostics-diff`, `review-diff`, `review-pack`, `context-pack`, `public-api-diff`, `tests-for-symbol`, `tests-for-diff`, `framework-entrypoints`, `di-graph`, `where-registered`, `di-impact`, `route-map`, `route-impact`, `options-graph`, `config-impact`, `where-handled`, `message-flow`, `ef-model`, `entity-impact`, `package-usage`, and `package-impact`.
 
@@ -125,9 +130,51 @@ Navlyn uses the Roslyn project/document context loaded by MSBuild. Conditional c
 
 Multi-targeted projects are loaded as separate Roslyn projects when MSBuild exposes them that way. Their names commonly include the target framework, such as `MyProject(net10.0)`, and `overview` reports `targetFramework` when Navlyn can determine it. Use the exact project name to select a target-specific context. Filtering by a `.csproj` path can be ambiguous when the same project file expands to multiple target frameworks, and returns `NAVLYN1007`.
 
-`--workspace` accepts `.code-workspace`, `.slnx`, `.sln`, and `.csproj` paths. The special value `auto` searches the current repository root or current directory for one top-level candidate, preferring `.code-workspace`, then `.slnx`, then `.sln`, then `.csproj`. A `.code-workspace` file is treated as a discovery container: Navlyn reads its `folders` array, finds `.slnx`, `.sln`, or `.csproj` candidates in those folders, loads the single best candidate, and reports `NAVLYN1106` when that selection is ambiguous. Folders outside the repository root are allowed and reported as workspace-load warnings on stderr.
+`--workspace` accepts `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, and `.csproj` paths. The special value `auto` searches the current repository root or current directory for one top-level candidate, preferring `navlyn.workspace.json`, then `.code-workspace`, then `.slnx`, then `.sln`, then `.csproj`. `navlyn.workspace.json` can set `primaryWorkspace`, `workspaceCandidates`, `excludes`, `generatedFolders`, `tests.include`, `defaultRootPolicy`, `allowRoots`, and `cacheHints`; relative paths resolve from the config file. Its schema is `docs/schemas/navlyn-workspace.schema.json`. A `.code-workspace` file is treated as a discovery container: Navlyn reads its `folders` array, finds `.slnx`, `.sln`, or `.csproj` candidates in those folders, loads the single best candidate, and reports `NAVLYN1106` when that selection is ambiguous. `navlyn.workspace.json` ambiguity reports `NAVLYN1109`, invalid config reports `NAVLYN1107`, and root-policy violations report `NAVLYN1110`.
+
+`--workspace-root-policy repo-relative|allow-listed|all` overrides the config default for a command. `repo-relative` only allows workspace folders under the repository root, `allow-listed` also allows `allowRoots` from `navlyn.workspace.json`, and `all` preserves permissive CLI behavior by allowing outside-root folders with workspace-load warnings on stderr.
 
 Linked files are matched and emitted by physical repository-relative path. When one physical file is linked into multiple projects, use `--project` to choose the intended semantic context. Without `--project`, Navlyn chooses a deterministic first matching document; returned symbol facts identify the project that produced a symbol when one is available.
+
+## Workspace Lifecycle Commands
+
+`workspace-status` reports the loaded workspace, snapshot fingerprint, document-index size, version fingerprints, and optional on-disk cache manifest status.
+
+```powershell
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- workspace-status --workspace navlyn.workspace.json --cache auto
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- workspace-status --workspace navlyn.workspace.json --cache on
+```
+
+Options:
+
+- `--workspace <path|auto>` and `--workspace-root-policy <mode>` follow the common workspace contract.
+- `--cache auto|on|off`: `auto` honors `navlyn.workspace.json` `cacheHints.enabled`, `on` forces cache inspection, and `off` reports the workspace with cache status `disabled`.
+- `--cache-directory <path>`: overrides the cache directory for this command.
+- `--daemon-pipe <name>`: tries an opt-in local `navlyn serve --pipe <name>` daemon first, then falls back to the stateless CLI path if the daemon is unavailable.
+
+`workspace-refresh` forces a fresh workspace load for the current process and can clear or write the lightweight cache manifest:
+
+```powershell
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- workspace-refresh --workspace navlyn.workspace.json --cache on --write-cache
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- workspace-refresh --workspace navlyn.workspace.json --cache on --clear-cache
+```
+
+Additional options:
+
+- `--write-cache`: writes `.navlyn/cache/workspace-index.json` or the configured cache directory.
+- `--clear-cache`: removes the current workspace cache manifest before status/write handling.
+
+The on-disk cache is opt-in and read-only with respect to source files. The manifest stores workspace and version fingerprints, project graph facts, document-index facts, declaration syntax facts when written by `workspace-refresh --write-cache`, tracked file hashes/mtimes, and an explicit `candidateRecordsStored: false` marker because candidate IDs remain session-local. It does not store source text. A stale manifest is rejected when tracked files, workspace path, schema version, Navlyn/Roslyn/runtime version, SDK-global configuration, or file hashes differ.
+
+`serve` starts a local read-only daemon. With no `--pipe`, it reads newline-delimited JSON requests from stdin and writes newline-delimited JSON responses to stdout. With `--pipe`, it listens on a local named pipe. Supported methods are `workspace/status`, `workspace/refresh`, and `daemon/shutdown`.
+
+```powershell
+'{"id":"1","method":"workspace/status","cache":{"cacheMode":"off","write":false,"clear":false}}' |
+  dotnet run --framework net10.0 --no-launch-profile --project navlyn -- serve --workspace navlyn.workspace.json
+
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- serve --workspace navlyn.workspace.json --pipe navlyn-local
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- workspace-status --workspace navlyn.workspace.json --daemon-pipe navlyn-local
+```
 
 ## Generated Code
 
@@ -145,7 +192,8 @@ Fuzzy commands are official agent-oriented shortcuts over the precise semantic p
 
 Common options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace-root-policy <mode>`: optional `repo-relative`, `allow-listed`, or `all` override.
 - `--query <text>`: required fuzzy symbol query.
 - `--assume-kind <kind>`: optional repeated Roslyn symbol kind used for ranking.
 - `--match smart|exact|contains|regex`: defaults to `smart`.
@@ -286,6 +334,9 @@ Additional options:
 - `--relation-limit <number>`: defaults to `25`.
 - `--include-snippets`.
 - `--snippet-lines <number>`.
+- `--scope file|project|dependent-projects|workspace-set|solution`: scope for heavy reference and caller facts. Defaults to `dependent-projects`; use `solution` only when a full solution search is required.
+- `--max-documents <number>`: maximum lexically matching documents searched by heavy reference and caller facts before returning partial results. Defaults to `200`.
+- `--profile light|full`: `light` returns definition and member facts only; `full` preserves the compatibility shape with references and relations. Defaults to `full`.
 
 Selected-candidate output may include:
 
@@ -293,6 +344,8 @@ Selected-candidate output may include:
 - `members`: type member outline summary when the selected candidate is a type, with `totalMembers`, `limit`, and `truncated`.
 - `references`: reference count, `limit`, `truncated`, limited locations, and top files.
 - `relations`: shallow callers, calls, implementations, and hierarchy summaries where applicable.
+- `profile`: `light` or `full`.
+- `search`: emitted inside heavy reference or caller sections, with `scope`, `costClass`, searched document/project counts, `partial`, and rerun hints when a document budget truncates the semantic search.
 
 ### `related`
 
@@ -320,12 +373,15 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- impact --
 
 Additional options:
 
-- `--include <modes>`: comma-separated `references`, `callers`, `calls`, `implementations`, and `hierarchy`.
+- `--include <modes>`: comma-separated `declarations`, `references`, `callers`, `calls`, `implementations`, and `hierarchy`.
 - `--depth <number>`: bounded traversal depth. Defaults to `3`.
 - `--include-snippets`.
 - `--snippet-lines <number>`.
+- `--scope file|project|dependent-projects|workspace-set|solution`: scope for heavy references and callers. Defaults to `dependent-projects`; use `solution` only when a full solution search is required.
+- `--max-documents <number>`: maximum lexically matching documents searched by heavy references and callers before returning partial results. Defaults to `200`.
+- `--profile light|full`: `light` defaults to `declarations,calls`; `full` defaults to `references,callers,calls,implementations,hierarchy`. Defaults to `full`.
 
-Output is file-first like `related`, but file entries may include `impactLevel` values such as `direct` or `indirect`.
+Output is file-first like `related`, but file entries may include `impactLevel` values such as `direct` or `indirect`. Heavy reference and caller searches add a top-level `search` array with scope, cost class, searched counts, `partial`, and rerun hints.
 
 ### `entrypoints`
 
@@ -375,7 +431,7 @@ Diff workflow commands are review-oriented entrypoints for agents. They read Git
 
 Common options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - `--base <ref>`: compare from this Git ref. With `--head`, compares base to head; without `--head`, compares base to the working tree.
 - `--head <ref>`: compare to this Git ref. Requires `--base`.
 - `--staged`: use staged changes.
@@ -536,7 +592,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- public-ap
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - `--base <ref>`: Git ref to compare from.
 
 Optional options:
@@ -773,7 +829,7 @@ Application domain commands return source-level facts for common .NET applicatio
 
 Common options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - `--project <project>`: optional repeated project context filter. For source-position selected-subject commands in this section, this also selects the Roslyn project context and can be specified at most once.
 - `--exclude-generated`.
 - `--include-snippets`.
@@ -975,7 +1031,7 @@ The command returns deterministic JSON facts, ranked context items, budget infor
 
 Common options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - `--project <project>`: optional repeated project context filter.
 - `--exclude-generated`: excludes generated declarations, diagnostics, and snippets where applicable.
 - `--goal review|modify|understand`: ranking profile. Defaults to `understand` in query mode and `review` in diff mode.
@@ -1087,7 +1143,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- check --w
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 
 Result shape:
 
@@ -1110,7 +1166,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- overview 
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 
 Result shape:
 
@@ -1146,7 +1202,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- repo-grap
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 
 Optional options:
 
@@ -1229,7 +1285,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- diagnosti
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 
 Optional options:
 
@@ -1292,7 +1348,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- batch --w
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 
 Optional options:
 
@@ -1341,14 +1397,16 @@ Request options otherwise use the same names as the command JSON concepts:
 - `outline`: required `file`; optional `project`, `excludeGenerated`.
 - `symbol-at`, `symbol-info`, `type-hierarchy`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`.
 - `definition`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`, `includeMetadata`.
-- `references`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`, `resultProject`, `resultProjects`, `resultPath`, `resultPaths`, `resultKind`, `resultKinds`, `usageKind`, `usageKinds`, `groupBy`, `limit`.
-- `implementations`, `callers`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`, `resultProject`, `resultProjects`, `resultPath`, `resultPaths`, `resultKind`, `resultKinds`, `limit`.
+- `references`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`, `resultProject`, `resultProjects`, `resultPath`, `resultPaths`, `resultKind`, `resultKinds`, `usageKind`, `usageKinds`, `groupBy`, `limit`, `scope`, `maxDocuments`.
+- `implementations`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`, `resultProject`, `resultProjects`, `resultPath`, `resultPaths`, `resultKind`, `resultKinds`, `limit`.
+- `callers`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`, `resultProject`, `resultProjects`, `resultPath`, `resultPaths`, `resultKind`, `resultKinds`, `limit`, `scope`, `maxDocuments`.
 - `calls`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`, `resultProject`, `resultProjects`, `resultPath`, `resultPaths`, `resultKind`, `resultKinds`, `limit`, `includeMetadata`.
 - `find`: required `query`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `limit`, `candidatePolicy`, `minConfidence`, `explainSelection`.
 - `resolve-target`: required exactly one input mode: `query`, `candidateId`, or `file` with `line` and `column`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `limit`, `candidatePolicy`, `minConfidence`, `explainSelection`.
 - `where-used`: required `query` or `candidateId`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `limit`, `usageKind`, `usageKinds`, `groupBy`, `includeSnippets`, `snippetLines`, `candidatePolicy`, `minConfidence`, `explainSelection`.
-- `about`: required `query` or `candidateId`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `memberLimit`, `referenceLimit`, `relationLimit`, `includeSnippets`, `snippetLines`, `candidatePolicy`, `minConfidence`, `explainSelection`.
-- `related`, `impact`: required `query` or `candidateId`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `include`, `limit`, `depth`, `includeSnippets`, `snippetLines`, `candidatePolicy`, `minConfidence`, `explainSelection`.
+- `about`: required `query` or `candidateId`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `memberLimit`, `referenceLimit`, `relationLimit`, `includeSnippets`, `snippetLines`, `scope`, `maxDocuments`, `profile`, `candidatePolicy`, `minConfidence`, `explainSelection`. In batch, `profile` for `about` is `light` or `full`.
+- `related`: required `query` or `candidateId`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `include`, `limit`, `depth`, `includeSnippets`, `snippetLines`, `candidatePolicy`, `minConfidence`, `explainSelection`.
+- `impact`: required `query` or `candidateId`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `include`, `limit`, `depth`, `includeSnippets`, `snippetLines`, `scope`, `maxDocuments`, `profile`, `candidatePolicy`, `minConfidence`, `explainSelection`. In batch, `profile` for `impact` is `light` or `full`.
 - `entrypoints`: required `query` or `candidateId`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `project`, `projects`, `excludeGenerated`, `limit`, `depth`, `includeSnippets`, `snippetLines`, `candidatePolicy`, `minConfidence`, `explainSelection`.
 - `review-diff`: optional `base`, `head`, `staged`, `includeUnstaged`, `project`, `projects`, `excludeGenerated`, `symbolLimit`, `impactLimit`, `diagnosticLimit`, `relatedTestLimit`, `depth`, `includeSnippets`, `snippetLines`, `profile`.
 - `review-pack`: optional `pack`, `scope`, `base`, `head`, `staged`, `includeUnstaged`, `project`, `projects`, `excludeGenerated`, `findingLimit`, `evidenceLimit`, `symbolLimit`, `fileLimit`, `includeSnippets`, `snippetLines`, `architectureConfig`, `profile`.
@@ -1448,7 +1506,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols -
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - `--query <text>`: symbol name query.
 
 Optional options:
@@ -1529,7 +1587,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols-i
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - `--file <path>`: C# source file in the workspace.
 - `--line <number>`: 1-based source line.
 
@@ -1591,7 +1649,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- outline -
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - `--file <path>`: C# source file in the workspace.
 
 Optional options:
@@ -1637,7 +1695,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-at
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -1693,7 +1751,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-in
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -1745,7 +1803,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- scope-at 
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -1805,7 +1863,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-so
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -1858,7 +1916,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- signature
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -1909,7 +1967,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-di
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -2015,7 +2073,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- implement
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -2080,7 +2138,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- type-hier
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -2133,7 +2191,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- callers -
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -2144,6 +2202,8 @@ Optional options:
 - `--result-path <path-fragment>`: filters result-side caller symbol paths by repository-relative path fragment. Can be specified more than once.
 - `--result-kind <kind>`: filters result-side caller symbols by symbol kind. Can be specified more than once.
 - `--limit <number>`: limits the number of caller groups returned. `totalGroups` reports the group count before truncation.
+- `--scope file|project|dependent-projects|workspace-set|solution`: semantic caller search scope. Defaults to `dependent-projects`; use `solution` only when a full solution search is required.
+- `--max-documents <number>`: maximum lexically matching documents searched before returning partial results. Defaults to `200`.
 
 Result shape:
 
@@ -2154,6 +2214,15 @@ Result shape:
   "column": 27,
   "limit": 10,
   "totalGroups": 1,
+  "search": {
+    "scope": "dependent-projects",
+    "costClass": "expensive",
+    "partial": false,
+    "searchedDocumentCount": 8,
+    "lexicalPrefilterApplied": true,
+    "maxDocuments": 200,
+    "rerunHints": ["Use --scope solution when a full solution search is required."]
+  },
   "symbol": {
     "name": "Create",
     "kind": "Method",
@@ -2192,7 +2261,7 @@ Result shape:
 
 `project` is emitted only when `--project` is provided.
 `excludeGenerated` is emitted only when `--exclude-generated` is provided.
-Caller output is grouped by calling source symbol. Groups and locations are ordered deterministically by source location and symbol facts.
+Caller output is grouped by calling source symbol. Groups and locations are ordered deterministically by source location and symbol facts. `search.partial: true` means the command succeeded with deterministic partial results because `--max-documents` capped the semantic search; use the returned `rerunHints` to expand the search.
 
 Invalid source file paths produce `NAVLYN1301` on stderr, exit code `2`, and no stdout output.
 Source files outside the loaded workspace produce `NAVLYN1302` on stderr, exit code `2`, and no stdout output.
@@ -2214,7 +2283,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- calls --w
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -2236,6 +2305,15 @@ Result shape:
   "column": 37,
   "limit": 10,
   "totalGroups": 1,
+  "search": {
+    "scope": "file",
+    "costClass": "local",
+    "partial": false,
+    "searchedDocumentCount": 1,
+    "lexicalPrefilterApplied": false,
+    "maxDocuments": 1,
+    "rerunHints": []
+  },
   "caller": {
     "name": "CreateRootCommand",
     "kind": "Method",
@@ -2275,7 +2353,7 @@ Result shape:
 `project` is emitted only when `--project` is provided.
 `excludeGenerated` is emitted only when `--exclude-generated` is provided.
 `includeMetadata` is emitted only when `--include-metadata` is provided.
-`calls` reports source callees such as method calls, constructors, source properties, events, indexers, user-defined operators, local functions, and source delegate-valued locals or members invoked through a delegate call where static analysis resolves them. Metadata-only callees are omitted by default. With `--include-metadata`, metadata-only callee groups are included when Roslyn resolves the callee; their group `locations` still report source call sites, while the callee symbol source location fields are null. `--result-kind` applies to metadata groups, while `--result-project` and `--result-path` exclude metadata groups because they have no source symbol path. Groups and locations are ordered deterministically by source location and symbol facts.
+`calls` reports source callees such as method calls, constructors, source properties, events, indexers, user-defined operators, local functions, and source delegate-valued locals or members invoked through a delegate call where static analysis resolves them. Metadata-only callees are omitted by default. With `--include-metadata`, metadata-only callee groups are included when Roslyn resolves the callee; their group `locations` still report source call sites, while the callee symbol source location fields are null. `--result-kind` applies to metadata groups, while `--result-project` and `--result-path` exclude metadata groups because they have no source symbol path. Groups and locations are ordered deterministically by source location and symbol facts. `search.costClass` is `local` because `calls` inspects only the containing source member.
 
 Invalid source file paths produce `NAVLYN1301` on stderr, exit code `2`, and no stdout output.
 Source files outside the loaded workspace produce `NAVLYN1302` on stderr, exit code `2`, and no stdout output.
@@ -2297,7 +2375,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- definitio
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -2363,7 +2441,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- reference
 
 Required options:
 
-- `--workspace <path|auto>`: `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
+- `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`.
 - Target input: either `--candidate-id <id>` or all of `--file <path>`, `--line <number>`, and `--column <number>`.
 
 Optional options:
@@ -2376,6 +2454,8 @@ Optional options:
 - `--usage-kind <kind>`: filters by source-level usage kind. Can be specified more than once or as comma-separated values. Supported values are `read`, `write`, `invoke`, `construct`, `inherit`, `implement`, `override`, `attribute`, `nameof`, and `typeof`.
 - `--group-by <group>`: adds grouped summaries. Can be specified more than once or as comma-separated values. Supported values are `file`, `project`, `containing-symbol`, `usage-kind`, and `test-vs-production`.
 - `--limit <number>`: limits the number of reference locations returned. `totalMatches` reports the location count before truncation.
+- `--scope file|project|dependent-projects|workspace-set|solution`: semantic reference search scope. Defaults to `dependent-projects`; use `solution` only when a full solution search is required.
+- `--max-documents <number>`: maximum lexically matching documents searched before returning partial results. Defaults to `200`.
 
 Result shape:
 
@@ -2386,6 +2466,15 @@ Result shape:
   "column": 37,
   "limit": 10,
   "totalMatches": 1,
+  "search": {
+    "scope": "dependent-projects",
+    "costClass": "expensive",
+    "partial": false,
+    "searchedDocumentCount": 8,
+    "lexicalPrefilterApplied": true,
+    "maxDocuments": 200,
+    "rerunHints": ["Use --scope solution when a full solution search is required."]
+  },
   "usageKindCounts": [
     {
       "usageKind": "construct",
@@ -2430,6 +2519,7 @@ Symbols with no source references return an empty `references` array. Reference 
 Each source reference includes additive semantic `containingSymbol` context when Roslyn can resolve the enclosing source symbol.
 Each source reference includes additive `usageKind`. Usage kind is a bounded source-level classification, not flow-sensitive runtime proof. `totalMatches` and `usageKindCounts` are computed after result and usage-kind filters and before `--limit`. `groups` is emitted only when `--group-by` is provided and contains deterministic count summaries with a first reference location.
 Accessor keyword positions resolve references for the associated source property or event.
+`search.partial: true` means the command succeeded with deterministic partial results because `--max-documents` capped the semantic search; use the returned `rerunHints` to expand the search. `--result-project`, `--result-path`, `--result-kind`, and `--limit` filter the results after the scoped semantic search.
 `project` is emitted only when `--project` is provided.
 `excludeGenerated` is emitted only when `--exclude-generated` is provided.
 

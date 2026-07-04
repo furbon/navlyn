@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [switch]$NoBuild,
-    [string]$Output = 'artifacts/package-smoke/packages'
+    [string]$Output = 'artifacts/package-smoke/packages',
+    [ValidateSet('net8.0', 'net10.0')]
+    [string[]]$Frameworks = @('net8.0', 'net10.0')
 )
 
 Set-StrictMode -Version Latest
@@ -9,9 +11,7 @@ $ErrorActionPreference = 'Stop'
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $PackageOutput = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $Output))
-$ToolPath = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot 'artifacts/package-smoke/tools'))
-$NavlynOnlyToolPath = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot 'artifacts/package-smoke/tools-navlyn-only'))
-$McpOnlyToolPath = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot 'artifacts/package-smoke/tools-mcp-only'))
+$ToolRoot = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot 'artifacts/package-smoke'))
 $TargetFrameworkScript = Join-Path $RepoRoot 'scripts/lib/navlyn-target-framework.ps1'
 
 . $TargetFrameworkScript
@@ -32,7 +32,8 @@ function Get-ProjectTargetFramework {
 function Get-ToolExecutable {
     param(
         [string]$Name,
-        [string]$Root = $ToolPath
+        [Parameter(Mandatory = $true)]
+        [string]$Root
     )
 
     $extension = if ($IsWindows) { '.exe' } else { '' }
@@ -73,6 +74,71 @@ function Invoke-Checked {
     finally {
         Remove-Item -LiteralPath @($stdout, $stderr) -ErrorAction SilentlyContinue
     }
+}
+
+function Invoke-ToolInstall {
+    param(
+        [string]$Name,
+        [string]$PackageId,
+        [string]$ToolPath,
+        [string]$Version,
+        [string]$Framework
+    )
+
+    Invoke-Checked -Name $Name -FilePath 'dotnet' -Arguments @(
+        'tool',
+        'install',
+        $PackageId,
+        '--tool-path',
+        $ToolPath,
+        '--add-source',
+        $PackageOutput,
+        '--version',
+        $Version,
+        '--framework',
+        $Framework)
+}
+
+function Invoke-InstalledToolSmoke {
+    param(
+        [string]$Framework,
+        [string]$NavlynVersion,
+        [string]$McpVersion
+    )
+
+    $frameworkDirectoryName = $Framework.Replace('.', '-')
+    $navlynOnlyToolPath = [System.IO.Path]::GetFullPath((Join-Path $ToolRoot "tools-navlyn-only-$frameworkDirectoryName"))
+    $mcpOnlyToolPath = [System.IO.Path]::GetFullPath((Join-Path $ToolRoot "tools-mcp-only-$frameworkDirectoryName"))
+    $combinedToolPath = [System.IO.Path]::GetFullPath((Join-Path $ToolRoot "tools-$frameworkDirectoryName"))
+
+    foreach ($path in @($navlynOnlyToolPath, $mcpOnlyToolPath, $combinedToolPath)) {
+        if (Test-Path -LiteralPath $path) {
+            Remove-Item -LiteralPath $path -Recurse -Force
+        }
+
+        [System.IO.Directory]::CreateDirectory($path) | Out-Null
+    }
+
+    Invoke-ToolInstall -Name "install navlyn-only tool $Framework" -PackageId 'navlyn' -ToolPath $navlynOnlyToolPath -Version $NavlynVersion -Framework $Framework
+    $navlynOnly = Get-ToolExecutable -Name 'navlyn' -Root $navlynOnlyToolPath
+    Invoke-Checked -Name "navlyn-only help $Framework" -FilePath $navlynOnly -Arguments @('--help')
+    Invoke-Checked -Name "navlyn-only check $Framework" -FilePath $navlynOnly -Arguments @('check', '--workspace', 'navlyn.slnx')
+
+    Invoke-ToolInstall -Name "install navlyn-mcp-only tool $Framework" -PackageId 'navlyn-mcp' -ToolPath $mcpOnlyToolPath -Version $McpVersion -Framework $Framework
+    $mcpOnly = Get-ToolExecutable -Name 'navlyn-mcp' -Root $mcpOnlyToolPath
+    Invoke-Checked -Name "navlyn-mcp-only help $Framework" -FilePath $mcpOnly -Arguments @('--help')
+    Invoke-McpInstalledToolSmoke -McpExecutable $mcpOnly
+
+    Invoke-ToolInstall -Name "install navlyn tool $Framework" -PackageId 'navlyn' -ToolPath $combinedToolPath -Version $NavlynVersion -Framework $Framework
+    Invoke-ToolInstall -Name "install navlyn-mcp tool $Framework" -PackageId 'navlyn-mcp' -ToolPath $combinedToolPath -Version $McpVersion -Framework $Framework
+
+    $navlyn = Get-ToolExecutable -Name 'navlyn' -Root $combinedToolPath
+    $navlynMcp = Get-ToolExecutable -Name 'navlyn-mcp' -Root $combinedToolPath
+    Invoke-Checked -Name "navlyn help $Framework" -FilePath $navlyn -Arguments @('--help')
+    Invoke-Checked -Name "navlyn check $Framework" -FilePath $navlyn -Arguments @('check', '--workspace', 'navlyn.slnx')
+    Invoke-Checked -Name "navlyn repo-graph compact $Framework" -FilePath $navlyn -Arguments @('repo-graph', '--workspace', 'navlyn.slnx', '--profile', 'compact')
+    Invoke-Checked -Name "navlyn-mcp help $Framework" -FilePath $navlynMcp -Arguments @('--help')
+    Invoke-McpInstalledToolSmoke -McpExecutable $navlynMcp
 }
 
 function Write-McpFrame {
@@ -225,18 +291,7 @@ else {
 }
 
 [System.IO.Directory]::CreateDirectory($PackageOutput) | Out-Null
-$toolRoot = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot 'artifacts/package-smoke'))
-if (!(Test-Path -LiteralPath $toolRoot)) {
-    [System.IO.Directory]::CreateDirectory($toolRoot) | Out-Null
-}
-
-foreach ($path in @($ToolPath, $NavlynOnlyToolPath, $McpOnlyToolPath)) {
-    if (Test-Path -LiteralPath $path) {
-        Remove-Item -LiteralPath $path -Recurse -Force
-    }
-
-    [System.IO.Directory]::CreateDirectory($path) | Out-Null
-}
+[System.IO.Directory]::CreateDirectory($ToolRoot) | Out-Null
 
 $packArgs = @('pack', 'navlyn/navlyn.csproj', '-c', 'Release', '-o', $PackageOutput)
 if ($NoBuild) {
@@ -253,25 +308,8 @@ Invoke-Checked -Name 'pack navlyn-mcp' -FilePath 'dotnet' -Arguments $mcpPackArg
 $navlynVersion = Get-ProjectVersion -ProjectPath (Join-Path $RepoRoot 'navlyn/navlyn.csproj')
 $mcpVersion = Get-ProjectVersion -ProjectPath (Join-Path $RepoRoot 'navlyn.Mcp/navlyn.Mcp.csproj')
 
-Invoke-Checked -Name 'install navlyn-only tool' -FilePath 'dotnet' -Arguments @('tool', 'install', 'navlyn', '--tool-path', $NavlynOnlyToolPath, '--add-source', $PackageOutput, '--version', $navlynVersion)
-$navlynOnly = Get-ToolExecutable -Name 'navlyn' -Root $NavlynOnlyToolPath
-Invoke-Checked -Name 'navlyn-only help' -FilePath $navlynOnly -Arguments @('--help')
-Invoke-Checked -Name 'navlyn-only check' -FilePath $navlynOnly -Arguments @('check', '--workspace', 'navlyn.slnx')
+foreach ($framework in $Frameworks) {
+    Invoke-InstalledToolSmoke -Framework $framework -NavlynVersion $navlynVersion -McpVersion $mcpVersion
+}
 
-Invoke-Checked -Name 'install navlyn-mcp-only tool' -FilePath 'dotnet' -Arguments @('tool', 'install', 'navlyn-mcp', '--tool-path', $McpOnlyToolPath, '--add-source', $PackageOutput, '--version', $mcpVersion)
-$mcpOnly = Get-ToolExecutable -Name 'navlyn-mcp' -Root $McpOnlyToolPath
-Invoke-Checked -Name 'navlyn-mcp-only help' -FilePath $mcpOnly -Arguments @('--help')
-Invoke-McpInstalledToolSmoke -McpExecutable $mcpOnly
-
-Invoke-Checked -Name 'install navlyn tool' -FilePath 'dotnet' -Arguments @('tool', 'install', 'navlyn', '--tool-path', $ToolPath, '--add-source', $PackageOutput, '--version', $navlynVersion)
-Invoke-Checked -Name 'install navlyn-mcp tool' -FilePath 'dotnet' -Arguments @('tool', 'install', 'navlyn-mcp', '--tool-path', $ToolPath, '--add-source', $PackageOutput, '--version', $mcpVersion)
-
-$navlyn = Get-ToolExecutable -Name 'navlyn'
-$navlynMcp = Get-ToolExecutable -Name 'navlyn-mcp'
-Invoke-Checked -Name 'navlyn help' -FilePath $navlyn -Arguments @('--help')
-Invoke-Checked -Name 'navlyn check' -FilePath $navlyn -Arguments @('check', '--workspace', 'navlyn.slnx')
-Invoke-Checked -Name 'navlyn repo-graph compact' -FilePath $navlyn -Arguments @('repo-graph', '--workspace', 'navlyn.slnx', '--profile', 'compact')
-Invoke-Checked -Name 'navlyn-mcp help' -FilePath $navlynMcp -Arguments @('--help')
-Invoke-McpInstalledToolSmoke -McpExecutable $navlynMcp
-
-Write-Host 'Package install smoke passed for navlyn-only, navlyn-mcp-only, and combined installs.'
+Write-Host "Package install smoke passed for navlyn-only, navlyn-mcp-only, and combined installs on: $($Frameworks -join ', ')."

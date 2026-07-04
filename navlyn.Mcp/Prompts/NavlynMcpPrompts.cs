@@ -20,7 +20,7 @@ Recommended flow:
 1. If candidateId is missing, call navlyn_resolve_target with the query and inspect confidence, selectedTarget, candidates, and warnings.
 2. Call navlyn_about_symbol with candidateId when possible.
 3. Call navlyn_symbol_source for bounded source text or navlyn_symbol_edges for references, callers, calls, or implementations when precise facts are needed.
-4. Escalate to navlyn_context_pack with goal understand and a compact profile only when normal file reads or smaller symbol facts are not enough.
+4. If navlyn_context_pack is needed, restart or configure the server with --tool-profile edit, review, or full; then use goal understand and a compact profile only when normal file reads or smaller symbol facts are not enough.
 
 Do not infer runtime behavior from static facts alone. Check confidence, warnings, truncation, and CLI diagnostics before relying on a result.
 """;
@@ -37,6 +37,8 @@ Do not infer runtime behavior from static facts alone. Check confidence, warning
         string change = string.IsNullOrWhiteSpace(changeKind) ? "the planned change" : $"a {changeKind.Trim()} change";
         return $"""
 Prepare {change} for {target} with Navlyn facts before editing.
+
+Use an MCP server started with --tool-profile edit for this flow.
 
 Recommended flow:
 1. Resolve the target with navlyn_resolve_target if candidateId is missing.
@@ -64,6 +66,8 @@ Keep Navlyn in facts-provider mode. Use the returned facts to decide what files 
         return $"""
 Use Navlyn to collect deterministic review facts for {diffMode}.
 
+Use an MCP server started with --tool-profile review for this flow.
+
 Recommended flow:
 1. Call navlyn_review_diff with profile evidence, plus base/head/staged arguments when applicable.
 2. Inspect changed symbols, impact facts, diagnostics, related tests, warnings, truncation, and next actions.
@@ -88,8 +92,8 @@ Investigate {target} with Navlyn facts before editing.
 
 Recommended flow:
 1. If an exact file/line/column is known, call navlyn_exact_navigation with operation symbol_info or definition, or call navlyn_symbol_source when bounded source text is the needed fact.
-2. Use navlyn_context_pack around the affected symbol or diff only when bounded reading material is needed.
-3. Use navlyn_batch for batch-supported workspace, diagnostics, review, tests, DI, or application-domain facts only after deciding several facts are needed from one workspace.
+2. Use navlyn_context_pack around the affected symbol or diff only when bounded reading material is needed and the active profile exposes it.
+3. Use navlyn_batch only in --tool-profile full for batch-supported workspace, diagnostics, review, tests, DI, or application-domain facts after deciding several facts are needed from one workspace.
 4. For direct CLI-only facts such as symbol-diagnostics, diagnostic-pack, scope-at, or signature, ask the client to run the matching Navlyn CLI command outside MCP when that surface is available.
 5. After editing, run the repository's normal build/test validation outside Navlyn.
 

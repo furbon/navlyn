@@ -26,6 +26,22 @@ public sealed class NavlynToolCommandBuilderTests
     }
 
     [Fact]
+    public void WorkspaceRefresh_ForwardsCacheControls()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.WorkspaceRefresh(
+            cache: "on",
+            cacheDirectory: ".navlyn/custom-cache",
+            clearCache: true,
+            writeCache: true);
+
+        Assert.True(result.IsValid);
+        Assert.Equal("workspace-refresh", result.Command);
+        Assert.Equal(
+            ["--cache", "on", "--cache-directory", ".navlyn/custom-cache", "--clear-cache", "--write-cache"],
+            result.Arguments);
+    }
+
+    [Fact]
     public void FindSymbol_ProjectAndProjectsAreMutuallyExclusive()
     {
         CommandBuildResult result = NavlynToolCommandBuilder.FindSymbol(
@@ -122,6 +138,42 @@ public sealed class NavlynToolCommandBuilderTests
 
         Assert.False(result.IsValid);
         Assert.Equal("Source-position mode accepts at most one project.", result.Error);
+    }
+
+    [Fact]
+    public void FuzzySymbolCommand_AboutForwardsLightProfileSearchBudget()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.FuzzySymbolCommand(
+            "about",
+            query: null,
+            candidateId: "sym:v1:00000000000000000000000000000000",
+            assumeKind: null,
+            assumeKinds: null,
+            match: null,
+            caseSensitive: null,
+            project: null,
+            projects: null,
+            excludeGenerated: null,
+            memberLimit: null,
+            referenceLimit: null,
+            relationLimit: null,
+            include: null,
+            limit: null,
+            depth: null,
+            includeSnippets: null,
+            snippetLines: null,
+            scope: "file",
+            maxDocuments: 5,
+            profile: "light",
+            candidatePolicy: null,
+            minConfidence: null,
+            explainSelection: null);
+
+        Assert.True(result.IsValid);
+        Assert.Equal("about", result.Command);
+        Assert.Equal(
+            ["--candidate-id", "sym:v1:00000000000000000000000000000000", "--scope", "file", "--max-documents", "5", "--profile", "light"],
+            result.Arguments);
     }
 
     [Fact]
@@ -401,6 +453,38 @@ public sealed class NavlynToolCommandBuilderTests
         Assert.Equal("references", result.Command);
         Assert.Equal(
             ["--candidate-id", "sym:v1:00000000000000000000000000000000", "--result-project", "App", "--result-path", "src", "--result-kind", "Method", "--usage-kind", "invoke", "--group-by", "file", "--limit", "25"],
+            result.Arguments);
+    }
+
+    [Fact]
+    public void SymbolEdges_ReferencesForwardsSearchBudget()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.SymbolEdges(
+            operation: "references",
+            candidateId: "sym:v1:00000000000000000000000000000000",
+            file: null,
+            line: null,
+            column: null,
+            project: null,
+            excludeGenerated: null,
+            resultProject: null,
+            resultProjects: null,
+            resultPath: null,
+            resultPaths: null,
+            resultKind: null,
+            resultKinds: null,
+            usageKind: null,
+            usageKinds: null,
+            groupBy: null,
+            limit: null,
+            scope: "solution",
+            maxDocuments: 25,
+            includeMetadata: null);
+
+        Assert.True(result.IsValid);
+        Assert.Equal("references", result.Command);
+        Assert.Equal(
+            ["--candidate-id", "sym:v1:00000000000000000000000000000000", "--scope", "solution", "--max-documents", "25"],
             result.Arguments);
     }
 

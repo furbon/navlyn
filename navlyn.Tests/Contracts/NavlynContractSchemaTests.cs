@@ -74,6 +74,8 @@ public sealed class NavlynContractSchemaTests
         Assert.Contains(required, value => value!.GetValue<string>() == "ok");
         Assert.Contains(required, value => value!.GetValue<string>() == "tool");
         Assert.Contains(required, value => value!.GetValue<string>() == "workspace");
+        JsonArray executionPathValues = schema["properties"]!["metadata"]!["properties"]!["executionPath"]!["enum"]!.AsArray();
+        Assert.Contains(executionPathValues, value => value!.GetValue<string>() == "daemon");
 
         using JsonDocument resultDocument = JsonDocument.Parse("""
             {
@@ -112,9 +114,69 @@ public sealed class NavlynContractSchemaTests
         Assert.Equal("navlyn_find_symbol", root.GetProperty("tool").GetString());
         Assert.Equal("navlyn.slnx", root.GetProperty("workspace").GetString());
         Assert.Equal("abc123", root.GetProperty("metadata").GetProperty("snapshotId").GetString());
+        Assert.Equal("fresh", root.GetProperty("metadata").GetProperty("freshnessStatus").GetString());
         Assert.False(root.GetProperty("recommendedNextAction").GetProperty("runByDefault").GetBoolean());
         Assert.Equal("cheap-file-first", root.GetProperty("recommendedNextAction").GetProperty("costClass").GetString());
         Assert.Single(root.GetProperty("optionalFollowUps").EnumerateArray());
+    }
+
+    [Fact]
+    public void WorkspaceStatusSchema_RequiresFreshnessAndCacheFields()
+    {
+        JsonObject schema = ReadSchema("navlyn-workspace-status-result.schema.json");
+
+        JsonArray required = schema["required"]!.AsArray();
+        Assert.Contains(required, value => value!.GetValue<string>() == "workspace");
+        Assert.Contains(required, value => value!.GetValue<string>() == "snapshot");
+        Assert.Contains(required, value => value!.GetValue<string>() == "cache");
+
+        JsonObject cache = schema["properties"]!["cache"]!.AsObject();
+        JsonArray cacheRequired = cache["required"]!.AsArray();
+        Assert.Contains(cacheRequired, value => value!.GetValue<string>() == "status");
+        Assert.Contains(cacheRequired, value => value!.GetValue<string>() == "candidateRecordsStored");
+    }
+
+    [Fact]
+    public void SymbolSearchMetadataSchema_RequiresBudgetAndPartialFields()
+    {
+        JsonObject schema = ReadSchema("navlyn-symbol-search-metadata.schema.json");
+
+        JsonArray required = schema["required"]!.AsArray();
+        Assert.Contains(required, value => value!.GetValue<string>() == "scope");
+        Assert.Contains(required, value => value!.GetValue<string>() == "partial");
+        Assert.Contains(required, value => value!.GetValue<string>() == "maxDocuments");
+        Assert.Contains(required, value => value!.GetValue<string>() == "rerunHints");
+    }
+
+    [Fact]
+    public void FileFirstSchemas_RequireStableAgentFields()
+    {
+        JsonObject outline = ReadSchema("navlyn-file-outline-result.schema.json");
+        JsonObject outlineEntry = outline["properties"]!["entries"]!["items"]!.AsObject();
+        JsonArray outlineEntryRequired = outlineEntry["required"]!.AsArray();
+        Assert.Contains(outlineEntryRequired, value => value!.GetValue<string>() == "candidateId");
+        Assert.Contains(outlineEntryRequired, value => value!.GetValue<string>() == "facts");
+        Assert.Contains(outlineEntryRequired, value => value!.GetValue<string>() == "endColumn");
+
+        JsonObject symbolSource = ReadSchema("navlyn-symbol-source-result.schema.json");
+        JsonArray symbolSourceRequired = symbolSource["required"]!.AsArray();
+        Assert.Contains(symbolSourceRequired, value => value!.GetValue<string>() == "limits");
+        Assert.Contains(symbolSourceRequired, value => value!.GetValue<string>() == "symbol");
+        Assert.Contains(symbolSourceRequired, value => value!.GetValue<string>() == "slices");
+    }
+
+    [Fact]
+    public void ResolveTargetSchema_RequiresSelectionAndCandidateFields()
+    {
+        JsonObject schema = ReadSchema("navlyn-resolve-target-result.schema.json");
+
+        JsonArray required = schema["required"]!.AsArray();
+        Assert.Contains(required, value => value!.GetValue<string>() == "selectionInput");
+        Assert.Contains(required, value => value!.GetValue<string>() == "confidence");
+        Assert.Contains(required, value => value!.GetValue<string>() == "recommendedNextActions");
+
+        JsonObject selectionInput = schema["properties"]!["selectionInput"]!.AsObject();
+        Assert.Contains(selectionInput["required"]!.AsArray(), value => value!.GetValue<string>() == "mode");
     }
 
     private static JsonObject ReadSchema(string fileName)

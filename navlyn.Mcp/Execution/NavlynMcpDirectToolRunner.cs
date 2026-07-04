@@ -2,9 +2,11 @@
 using System.Text.Json.Serialization;
 using Microsoft.CodeAnalysis;
 using Navlyn.Cli.Commands;
+using Navlyn.Cli.OutputProfiles;
 using Navlyn.Diagnostics;
 using Navlyn.Mcp.Configuration;
 using Navlyn.Mcp.Tools;
+using Navlyn.RepoGraph;
 using Navlyn.Symbols;
 using Navlyn.Workspaces;
 
@@ -26,7 +28,7 @@ internal sealed class NavlynMcpDirectToolRunner(
     public bool CanRun(CommandBuildResult command)
     {
         return command.StandardInput is null &&
-            command.Command is "outline" or "symbol-source";
+            command.Command is "repo-graph" or "outline" or "symbol-source" or "workspace-status" or "workspace-refresh";
     }
 
     public async Task<NavlynToolResult> RunAsync(
@@ -35,10 +37,26 @@ internal sealed class NavlynMcpDirectToolRunner(
         CancellationToken cancellationToken)
     {
         NavlynSourceCommand sourceCommand = CreateSourceCommand(command);
+        if ((command.Command == "workspace-status" || command.Command == "workspace-refresh") &&
+            !string.IsNullOrWhiteSpace(options.DaemonPipe))
+        {
+            NavlynToolResult? daemonResult = await TryRunDaemonWorkspaceToolAsync(
+                toolName,
+                sourceCommand,
+                command,
+                cancellationToken);
+            if (daemonResult is not null)
+            {
+                return daemonResult;
+            }
+        }
+
         NavlynMcpWorkspaceCacheResult cacheResult;
         try
         {
-            cacheResult = await workspaceCache.GetAsync(cancellationToken);
+            cacheResult = command.Command == "workspace-refresh"
+                ? await workspaceCache.RefreshAsync(cancellationToken)
+                : await workspaceCache.GetAsync(cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -60,20 +78,15 @@ internal sealed class NavlynMcpDirectToolRunner(
         }
 
         NavlynMcpWorkspaceCache.CachedWorkspace cachedWorkspace = cacheResult.CachedWorkspace!;
-        NavlynToolMetadata metadata = new(
-            ExecutionPath: "direct",
-            WorkspaceCacheStatus: "warm",
-            WorkspaceCacheHit: cacheResult.CacheHit,
-            WorkspaceFingerprint: cachedWorkspace.Fingerprint,
-            SnapshotId: cachedWorkspace.Fingerprint,
-            CostClass: "cheap-file-first");
-
         try
         {
             return command.Command switch
             {
-                "outline" => await RunOutlineAsync(toolName, sourceCommand, cachedWorkspace, metadata, command.Arguments, cancellationToken),
-                "symbol-source" => await RunSymbolSourceAsync(toolName, sourceCommand, cachedWorkspace, metadata, command.Arguments, cancellationToken),
+                "workspace-status" => await RunWorkspaceStatusAsync(toolName, sourceCommand, cachedWorkspace, cacheResult.CacheHit, command.Arguments, cancellationToken),
+                "workspace-refresh" => await RunWorkspaceRefreshAsync(toolName, sourceCommand, cachedWorkspace, cacheResult.CacheHit, command.Arguments, cancellationToken),
+                "repo-graph" => RunRepoGraph(toolName, sourceCommand, cachedWorkspace, cacheResult.CacheHit, command.Arguments),
+                "outline" => await RunOutlineAsync(toolName, sourceCommand, cachedWorkspace, cacheResult.CacheHit, command.Arguments, cancellationToken),
+                "symbol-source" => await RunSymbolSourceAsync(toolName, sourceCommand, cachedWorkspace, cacheResult.CacheHit, command.Arguments, cancellationToken),
                 _ => Failed(toolName, sourceCommand, "NAVLYN_MCP_DIRECT_UNSUPPORTED", $"Direct MCP execution is not available for {command.Command}.")
             };
         }
@@ -87,11 +100,131 @@ internal sealed class NavlynMcpDirectToolRunner(
         }
     }
 
+    private async Task<NavlynToolResult?> TryRunDaemonWorkspaceToolAsync(
+        string toolName,
+        NavlynSourceCommand sourceCommand,
+        CommandBuildResult command,
+        CancellationToken cancellationToken)
+    {
+        WorkspaceDiskCacheRequest request = CreateCacheRequest(command.Arguments, writeDefault: false);
+        string method = command.Command == "workspace-refresh"
+            ? WorkspaceDaemonProtocol.RefreshMethod
+            : WorkspaceDaemonProtocol.StatusMethod;
+        WorkspaceDaemonClientResult daemonResult = await WorkspaceDaemonProtocol.SendAsync(
+            options.DaemonPipe!,
+            new WorkspaceDaemonRequest(null, method, request),
+            WorkspaceDaemonProtocol.DefaultConnectTimeoutMilliseconds,
+            cancellationToken);
+        if (daemonResult.Response?.Ok != true || daemonResult.Response.Result is null)
+        {
+            return null;
+        }
+
+        return Succeeded(
+            toolName,
+            sourceCommand,
+            daemonResult.Response.Result.Value,
+            new NavlynToolMetadata(
+                ExecutionPath: "daemon",
+                WorkspaceCacheStatus: "daemon",
+                WorkspaceCacheHit: true,
+                WorkspaceFingerprint: "daemon",
+                IndexStatus: "daemon",
+                SnapshotId: null,
+                CostClass: "workspace-lifecycle"));
+    }
+
+    private async Task<NavlynToolResult> RunWorkspaceStatusAsync(
+        string toolName,
+        NavlynSourceCommand sourceCommand,
+        NavlynMcpWorkspaceCache.CachedWorkspace cachedWorkspace,
+        bool cacheHit,
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken)
+    {
+        WorkspaceStatusResult output = await WorkspaceDiskCache.CreateStatusAsync(
+            "workspace-status",
+            cachedWorkspace.Workspace,
+            snapshot: null,
+            new FileInfo(options.Workspace),
+            CreateCacheRequest(arguments, writeDefault: false),
+            cancellationToken);
+        return Succeeded(toolName, sourceCommand, output, CreateMetadata(cachedWorkspace, cacheHit, "workspace-lifecycle"));
+    }
+
+    private async Task<NavlynToolResult> RunWorkspaceRefreshAsync(
+        string toolName,
+        NavlynSourceCommand sourceCommand,
+        NavlynMcpWorkspaceCache.CachedWorkspace cachedWorkspace,
+        bool cacheHit,
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken)
+    {
+        WorkspaceStatusResult output = await WorkspaceDiskCache.CreateStatusAsync(
+            "workspace-refresh",
+            cachedWorkspace.Workspace,
+            snapshot: null,
+            new FileInfo(options.Workspace),
+            CreateCacheRequest(arguments, writeDefault: false),
+            cancellationToken);
+        return Succeeded(toolName, sourceCommand, output, CreateMetadata(cachedWorkspace, cacheHit, "workspace-lifecycle"));
+    }
+
+    private NavlynToolResult RunRepoGraph(
+        string toolName,
+        NavlynSourceCommand sourceCommand,
+        NavlynMcpWorkspaceCache.CachedWorkspace cachedWorkspace,
+        bool cacheHit,
+        IReadOnlyList<string> arguments)
+    {
+        IReadOnlyList<string> projectFilters = GetValues(arguments, "--project");
+        bool includePackages = GetBoolValue(arguments, "--include-packages") ?? true;
+        bool includeMsbuildFiles = GetBoolValue(arguments, "--include-msbuild-files") ?? true;
+        bool includePreprocessorSymbols = GetBoolValue(arguments, "--include-preprocessor-symbols") ?? true;
+        bool classification = GetBoolValue(arguments, "--classification") ?? true;
+        int relationshipLimit = GetIntValue(arguments, "--relationship-limit") ?? 200;
+        string profile = GetValue(arguments, "--profile") ?? OutputProfile.Default;
+
+        ProjectFilterResolutionResult projectResolution = new ProjectFilterResolver().ResolveMany(
+            cachedWorkspace.Workspace.Solution,
+            projectFilters);
+        if (projectResolution.Error is not null)
+        {
+            return Failed(toolName, sourceCommand, projectResolution.Error);
+        }
+
+        RepoGraphResult result = new RepoGraphResolver().Resolve(
+            cachedWorkspace.Workspace,
+            projectResolution.Projects,
+            new RepoGraphOptions(
+                IncludePackages: includePackages,
+                IncludeMsbuildFiles: includeMsbuildFiles,
+                IncludePreprocessorSymbols: includePreprocessorSymbols,
+                IncludeClassification: classification,
+                RelationshipLimit: relationshipLimit));
+
+        object output = OutputProfile.Format(cachedWorkspace.Workspace, "repo-graph", profile, result, new
+        {
+            projectFilters,
+            includePackages,
+            includeMsbuildFiles,
+            includePreprocessorSymbols,
+            classification,
+            relationshipLimit
+        });
+
+        return Succeeded(
+            toolName,
+            sourceCommand,
+            output,
+            CreateMetadata(cachedWorkspace, cacheHit, "workspace-summary"));
+    }
+
     private async Task<NavlynToolResult> RunOutlineAsync(
         string toolName,
         NavlynSourceCommand sourceCommand,
         NavlynMcpWorkspaceCache.CachedWorkspace cachedWorkspace,
-        NavlynToolMetadata metadata,
+        bool cacheHit,
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken)
     {
@@ -146,14 +279,14 @@ internal sealed class NavlynMcpDirectToolRunner(
                 EndLine: entry.EndLine,
                 EndColumn: entry.EndColumn))]);
 
-        return Succeeded(toolName, sourceCommand, output, metadata);
+        return Succeeded(toolName, sourceCommand, output, CreateMetadata(cachedWorkspace, cacheHit, "cheap-file-first"));
     }
 
     private async Task<NavlynToolResult> RunSymbolSourceAsync(
         string toolName,
         NavlynSourceCommand sourceCommand,
         NavlynMcpWorkspaceCache.CachedWorkspace cachedWorkspace,
-        NavlynToolMetadata metadata,
+        bool cacheHit,
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken)
     {
@@ -232,7 +365,7 @@ internal sealed class NavlynMcpDirectToolRunner(
             Truncated: resolution.Truncated,
             Warnings: resolution.Warnings);
 
-        return Succeeded(toolName, sourceCommand, output, metadata);
+        return Succeeded(toolName, sourceCommand, output, CreateMetadata(cachedWorkspace, cacheHit, "cheap-file-first"));
     }
 
     private async Task<CandidateTargetResolutionResult> ResolveCandidateTargetAsync(
@@ -317,6 +450,26 @@ internal sealed class NavlynMcpDirectToolRunner(
             metadata);
     }
 
+    private static NavlynToolMetadata CreateMetadata(
+        NavlynMcpWorkspaceCache.CachedWorkspace cachedWorkspace,
+        bool cacheHit,
+        string costClass)
+    {
+        DocumentIndex documentIndex = cachedWorkspace.Workspace.DocumentIndex ??
+            DocumentIndexProvider.GetOrCreate(cachedWorkspace.Workspace.Solution);
+        return new NavlynToolMetadata(
+            ExecutionPath: "direct",
+            WorkspaceCacheStatus: "warm",
+            WorkspaceCacheHit: cacheHit,
+            WorkspaceFingerprint: cachedWorkspace.Fingerprint,
+            IndexStatus: "warm",
+            SnapshotId: cachedWorkspace.SnapshotId,
+            CostClass: costClass,
+            FreshnessStatus: cachedWorkspace.FreshnessStatus,
+            DocumentIndexDocumentCount: documentIndex.DocumentCount,
+            DocumentIndexEstimatedBytes: documentIndex.EstimatedMemoryBytes);
+    }
+
     private NavlynToolResult Failed(
         string toolName,
         NavlynSourceCommand sourceCommand,
@@ -359,7 +512,14 @@ internal sealed class NavlynMcpDirectToolRunner(
     {
         return new NavlynSourceCommand(
             command.Command!,
-            [command.Command!, "--workspace", options.WorkspaceArgument, .. command.Arguments]);
+            [
+                command.Command!,
+                "--workspace",
+                options.WorkspaceArgument,
+                "--workspace-root-policy",
+                WorkspaceLoader.FormatWorkspaceRootPolicy(options.WorkspaceRootPolicy),
+                .. command.Arguments
+            ]);
     }
 
     private FileInfo CreateFileInfo(string path)
@@ -392,12 +552,45 @@ internal sealed class NavlynMcpDirectToolRunner(
         return null;
     }
 
+    private static IReadOnlyList<string> GetValues(IReadOnlyList<string> arguments, string option)
+    {
+        List<string> values = [];
+        for (int index = 0; index < arguments.Count - 1; index++)
+        {
+            if (arguments[index] == option)
+            {
+                values.Add(arguments[index + 1]);
+            }
+        }
+
+        return values;
+    }
+
+    private static bool? GetBoolValue(IReadOnlyList<string> arguments, string option)
+    {
+        string? value = GetValue(arguments, option);
+        return value is null
+            ? null
+            : bool.Parse(value);
+    }
+
     private static int? GetIntValue(IReadOnlyList<string> arguments, string option)
     {
         string? value = GetValue(arguments, option);
         return value is null
             ? null
             : int.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static WorkspaceDiskCacheRequest CreateCacheRequest(
+        IReadOnlyList<string> arguments,
+        bool writeDefault)
+    {
+        return new WorkspaceDiskCacheRequest(
+            CacheMode: GetValue(arguments, "--cache") ?? WorkspaceDiskCache.DefaultCacheMode,
+            Write: HasFlag(arguments, "--write-cache") || writeDefault,
+            Clear: HasFlag(arguments, "--clear-cache"),
+            DirectoryOverride: GetValue(arguments, "--cache-directory"));
     }
 
     private static bool HasFlag(IReadOnlyList<string> arguments, string option)

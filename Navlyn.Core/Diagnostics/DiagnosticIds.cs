@@ -20,6 +20,10 @@ internal static class DiagnosticIds
     public const int InvalidCodeWorkspace = 1104;
     public const int CodeWorkspaceNoCandidates = 1105;
     public const int AmbiguousCodeWorkspace = 1106;
+    public const int InvalidNavlynWorkspace = 1107;
+    public const int NavlynWorkspaceNoCandidates = 1108;
+    public const int AmbiguousNavlynWorkspace = 1109;
+    public const int WorkspaceRootPolicyViolation = 1110;
 
     public const int MSBuildRegistrationFailed = 1201;
     public const int WorkspaceDiagnostic = 1202;

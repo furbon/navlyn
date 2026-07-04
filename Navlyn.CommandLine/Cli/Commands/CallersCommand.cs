@@ -14,11 +14,13 @@ internal static class CallersCommand
         Option<string[]> resultPathOption = NavigationResultOptions.CreateResultPathOption();
         Option<string[]> resultKindOption = NavigationResultOptions.CreateResultKindOption();
         Option<int?> limitOption = SharedOptions.CreateLimitOption();
+        Option<string> scopeOption = SharedOptions.CreateSearchScopeOption();
+        Option<int?> maxDocumentsOption = SharedOptions.CreateMaxDocumentsOption();
 
         return SourcePositionCommand.Create(
             "callers",
             "Find source callers for the C# symbol at a source position.",
-            [resultProjectOption, resultPathOption, resultKindOption, limitOption],
+            [resultProjectOption, resultPathOption, resultKindOption, limitOption, scopeOption, maxDocumentsOption],
             (workspace, options, parseResult, cancellationToken) => ExecuteAsync(
                 workspace,
                 options,
@@ -26,6 +28,8 @@ internal static class CallersCommand
                 parseResult.GetValue(resultPathOption) ?? [],
                 parseResult.GetValue(resultKindOption) ?? [],
                 parseResult.GetValue(limitOption),
+                parseResult.GetValue(scopeOption)!,
+                parseResult.GetValue(maxDocumentsOption),
                 cancellationToken));
     }
 
@@ -36,8 +40,15 @@ internal static class CallersCommand
         IReadOnlyList<string> resultPaths,
         IReadOnlyList<string> resultKinds,
         int? limit,
+        string scope,
+        int? maxDocuments,
         CancellationToken cancellationToken)
     {
+        if (!FuzzyCommandSupport.TryCreatePositiveOption("--max-documents", maxDocuments ?? SymbolNavigationSearchOptions.DefaultMaxDocuments, out int exitCode))
+        {
+            return exitCode;
+        }
+
         if (!NavigationResultOptions.TryCreate(
             loadedWorkspace,
             resultProjectFilters,
@@ -57,6 +68,7 @@ internal static class CallersCommand
             options.Column,
             options.Project,
             options.ExcludeGenerated,
+            SymbolNavigationSearchOptions.Create(scope, maxDocuments),
             cancellationToken);
 
         if (result.Error is not null)
@@ -86,6 +98,7 @@ internal static class CallersCommand
             ExcludeGenerated: options.ExcludeGenerated,
             Limit: resultFilter.Limit,
             TotalGroups: filteredCallers.Count,
+            Search: resolution.Search,
             Symbol: CallHierarchySymbolResult.FromSymbol(resolution.Symbol),
             Callers: limitedCallers.Select(CallHierarchyGroupResult.FromGroup).ToArray()));
 
@@ -110,6 +123,7 @@ internal static class CallersCommand
         bool ExcludeGenerated,
         int? Limit,
         int TotalGroups,
+        SymbolNavigationSearchMetadata Search,
         CallHierarchySymbolResult Symbol,
         IReadOnlyList<CallHierarchyGroupResult> Callers);
 }

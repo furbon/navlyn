@@ -105,11 +105,11 @@ Navlyn はこの一連の調査を、Roslyn の事実に基づくエージェン
 | 実行境界からどう到達するか | `entrypoints --framework-aware` | `route-map`, `where-handled`, `di-impact` |
 | MCP クライアントからどう聞くか | `navlyn_resolve_target` | `navlyn_exact_navigation`, `navlyn_context_pack` |
 
-MCP や batch で複数の事実を続けて集める場合、同じワークスペースから複数の対応済み事実が必要だと分かってから `navlyn_batch` を使います。これは最初に実行するチェックリストではなく、最適化です。
+MCP や batch で複数の事実を続けて集める場合、同じワークスペースから複数の対応済み事実が必要だと分かってから、`--tool-profile full` の `navlyn_batch` を使います。これは最初に実行するチェックリストではなく、最適化です。
 
 ## クイックスタート
 
-Navlyn の tool package は .NET 8 と .NET 10 を対象にし、MSBuild/Roslyn 経由で `.code-workspace`、`.slnx`、`.sln`、`.csproj` ワークスペースを読み込みます。リポジトリの最上位に明確な候補が 1 つだけある場合に限り、`--workspace auto` も使えます。
+Navlyn の tool package は .NET 8 と .NET 10 を対象にし、MSBuild/Roslyn 経由で `navlyn.workspace.json`、`.code-workspace`、`.slnx`、`.sln`、`.csproj` ワークスペースを読み込みます。共有する候補、生成/テスト除外、root policy には `navlyn.workspace.json` を使います。リポジトリの最上位に明確な候補が 1 つだけある場合に限り、`--workspace auto` も使えます。
 
 このリポジトリから実行する場合:
 
@@ -181,7 +181,7 @@ navlyn context-pack --workspace navlyn.slnx --diff --goal review --profile compa
 ```json
 {
   "command": "navlyn-mcp",
-  "args": ["--workspace", "path/to/YourRepo.slnx"]
+  "args": ["--workspace", "path/to/navlyn.workspace.json", "--tool-profile", "reader"]
 }
 ```
 
@@ -190,11 +190,11 @@ navlyn context-pack --workspace navlyn.slnx --diff --goal review --profile compa
 ```json
 {
   "command": "navlyn-mcp",
-  "args": ["--workspace", "auto"]
+  "args": ["--workspace", "auto", "--tool-profile", "reader"]
 }
 ```
 
-MCP サーバーは `navlyn_workspace_summary`、`navlyn_resolve_target`、`navlyn_find_symbol`、`navlyn_file_outline`、`navlyn_symbol_source`、`navlyn_symbol_edges`、`navlyn_exact_navigation`、`navlyn_review_diff`、`navlyn_context_pack`、`navlyn_batch` などの道具に加え、上限付きのリソースとプロンプトを公開します。tool description は必要時だけ使う前提で書かれています。file/source/edge tools は既知の 1 ファイルまたは 1 シンボルに、workspace summary はプロジェクト文脈が必要なとき、review diff は実際の Git diff があるとき、context pack は段階的な追加調査、batch は複数の事実が必要だと決まったときに使います。詳しくは [`docs/navlyn-mcp-server.md`](docs/navlyn-mcp-server.md) を参照してください。
+MCP サーバーは起動時固定の tool profile を使い、workspace 展開はデフォルトで `--workspace-root-policy repo-relative` です。デフォルトの `reader` profile は `navlyn_file_outline`、`navlyn_resolve_target`、`navlyn_symbol_source`、`navlyn_symbol_edges` など、1 ファイル・1 シンボルの調査に向いた道具を公開します。実際の Git diff レビューには `--tool-profile review`、編集計画には `edit`、`navlyn_batch` を含む完全な互換 surface には `full` を使います。tool description は必要時だけ使う前提で書かれています。file/source/edge tools は既知の 1 ファイルまたは 1 シンボルに、workspace summary はプロジェクト文脈が必要なとき、review diff は実際の Git diff があるとき、context pack は段階的な追加調査、batch は複数の事実が必要だと決まったときに使います。詳しくは [`docs/navlyn-mcp-server.md`](docs/navlyn-mcp-server.md) を参照してください。
 
 ## Navlyn の位置づけ
 

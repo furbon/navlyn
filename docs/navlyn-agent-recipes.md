@@ -23,7 +23,7 @@ Stop once the returned facts answer the question. Escalate only when the next fa
 | Known symbol identity | `definition`, `references`, or `symbol-source` via CLI; `navlyn_symbol_source` or `navlyn_symbol_edges` via MCP | `impact` for edit risk, `context-pack` for a reading queue |
 | Single-file review | `outline` via CLI or `navlyn_file_outline` / `navlyn_inspect_file` via MCP when semantic structure matters | `context-pack` only if the file does not contain enough context |
 | Real Git diff review | `review-diff` | `tests-for-diff`, `public-api-diff`, `review-pack`, or `context-pack --diff` only when relevant |
-| Multiple known facts from one workspace | Individual tools first | `batch` / `navlyn_batch` after the needed facts are known |
+| Multiple known facts from one workspace | Individual tools first | CLI `batch` or MCP `navlyn_batch` in `--tool-profile full` after the needed facts are known |
 
 ## Workspace Context
 
@@ -198,7 +198,13 @@ navlyn_context_pack(candidateId: "sym:v1:...", goal: "modify", changeKind: "sign
 MCP flow for a real diff review:
 
 ```text
+Start navlyn-mcp with --tool-profile review.
 navlyn_review_diff(profile: "evidence")
+```
+
+If several review follow-ups are already needed, restart or configure the server with `--tool-profile full` before using `navlyn_batch`:
+
+```text
 navlyn_batch(requests: [
   { id: "tests", command: "tests-for-diff", profile: "compact" },
   { id: "api", command: "public-api-diff", base: "main", profile: "evidence" },
@@ -206,7 +212,7 @@ navlyn_batch(requests: [
 ])
 ```
 
-Use `navlyn_batch` in the review flow only when those follow-up facts are already needed. Otherwise call the one relevant follow-up tool or stop after `navlyn_review_diff`.
+Use `navlyn_batch` in the review flow only when those follow-up facts are already needed. Otherwise call the one relevant follow-up tool in `review` profile or stop after `navlyn_review_diff`.
 
 ## GitHub Actions
 

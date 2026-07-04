@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.navlyn.dev/navlyn-symbol-source-result.schema.json",
+  "title": "Navlyn Symbol Source Result",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "file",
+    "line",
+    "column",
+    "view",
+    "limits",
+    "symbol",
+    "slices",
+    "truncated",
+    "warnings"
+  ],
+  "properties": {
+    "file": { "type": "string", "minLength": 1 },
+    "line": { "type": "integer", "minimum": 1 },
+    "column": { "type": "integer", "minimum": 1 },
+    "project": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "selectionInput": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "excludeGenerated": { "type": "boolean" },
+    "view": {
+      "type": "string",
+      "enum": [
+        "signature",
+        "declaration",
+        "body",
+        "members",
+        "xml-doc",
+        "attributes"
+      ]
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "maxLines",
+        "budgetTokens"
+      ],
+      "properties": {
+        "maxLines": { "type": "integer", "minimum": 1 },
+        "budgetTokens": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "symbol": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "name",
+        "kind",
+        "facts"
+      ],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "container": { "type": [ "string", "null" ] },
+        "facts": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "slices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "kind",
+          "path",
+          "startLine",
+          "endLine",
+          "text",
+          "truncated"
+        ],
+        "properties": {
+          "kind": { "type": "string", "minLength": 1 },
+          "path": { "type": "string", "minLength": 1 },
+          "startLine": { "type": "integer", "minimum": 1 },
+          "endLine": { "type": "integer", "minimum": 1 },
+          "text": { "type": "string" },
+          "truncated": { "type": "boolean" }
+        }
+      }
+    },
+    "truncated": { "type": "boolean" },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

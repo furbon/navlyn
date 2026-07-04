@@ -18,7 +18,7 @@
     <RepositoryUrl>https://github.com/furbon/navlyn</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/furbon/navlyn</PackageProjectUrl>
-    <PackageReleaseNotes>0.5.0 adds MCP file-first navigation tools, direct warm-path workspace reuse, .NET 8 and .NET 10 tool assets, .code-workspace loading, envelope schemas, golden contract snapshots, and refreshed OSS onboarding docs.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.5.0 adds MCP tool profiles, file-first navigation, workspace status/refresh, opt-in serve/cache support, indexed candidate reuse, bounded search metadata, .NET 8 and .NET 10 validation, focused schemas/goldens, evals, benchmarks, and refreshed OSS onboarding docs.</PackageReleaseNotes>
     <Copyright>Copyright (c) 2026 furbon.tech</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>

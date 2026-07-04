@@ -116,7 +116,12 @@ internal sealed record NavlynToolMetadata(
     string WorkspaceFingerprint,
     string IndexStatus = "warm",
     string? SnapshotId = null,
-    string CostClass = "analysis");
+    string CostClass = "analysis",
+    string FreshnessStatus = "fresh",
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? DocumentIndexDocumentCount = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    long? DocumentIndexEstimatedBytes = null);
 
 internal sealed record NavlynFollowUpAction(
     JsonElement Action,

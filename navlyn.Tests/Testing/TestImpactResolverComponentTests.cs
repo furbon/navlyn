@@ -46,7 +46,7 @@ public sealed class TestImpactResolverComponentTests(ResolverComponentTestFixtur
         TestImpactResolution impact = await new TestImpactResolver().ResolveForSymbolAsync(
             workspace,
             subjectProjects,
-            explicitTestProjects: workspace.Solution.Projects.Where(project => project.Name == "navlyn.Tests").ToArray(),
+            explicitTestProjects: workspace.Solution.Projects.Where(project => project.FilePath is not null && project.FilePath.EndsWith("navlyn.Tests.csproj", StringComparison.OrdinalIgnoreCase)).ToArray(),
             subject,
             new TestImpactOptions(TestLimit: 10, ReferenceLimit: 200, IncludeSnippets: false, SnippetLines: 1, ExcludeGenerated: false),
             CancellationToken.None);

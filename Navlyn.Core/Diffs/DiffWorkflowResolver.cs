@@ -257,7 +257,7 @@ internal sealed class DiffWorkflowResolver(IDiffProvider? diffProvider = null)
                 relatedTests.Truncated,
             Warnings:
             [
-                "Public contract changes are current-workspace heuristics; before/after public API diff is deferred.",
+                "Public contract changes are current-workspace heuristics; this review-diff pack does not include before/after public API diff.",
                 "Diagnostics are current scoped diagnostics, not before/after diagnostic deltas."
             ],
             NextActions: CreateBaseNextActions(workspace.DisplayPath, changedSymbols.ChangedSymbols.Symbols),

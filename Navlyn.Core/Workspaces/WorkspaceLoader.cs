@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.MSBuild;
 using Navlyn.Diagnostics;
 using Navlyn.Paths;
+using System.IO.Enumeration;
 using System.Text.Json;
 
 namespace Navlyn.Workspaces;
@@ -13,13 +14,21 @@ internal sealed class WorkspaceLoader
         ? StringComparer.OrdinalIgnoreCase
         : StringComparer.Ordinal;
 
-    public async Task<WorkspaceLoadResult> LoadAsync(FileInfo workspace, CancellationToken cancellationToken)
+    public Task<WorkspaceLoadResult> LoadAsync(FileInfo workspace, CancellationToken cancellationToken)
+    {
+        return LoadAsync(workspace, WorkspaceLoadOptions.Default, cancellationToken);
+    }
+
+    public async Task<WorkspaceLoadResult> LoadAsync(
+        FileInfo workspace,
+        WorkspaceLoadOptions options,
+        CancellationToken cancellationToken)
     {
         WorkspacePathResolution resolution;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            resolution = ResolveWorkspacePath(workspace);
+            resolution = ResolveWorkspacePath(workspace, options);
         }
         catch (OperationCanceledException)
         {
@@ -99,7 +108,8 @@ internal sealed class WorkspaceLoader
                 Kind: workspaceKind,
                 Workspace: msbuildWorkspace,
                 Solution: solution,
-                Projects: GetProjects(solution));
+                Projects: GetProjects(solution),
+                DocumentIndex: DocumentIndexProvider.GetOrCreate(solution));
 
             return WorkspaceLoadResult.Succeeded(loadedWorkspace, diagnostics);
         }
@@ -132,10 +142,13 @@ internal sealed class WorkspaceLoader
             return false;
         }
 
-        IReadOnlyList<WorkspaceCandidate> candidates = FindWorkspaceCandidates(fullSearchDirectory, includeCodeWorkspace: true);
+        IReadOnlyList<WorkspaceCandidate> candidates = FindWorkspaceCandidates(
+            fullSearchDirectory,
+            includeCodeWorkspace: true,
+            includeNavlynWorkspace: true);
         if (candidates.Count == 0)
         {
-            error = $"--workspace auto could not find a .code-workspace, .slnx, .sln, or .csproj in {fullSearchDirectory}.";
+            error = $"--workspace auto could not find a navlyn.workspace.json, .code-workspace, .slnx, .sln, or .csproj in {fullSearchDirectory}.";
             return false;
         }
 
@@ -165,7 +178,7 @@ internal sealed class WorkspaceLoader
         };
     }
 
-    private static WorkspacePathResolution ResolveWorkspacePath(FileInfo workspace)
+    private static WorkspacePathResolution ResolveWorkspacePath(FileInfo workspace, WorkspaceLoadOptions options)
     {
         string input = workspace.ToString();
         string workspacePath;
@@ -183,10 +196,18 @@ internal sealed class WorkspaceLoader
             workspacePath = candidates.FirstOrDefault(File.Exists) ?? candidates[0];
         }
 
+        if (IsNavlynWorkspaceFile(workspacePath))
+        {
+            return ResolveNavlynWorkspace(workspacePath, options);
+        }
+
         string extension = Path.GetExtension(workspacePath);
         if (extension.Equals(".code-workspace", StringComparison.OrdinalIgnoreCase))
         {
-            return ResolveCodeWorkspace(workspacePath);
+            WorkspaceRootPolicyContext context = CreateDefaultPolicyContext(
+                workspacePath,
+                options.RootPolicyOverride ?? WorkspaceRootPolicy.All);
+            return ResolveCodeWorkspace(workspacePath, context);
         }
 
         string? workspaceKind = GetWorkspaceKind(workspacePath);
@@ -194,13 +215,15 @@ internal sealed class WorkspaceLoader
         {
             throw new CodeWorkspaceException(
                 DiagnosticIds.InvalidWorkspaceExtension,
-                "Workspace must be a .code-workspace, .slnx, .sln, or .csproj file.");
+                "Workspace must be a navlyn.workspace.json, .code-workspace, .slnx, .sln, or .csproj file.");
         }
 
         return new WorkspacePathResolution(Path.GetFullPath(workspacePath), workspaceKind, []);
     }
 
-    private static WorkspacePathResolution ResolveCodeWorkspace(string codeWorkspacePath)
+    private static WorkspacePathResolution ResolveCodeWorkspace(
+        string codeWorkspacePath,
+        WorkspaceRootPolicyContext policyContext)
     {
         string fullPath = Path.GetFullPath(codeWorkspacePath);
         if (!File.Exists(fullPath))
@@ -211,7 +234,6 @@ internal sealed class WorkspaceLoader
         List<WorkspaceLoadDiagnostic> diagnostics = [];
         CodeWorkspaceDocument document = ReadCodeWorkspace(fullPath);
         string codeWorkspaceDirectory = Path.GetDirectoryName(fullPath) ?? Directory.GetCurrentDirectory();
-        string? repositoryRoot = PathDisplay.FindRepositoryRoot(codeWorkspaceDirectory);
 
         List<WorkspaceCandidate> candidates = [];
         foreach (string folderPath in document.FolderPaths)
@@ -220,14 +242,17 @@ internal sealed class WorkspaceLoader
                 ? Path.GetFullPath(folderPath)
                 : Path.GetFullPath(Path.Combine(codeWorkspaceDirectory, folderPath));
 
-            if (repositoryRoot is not null && IsOutsideRoot(folderFullPath, repositoryRoot))
+            if (!TryApplyRootPolicy(
+                folderFullPath,
+                policyContext,
+                "VS Code workspace folder",
+                diagnostics,
+                out CodeWorkspaceException? policyError))
             {
-                diagnostics.Add(new WorkspaceLoadDiagnostic(
-                    Kind: "Warning",
-                    Message: $"VS Code workspace folder is outside repository root: {folderFullPath}"));
+                throw policyError!;
             }
 
-            if (File.Exists(folderFullPath) && IsWorkspaceCandidate(folderFullPath, includeCodeWorkspace: false))
+            if (File.Exists(folderFullPath) && IsWorkspaceCandidate(folderFullPath, includeCodeWorkspace: false, includeNavlynWorkspace: false))
             {
                 AddCandidate(candidates, folderFullPath, codeWorkspaceDirectory);
                 continue;
@@ -241,7 +266,10 @@ internal sealed class WorkspaceLoader
                 continue;
             }
 
-            foreach (WorkspaceCandidate candidate in FindWorkspaceCandidates(folderFullPath, includeCodeWorkspace: false))
+            foreach (WorkspaceCandidate candidate in FindWorkspaceCandidates(
+                folderFullPath,
+                includeCodeWorkspace: false,
+                includeNavlynWorkspace: false))
             {
                 AddCandidate(candidates, candidate.FullPath, codeWorkspaceDirectory);
             }
@@ -276,6 +304,133 @@ internal sealed class WorkspaceLoader
         }
 
         return new WorkspacePathResolution(selectedWorkspace, workspaceKind, diagnostics);
+    }
+
+    private static WorkspacePathResolution ResolveNavlynWorkspace(
+        string navlynWorkspacePath,
+        WorkspaceLoadOptions options)
+    {
+        string fullPath = Path.GetFullPath(navlynWorkspacePath);
+        if (!File.Exists(fullPath))
+        {
+            return new WorkspacePathResolution(fullPath, "navlyn-workspace", []);
+        }
+
+        List<WorkspaceLoadDiagnostic> diagnostics = [];
+        NavlynWorkspaceDocument document = ReadNavlynWorkspace(fullPath);
+        string workspaceDirectory = Path.GetDirectoryName(fullPath) ?? Directory.GetCurrentDirectory();
+        WorkspaceRootPolicyContext policyContext = CreateNavlynWorkspacePolicyContext(
+            workspaceDirectory,
+            document,
+            options.RootPolicyOverride);
+
+        if (!string.IsNullOrWhiteSpace(document.PrimaryWorkspace))
+        {
+            string primaryWorkspace = ResolveConfigPath(workspaceDirectory, document.PrimaryWorkspace);
+            if (!TryApplyRootPolicy(
+                primaryWorkspace,
+                policyContext,
+                "Navlyn workspace primaryWorkspace",
+                diagnostics,
+                out CodeWorkspaceException? policyError))
+            {
+                throw policyError!;
+            }
+
+            return ResolveSelectedWorkspace(primaryWorkspace, diagnostics, policyContext);
+        }
+
+        List<WorkspaceCandidate> candidates = [];
+        IReadOnlyList<string> candidateInputs = document.WorkspaceCandidates.Count == 0
+            ? ["."]
+            : document.WorkspaceCandidates;
+
+        foreach (string candidateInput in candidateInputs)
+        {
+            string candidatePath = ResolveConfigPath(workspaceDirectory, candidateInput);
+            if (!TryApplyRootPolicy(
+                candidatePath,
+                policyContext,
+                "Navlyn workspace candidate",
+                diagnostics,
+                out CodeWorkspaceException? policyError))
+            {
+                throw policyError!;
+            }
+
+            if (File.Exists(candidatePath) && IsWorkspaceCandidate(candidatePath, includeCodeWorkspace: true, includeNavlynWorkspace: false))
+            {
+                AddNavlynWorkspaceCandidate(candidates, candidatePath, workspaceDirectory, document);
+                continue;
+            }
+
+            if (!Directory.Exists(candidatePath))
+            {
+                diagnostics.Add(new WorkspaceLoadDiagnostic(
+                    Kind: "Warning",
+                    Message: $"Navlyn workspace candidate does not exist: {candidatePath}"));
+                continue;
+            }
+
+            foreach (WorkspaceCandidate candidate in FindWorkspaceCandidates(
+                candidatePath,
+                includeCodeWorkspace: true,
+                includeNavlynWorkspace: false))
+            {
+                AddNavlynWorkspaceCandidate(candidates, candidate.FullPath, workspaceDirectory, document);
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            throw new CodeWorkspaceException(
+                DiagnosticIds.NavlynWorkspaceNoCandidates,
+                $"Navlyn workspace did not contain a .code-workspace, .slnx, .sln, or .csproj candidate: {fullPath}");
+        }
+
+        int bestRank = candidates.Min(candidate => candidate.Rank);
+        IReadOnlyList<WorkspaceCandidate> bestCandidates = [.. candidates
+            .Where(candidate => candidate.Rank == bestRank)
+            .OrderBy(candidate => candidate.DisplayPath, StringComparer.OrdinalIgnoreCase)];
+        if (bestCandidates.Count > 1)
+        {
+            string candidateList = string.Join(", ", bestCandidates.Select(candidate => candidate.DisplayPath));
+            throw new CodeWorkspaceException(
+                DiagnosticIds.AmbiguousNavlynWorkspace,
+                $"Navlyn workspace contains multiple workspace candidates: {candidateList}. Set primaryWorkspace or pass --workspace explicitly.");
+        }
+
+        return ResolveSelectedWorkspace(bestCandidates[0].FullPath, diagnostics, policyContext);
+    }
+
+    private static WorkspacePathResolution ResolveSelectedWorkspace(
+        string selectedWorkspace,
+        List<WorkspaceLoadDiagnostic> diagnostics,
+        WorkspaceRootPolicyContext policyContext)
+    {
+        if (IsNavlynWorkspaceFile(selectedWorkspace))
+        {
+            throw new CodeWorkspaceException(
+                DiagnosticIds.InvalidNavlynWorkspace,
+                "navlyn.workspace.json cannot select another navlyn.workspace.json file.");
+        }
+
+        if (Path.GetExtension(selectedWorkspace).Equals(".code-workspace", StringComparison.OrdinalIgnoreCase))
+        {
+            WorkspacePathResolution codeWorkspaceResolution = ResolveCodeWorkspace(selectedWorkspace, policyContext);
+            diagnostics.AddRange(codeWorkspaceResolution.Diagnostics);
+            return codeWorkspaceResolution with { Diagnostics = diagnostics };
+        }
+
+        string? workspaceKind = GetWorkspaceKind(selectedWorkspace);
+        if (workspaceKind is null)
+        {
+            throw new CodeWorkspaceException(
+                DiagnosticIds.InvalidWorkspaceExtension,
+                "Workspace must be a .code-workspace, .slnx, .sln, or .csproj file.");
+        }
+
+        return new WorkspacePathResolution(Path.GetFullPath(selectedWorkspace), workspaceKind, diagnostics);
     }
 
     private static CodeWorkspaceDocument ReadCodeWorkspace(string fullPath)
@@ -336,23 +491,99 @@ internal sealed class WorkspaceLoader
         }
     }
 
-    private static IReadOnlyList<WorkspaceCandidate> FindWorkspaceCandidates(string searchDirectory, bool includeCodeWorkspace)
+    private static NavlynWorkspaceDocument ReadNavlynWorkspace(string fullPath)
+    {
+        try
+        {
+            using FileStream stream = File.OpenRead(fullPath);
+            using JsonDocument document = JsonDocument.Parse(
+                stream,
+                new JsonDocumentOptions
+                {
+                    AllowTrailingCommas = true,
+                    CommentHandling = JsonCommentHandling.Skip
+                });
+
+            JsonElement root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                throw new CodeWorkspaceException(
+                    DiagnosticIds.InvalidNavlynWorkspace,
+                    $"Navlyn workspace must be a JSON object: {fullPath}");
+            }
+
+            string? primaryWorkspace = ReadOptionalString(root, "primaryWorkspace", fullPath);
+            IReadOnlyList<string> workspaceCandidates = ReadOptionalStringArray(root, "workspaceCandidates", fullPath);
+            IReadOnlyList<string> excludes = ReadOptionalStringArray(root, "excludes", fullPath);
+            IReadOnlyList<string> generatedFolders = ReadOptionalStringArray(root, "generatedFolders", fullPath);
+            IReadOnlyList<string> allowRoots = ReadOptionalStringArray(root, "allowRoots", fullPath);
+            WorkspaceRootPolicy? defaultRootPolicy = ReadOptionalRootPolicy(root, "defaultRootPolicy", fullPath);
+            NavlynWorkspaceTests tests = ReadOptionalTests(root, fullPath);
+            NavlynWorkspaceCacheHints cacheHints = ReadOptionalCacheHints(root, fullPath);
+
+            return new NavlynWorkspaceDocument(
+                primaryWorkspace,
+                workspaceCandidates,
+                excludes,
+                generatedFolders,
+                allowRoots,
+                defaultRootPolicy,
+                tests,
+                cacheHints);
+        }
+        catch (CodeWorkspaceException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new CodeWorkspaceException(
+                DiagnosticIds.InvalidNavlynWorkspace,
+                $"Invalid Navlyn workspace file: {ex.Message}");
+        }
+    }
+
+    private static IReadOnlyList<WorkspaceCandidate> FindWorkspaceCandidates(
+        string searchDirectory,
+        bool includeCodeWorkspace,
+        bool includeNavlynWorkspace)
     {
         string fullSearchDirectory = Path.GetFullPath(searchDirectory);
         return [.. Directory.EnumerateFiles(fullSearchDirectory, "*", SearchOption.TopDirectoryOnly)
-            .Where(path => IsWorkspaceCandidate(path, includeCodeWorkspace))
+            .Where(path => IsWorkspaceCandidate(path, includeCodeWorkspace, includeNavlynWorkspace))
             .Select(path => CreateWorkspaceCandidate(path, fullSearchDirectory))
             .OrderBy(candidate => candidate.Rank)
             .ThenBy(candidate => candidate.DisplayPath, StringComparer.OrdinalIgnoreCase)];
     }
 
-    private static bool IsWorkspaceCandidate(string path, bool includeCodeWorkspace)
+    private static bool IsWorkspaceCandidate(string path, bool includeCodeWorkspace, bool includeNavlynWorkspace)
     {
         string extension = Path.GetExtension(path);
-        return (includeCodeWorkspace && extension.Equals(".code-workspace", StringComparison.OrdinalIgnoreCase)) ||
+        return (includeNavlynWorkspace && IsNavlynWorkspaceFile(path)) ||
+            (includeCodeWorkspace && extension.Equals(".code-workspace", StringComparison.OrdinalIgnoreCase)) ||
             extension.Equals(".slnx", StringComparison.OrdinalIgnoreCase) ||
             extension.Equals(".sln", StringComparison.OrdinalIgnoreCase) ||
             extension.Equals(".csproj", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsNavlynWorkspaceFile(string path)
+    {
+        return Path.GetFileName(path).Equals("navlyn.workspace.json", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void AddNavlynWorkspaceCandidate(
+        List<WorkspaceCandidate> candidates,
+        string path,
+        string displayRoot,
+        NavlynWorkspaceDocument document)
+    {
+        string fullPath = Path.GetFullPath(path);
+        if (IsExcludedByNavlynWorkspace(fullPath, displayRoot, document))
+        {
+            return;
+        }
+
+        AddCandidate(candidates, fullPath, displayRoot);
     }
 
     private static void AddCandidate(List<WorkspaceCandidate> candidates, string path, string displayRoot)
@@ -378,22 +609,319 @@ internal sealed class WorkspaceLoader
     private static int GetWorkspaceCandidateRank(string path)
     {
         string extension = Path.GetExtension(path);
-        if (extension.Equals(".code-workspace", StringComparison.OrdinalIgnoreCase))
+        if (IsNavlynWorkspaceFile(path))
         {
             return 0;
         }
 
-        if (extension.Equals(".slnx", StringComparison.OrdinalIgnoreCase))
+        if (extension.Equals(".code-workspace", StringComparison.OrdinalIgnoreCase))
         {
             return 1;
         }
 
-        if (extension.Equals(".sln", StringComparison.OrdinalIgnoreCase))
+        if (extension.Equals(".slnx", StringComparison.OrdinalIgnoreCase))
         {
             return 2;
         }
 
-        return 3;
+        if (extension.Equals(".sln", StringComparison.OrdinalIgnoreCase))
+        {
+            return 3;
+        }
+
+        return 4;
+    }
+
+    private static bool TryApplyRootPolicy(
+        string path,
+        WorkspaceRootPolicyContext context,
+        string description,
+        List<WorkspaceLoadDiagnostic> diagnostics,
+        out CodeWorkspaceException? error)
+    {
+        string fullPath = Path.GetFullPath(path);
+        bool outsideRoot = IsOutsideRoot(fullPath, context.Root);
+        bool allowedByList = !outsideRoot || context.AllowRoots.Any(root => !IsOutsideRoot(fullPath, root));
+
+        error = null;
+        if (context.Policy == WorkspaceRootPolicy.All)
+        {
+            if (outsideRoot && context.WarnWhenOutsideRoot)
+            {
+                diagnostics.Add(new WorkspaceLoadDiagnostic(
+                    Kind: "Warning",
+                    Message: $"{description} is outside repository root: {fullPath}"));
+            }
+
+            return true;
+        }
+
+        if (context.Policy == WorkspaceRootPolicy.AllowListed && allowedByList)
+        {
+            return true;
+        }
+
+        if (context.Policy == WorkspaceRootPolicy.RepoRelative && !outsideRoot)
+        {
+            return true;
+        }
+
+        error = new CodeWorkspaceException(
+            DiagnosticIds.WorkspaceRootPolicyViolation,
+            $"{description} is outside the allowed workspace roots for policy {FormatWorkspaceRootPolicy(context.Policy)}: {fullPath}");
+        return false;
+    }
+
+    private static WorkspaceRootPolicyContext CreateDefaultPolicyContext(
+        string workspacePath,
+        WorkspaceRootPolicy policy)
+    {
+        string workspaceDirectory = Path.GetDirectoryName(Path.GetFullPath(workspacePath)) ?? Directory.GetCurrentDirectory();
+        string? repositoryRoot = PathDisplay.FindRepositoryRoot(workspaceDirectory);
+        string root = repositoryRoot ?? workspaceDirectory;
+        return new WorkspaceRootPolicyContext(policy, root, [], WarnWhenOutsideRoot: repositoryRoot is not null);
+    }
+
+    private static WorkspaceRootPolicyContext CreateNavlynWorkspacePolicyContext(
+        string workspaceDirectory,
+        NavlynWorkspaceDocument document,
+        WorkspaceRootPolicy? rootPolicyOverride)
+    {
+        string root = PathDisplay.FindRepositoryRoot(workspaceDirectory) ?? workspaceDirectory;
+        WorkspaceRootPolicy policy = rootPolicyOverride ?? document.DefaultRootPolicy ?? WorkspaceRootPolicy.All;
+        IReadOnlyList<string> allowRoots = [.. document.AllowRoots
+            .Select(path => ResolveConfigPath(workspaceDirectory, path))
+            .Select(Path.GetFullPath)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)];
+        return new WorkspaceRootPolicyContext(policy, root, allowRoots, WarnWhenOutsideRoot: true);
+    }
+
+    internal static string FormatWorkspaceRootPolicy(WorkspaceRootPolicy policy)
+    {
+        return policy switch
+        {
+            WorkspaceRootPolicy.RepoRelative => "repo-relative",
+            WorkspaceRootPolicy.AllowListed => "allow-listed",
+            WorkspaceRootPolicy.All => "all",
+            _ => "all"
+        };
+    }
+
+    internal static bool TryParseWorkspaceRootPolicy(string value, out WorkspaceRootPolicy policy)
+    {
+        switch (value.Trim().ToLowerInvariant())
+        {
+            case "repo-relative":
+                policy = WorkspaceRootPolicy.RepoRelative;
+                return true;
+            case "allow-listed":
+                policy = WorkspaceRootPolicy.AllowListed;
+                return true;
+            case "all":
+                policy = WorkspaceRootPolicy.All;
+                return true;
+            default:
+                policy = WorkspaceRootPolicy.All;
+                return false;
+        }
+    }
+
+    private static string ResolveConfigPath(string configDirectory, string path)
+    {
+        return Path.IsPathRooted(path)
+            ? Path.GetFullPath(path)
+            : Path.GetFullPath(Path.Combine(configDirectory, path));
+    }
+
+    private static bool IsExcludedByNavlynWorkspace(
+        string candidatePath,
+        string configDirectory,
+        NavlynWorkspaceDocument document)
+    {
+        string relativePath = Path.GetRelativePath(configDirectory, candidatePath).Replace('\\', '/');
+        if (document.Excludes.Any(pattern => MatchesPathPattern(relativePath, pattern)) ||
+            document.GeneratedFolders.Any(pattern => MatchesPathPattern(relativePath, pattern)))
+        {
+            return true;
+        }
+
+        return !document.Tests.Include && IsTestCandidate(relativePath);
+    }
+
+    private static bool MatchesPathPattern(string relativePath, string pattern)
+    {
+        string normalizedPattern = pattern.Replace('\\', '/').Trim('/');
+        if (string.IsNullOrWhiteSpace(normalizedPattern))
+        {
+            return false;
+        }
+
+        if (normalizedPattern.Contains('*') ||
+            normalizedPattern.Contains('?'))
+        {
+            return FileSystemName.MatchesSimpleExpression(normalizedPattern, relativePath, ignoreCase: true);
+        }
+
+        return relativePath.Equals(normalizedPattern, StringComparison.OrdinalIgnoreCase) ||
+            relativePath.StartsWith($"{normalizedPattern}/", StringComparison.OrdinalIgnoreCase) ||
+            relativePath.Contains($"/{normalizedPattern}/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsTestCandidate(string relativePath)
+    {
+        string fileName = Path.GetFileNameWithoutExtension(relativePath);
+        if (fileName.Contains("Test", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return relativePath.Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Any(segment => segment.Equals("test", StringComparison.OrdinalIgnoreCase) ||
+                segment.Equals("tests", StringComparison.OrdinalIgnoreCase) ||
+                segment.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? ReadOptionalString(JsonElement root, string propertyName, string fullPath)
+    {
+        if (!root.TryGetProperty(propertyName, out JsonElement property))
+        {
+            return null;
+        }
+
+        if (property.ValueKind != JsonValueKind.String)
+        {
+            throw new CodeWorkspaceException(
+                DiagnosticIds.InvalidNavlynWorkspace,
+                $"Navlyn workspace {propertyName} must be a string: {fullPath}");
+        }
+
+        string? value = property.GetString();
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new CodeWorkspaceException(
+                DiagnosticIds.InvalidNavlynWorkspace,
+                $"Navlyn workspace {propertyName} must not be empty: {fullPath}");
+        }
+
+        return value;
+    }
+
+    private static IReadOnlyList<string> ReadOptionalStringArray(JsonElement root, string propertyName, string fullPath)
+    {
+        if (!root.TryGetProperty(propertyName, out JsonElement property))
+        {
+            return [];
+        }
+
+        if (property.ValueKind != JsonValueKind.Array)
+        {
+            throw new CodeWorkspaceException(
+                DiagnosticIds.InvalidNavlynWorkspace,
+                $"Navlyn workspace {propertyName} must be an array of strings: {fullPath}");
+        }
+
+        List<string> values = [];
+        foreach (JsonElement item in property.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String)
+            {
+                throw new CodeWorkspaceException(
+                    DiagnosticIds.InvalidNavlynWorkspace,
+                    $"Navlyn workspace {propertyName} must be an array of strings: {fullPath}");
+            }
+
+            string? value = item.GetString();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                throw new CodeWorkspaceException(
+                    DiagnosticIds.InvalidNavlynWorkspace,
+                    $"Navlyn workspace {propertyName} values must not be empty: {fullPath}");
+            }
+
+            values.Add(value);
+        }
+
+        return values;
+    }
+
+    private static WorkspaceRootPolicy? ReadOptionalRootPolicy(JsonElement root, string propertyName, string fullPath)
+    {
+        string? value = ReadOptionalString(root, propertyName, fullPath);
+        if (value is null)
+        {
+            return null;
+        }
+
+        if (!TryParseWorkspaceRootPolicy(value, out WorkspaceRootPolicy policy))
+        {
+            throw new CodeWorkspaceException(
+                DiagnosticIds.InvalidNavlynWorkspace,
+                $"Navlyn workspace {propertyName} must be one of: repo-relative, allow-listed, all.");
+        }
+
+        return policy;
+    }
+
+    private static NavlynWorkspaceTests ReadOptionalTests(JsonElement root, string fullPath)
+    {
+        if (!root.TryGetProperty("tests", out JsonElement tests))
+        {
+            return new NavlynWorkspaceTests(Include: true, Projects: []);
+        }
+
+        if (tests.ValueKind != JsonValueKind.Object)
+        {
+            throw new CodeWorkspaceException(
+                DiagnosticIds.InvalidNavlynWorkspace,
+                $"Navlyn workspace tests must be an object: {fullPath}");
+        }
+
+        bool include = true;
+        if (tests.TryGetProperty("include", out JsonElement includeElement))
+        {
+            if (includeElement.ValueKind != JsonValueKind.True && includeElement.ValueKind != JsonValueKind.False)
+            {
+                throw new CodeWorkspaceException(
+                    DiagnosticIds.InvalidNavlynWorkspace,
+                    $"Navlyn workspace tests.include must be a boolean: {fullPath}");
+            }
+
+            include = includeElement.GetBoolean();
+        }
+
+        IReadOnlyList<string> projects = ReadOptionalStringArray(tests, "projects", fullPath);
+        return new NavlynWorkspaceTests(include, projects);
+    }
+
+    private static NavlynWorkspaceCacheHints ReadOptionalCacheHints(JsonElement root, string fullPath)
+    {
+        if (!root.TryGetProperty("cacheHints", out JsonElement cacheHints))
+        {
+            return new NavlynWorkspaceCacheHints(Enabled: null, Directory: null);
+        }
+
+        if (cacheHints.ValueKind != JsonValueKind.Object)
+        {
+            throw new CodeWorkspaceException(
+                DiagnosticIds.InvalidNavlynWorkspace,
+                $"Navlyn workspace cacheHints must be an object: {fullPath}");
+        }
+
+        bool? enabled = null;
+        if (cacheHints.TryGetProperty("enabled", out JsonElement enabledElement))
+        {
+            if (enabledElement.ValueKind != JsonValueKind.True && enabledElement.ValueKind != JsonValueKind.False)
+            {
+                throw new CodeWorkspaceException(
+                    DiagnosticIds.InvalidNavlynWorkspace,
+                    $"Navlyn workspace cacheHints.enabled must be a boolean: {fullPath}");
+            }
+
+            enabled = enabledElement.GetBoolean();
+        }
+
+        string? directory = ReadOptionalString(cacheHints, "directory", fullPath);
+        return new NavlynWorkspaceCacheHints(enabled, directory);
     }
 
     private static bool IsOutsideRoot(string path, string root)
@@ -529,7 +1057,8 @@ internal sealed record LoadedWorkspace(
     string Kind,
     MSBuildWorkspace Workspace,
     Solution Solution,
-    IReadOnlyList<LoadedProject> Projects)
+    IReadOnlyList<LoadedProject> Projects,
+    DocumentIndex? DocumentIndex = null)
     : IDisposable
 {
     public int ProjectCount => Projects.Count;
@@ -559,6 +1088,26 @@ internal sealed record WorkspacePathResolution(
     IReadOnlyList<WorkspaceLoadDiagnostic> Diagnostics);
 
 internal sealed record CodeWorkspaceDocument(IReadOnlyList<string> FolderPaths);
+
+internal sealed record NavlynWorkspaceDocument(
+    string? PrimaryWorkspace,
+    IReadOnlyList<string> WorkspaceCandidates,
+    IReadOnlyList<string> Excludes,
+    IReadOnlyList<string> GeneratedFolders,
+    IReadOnlyList<string> AllowRoots,
+    WorkspaceRootPolicy? DefaultRootPolicy,
+    NavlynWorkspaceTests Tests,
+    NavlynWorkspaceCacheHints CacheHints);
+
+internal sealed record NavlynWorkspaceTests(bool Include, IReadOnlyList<string> Projects);
+
+internal sealed record NavlynWorkspaceCacheHints(bool? Enabled, string? Directory);
+
+internal sealed record WorkspaceRootPolicyContext(
+    WorkspaceRootPolicy Policy,
+    string Root,
+    IReadOnlyList<string> AllowRoots,
+    bool WarnWhenOutsideRoot);
 
 internal sealed record WorkspaceCandidate(string FullPath, int Rank, string DisplayPath);
 

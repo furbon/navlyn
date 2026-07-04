@@ -39,6 +39,37 @@ public sealed class CandidateTargetResolverComponentTests(ResolverComponentTestF
         Assert.Equal("FuzzyDiscoveryFixture", resolution.Project!.Name);
     }
 
+    [Fact]
+    public async Task ResolveAsync_CandidateId_UsesRecordedCandidateWithoutAdditionalEnrichment()
+    {
+        DeclarationIndex declarationIndex = await DeclarationIndexProvider.GetOrCreateAsync(
+            fixture.FuzzyDiscoveryWorkspace.Solution,
+            CancellationToken.None);
+        FuzzyFindResult find = await new FuzzyDiscoveryResolver().FindAsync(
+            fixture.FuzzyDiscoveryWorkspace,
+            new FuzzyQueryOptions(
+                Query: "EnemyManagerTools",
+                AssumeKinds: ["NamedType"],
+                Match: "auto",
+                CaseSensitive: null,
+                ExcludeGenerated: true,
+                Limit: null),
+            fixture.FuzzyDiscoveryWorkspace.Solution.Projects.ToArray(),
+            projectFilters: null,
+            CancellationToken.None);
+        int enrichmentCount = declarationIndex.SemanticEnrichmentCount;
+
+        CandidateTargetResolutionResult result = await new CandidateTargetResolver().ResolveAsync(
+            fixture.FuzzyDiscoveryWorkspace.Solution,
+            fixture.FuzzyDiscoveryWorkspace.Solution.Projects.ToArray(),
+            find.SelectedCandidate!.CandidateId!,
+            excludeGenerated: true,
+            CancellationToken.None);
+
+        ResolverAssert.NoError(result.Resolution, result.Error);
+        Assert.Equal(enrichmentCount, declarationIndex.SemanticEnrichmentCount);
+    }
+
     [Theory]
     [InlineData("bad", DiagnosticIds.InvalidCandidateId)]
     [InlineData("sym:v1:00000000000000000000000000000000", DiagnosticIds.CandidateIdNotFound)]

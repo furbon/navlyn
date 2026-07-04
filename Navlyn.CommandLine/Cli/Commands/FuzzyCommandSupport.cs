@@ -85,6 +85,18 @@ internal static class FuzzyCommandSupport
         };
     }
 
+    public static Option<string> CreateWorkflowProfileOption()
+    {
+        Option<string> option = new("--profile")
+        {
+            Description = "Workflow profile: light or full.",
+            DefaultValueFactory = _ => "full"
+        };
+
+        option.AcceptOnlyFromAmong("light", "full");
+        return option;
+    }
+
     public static bool TryCreateQuery(
         LoadedWorkspace loadedWorkspace,
         string query,

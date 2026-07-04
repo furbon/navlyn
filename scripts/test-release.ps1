@@ -41,11 +41,18 @@ try {
         -Arguments @('build', $script:NavlynTestSolutionPath, '--no-restore') `
         -ExpectedExitCode 0 | Out-Null
 
-    Write-Host 'Running xUnit tests...'
+    Write-Host 'Running xUnit tests on net8.0...'
     Invoke-CheckedProcess `
-        -Name 'dotnet test' `
+        -Name 'dotnet test net8.0' `
         -FilePath 'dotnet' `
-        -Arguments @('test', $script:NavlynTestSolutionPath, '--no-build') `
+        -Arguments @('test', $script:NavlynTestSolutionPath, '--framework', 'net8.0', '--no-build') `
+        -ExpectedExitCode 0 | Out-Null
+
+    Write-Host 'Running xUnit tests on net10.0...'
+    Invoke-CheckedProcess `
+        -Name 'dotnet test net10.0' `
+        -FilePath 'dotnet' `
+        -Arguments @('test', $script:NavlynTestSolutionPath, '--framework', 'net10.0', '--no-build') `
         -ExpectedExitCode 0 | Out-Null
 
     & $FormatCheckScript -Quiet

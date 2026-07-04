@@ -13,6 +13,8 @@ Keeping the packages separate lets CLI users install only `navlyn` and MCP users
 
 Both tool packages include `net8.0` and `net10.0` assets. The .NET SDK selects the compatible tool asset during install or restore. Semantic workspace loading still requires an installed .NET SDK/MSBuild that can load the target repository.
 
+Release validation installs both .NET 8 and .NET 10 SDKs, runs the xUnit suite on both target frameworks, and runs package install smoke tests with `dotnet tool install --framework net8.0` and `--framework net10.0`.
+
 ## User Install Shape
 
 Published packages should behave like normal .NET tools from any configured NuGet source:
@@ -52,7 +54,7 @@ The installed stdio server shape is:
 ```json
 {
   "command": "navlyn-mcp",
-  "args": ["--workspace", "path/to/YourRepo.slnx"]
+  "args": ["--workspace", "path/to/YourRepo.slnx", "--tool-profile", "reader"]
 }
 ```
 
@@ -60,7 +62,7 @@ For VS Code workspace configuration, use `.vscode/mcp.json` with a `servers` obj
 
 For local development from this repository, use [`../examples/mcp/local-development.json`](../examples/mcp/local-development.json). For installed tools, use [`../examples/mcp/dotnet-tool.json`](../examples/mcp/dotnet-tool.json).
 
-When an agent needs several facts from one workspace, prefer the MCP `navlyn_batch` tool or CLI `navlyn batch` with examples from [`../examples/batch`](../examples/batch). This reduces repeated workspace load cost and keeps tool selection smaller.
+When an agent needs several facts from one workspace, prefer CLI `navlyn batch`, or MCP `navlyn_batch` from `--tool-profile full`, with examples from [`../examples/batch`](../examples/batch). This reduces repeated workspace load cost after the needed facts are known.
 
 ## Release Identity
 
@@ -95,9 +97,11 @@ Run a local pack/install smoke before publishing:
 
 ```powershell
 ./scripts/test-package-install.ps1
+./scripts/test-package-install.ps1 -Frameworks net8.0
+./scripts/test-package-install.ps1 -Frameworks net10.0
 ```
 
-The script packs both tools, installs them from a local package source, and verifies three install shapes: `navlyn` only, `navlyn-mcp` only, and both tools together. It runs:
+The script packs both tools, installs them from a local package source, and verifies three install shapes for each requested target framework: `navlyn` only, `navlyn-mcp` only, and both tools together. It runs:
 
 - `navlyn --help`
 - `navlyn check --workspace navlyn.slnx`
@@ -122,7 +126,7 @@ By default this runs release validation before packing. Use `-NoValidation` only
 Publishing is opt-in. Dry-run is the default:
 
 ```powershell
-./scripts/publish-nuget.ps1
+./scripts/publish-nuget.ps1 -DryRun
 ```
 
 To publish from GitHub Actions, use NuGet Trusted Publishing. The publish workflow exchanges the GitHub OIDC token for a short-lived NuGet API key shortly before pushing packages, then passes that temporary value to this script as `NUGET_API_KEY`.
@@ -196,8 +200,8 @@ NuGet packages are immutable after publication. If a bad package is published:
 - Run `./scripts/test-release.ps1`.
 - Run `./scripts/test-package-install.ps1`.
 - Run `./scripts/pack-release.ps1`.
-- Dry-run `./scripts/publish-nuget.ps1`.
+- Dry-run `./scripts/publish-nuget.ps1 -DryRun`.
 - Publish with `-Publish` only from an intentional release environment.
 - Create the GitHub Release only after package publication and post-release smoke succeed.
 
-Generated packages, package smoke tools, release manifests, performance reports, binlogs, and local notes belong under ignored `artifacts/` or `.docs/` paths and should not be committed.
+Generated packages, package smoke tools, release manifests, performance reports, binlogs, and local notes belong under ignored local paths such as `artifacts/` and should not be committed.

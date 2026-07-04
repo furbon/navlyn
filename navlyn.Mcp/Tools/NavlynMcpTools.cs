@@ -10,6 +10,8 @@ namespace Navlyn.Mcp.Tools;
 internal static class NavlynMcpTools
 {
     public const string WorkspaceSummaryTool = "navlyn_workspace_summary";
+    public const string WorkspaceStatusTool = "navlyn_workspace_status";
+    public const string WorkspaceRefreshTool = "navlyn_workspace_refresh";
     public const string FindSymbolTool = "navlyn_find_symbol";
     public const string ResolveTargetTool = "navlyn_resolve_target";
     public const string FileOutlineTool = "navlyn_file_outline";
@@ -32,6 +34,12 @@ internal static class NavlynMcpTools
     private const string WorkspaceSummaryDescription =
         "Use only when project structure, target frameworks, package references, test relationships, or MSBuild file facts would change the answer. Do not run as a default first step for single-file review, specific symbol lookup, comments, strings, docs, or non-C# files. Returns repo-graph JSON; use profile compact when a small workspace map is enough.";
 
+    private const string WorkspaceStatusDescription =
+        "Use to inspect the current workspace snapshot, freshness metadata, direct cache status, and optional on-disk cache manifest state. This is a lifecycle/status tool, not a repository overview; use navlyn_workspace_summary for project graph facts.";
+
+    private const string WorkspaceRefreshDescription =
+        "Use only when the workspace snapshot or on-disk cache should be explicitly refreshed. It forces a fresh workspace load in the server process and can clear or write the lightweight .navlyn/cache manifest when requested.";
+
     private const string FindSymbolDescription =
         "Use when you have an approximate C# symbol name and need deterministic candidates or candidate ids. Do not use for comments, strings, markdown, generated artifacts, or non-C# content. Ambiguous results are returned as candidates; do not merge them. Follow with navlyn_about_symbol, navlyn_related_files, or navlyn_impact using candidateId.";
 
@@ -45,25 +53,25 @@ internal static class NavlynMcpTools
         "Use when one selected C# symbol needs bounded source text by candidateId or exact file/line/column. Prefer this over navlyn_context_pack for a single declaration, body, members, XML doc, or attributes view. Do not use for broad file reading, impact analysis, tests, or diff review.";
 
     private const string SymbolEdgesDescription =
-        "Use when one selected C# symbol needs direct relationship edges: references, callers, calls, or implementations. Prefer candidateId from navlyn_file_outline, navlyn_find_symbol, or navlyn_resolve_target. Use filters and limits for noisy symbols. Do not use for definition lookup, source text, test discovery, or static risk analysis.";
+        "Use when one selected C# symbol needs direct relationship edges: references, callers, calls, or implementations. Prefer candidateId from navlyn_file_outline, navlyn_find_symbol, or navlyn_resolve_target. References and callers are scoped expensive searches; set scope/maxDocuments for broad questions and prefer calls for cheap local outgoing edges. Use filters and limits for noisy symbols. Do not use for definition lookup, source text, test discovery, or static risk analysis.";
 
     private const string InspectFileDescription =
         "Use for a compact semantic inspection of one known C# source file. It returns the same bounded outline facts as navlyn_file_outline and does not include tests, impact, diagnostics, context packs, or raw file text.";
 
     private const string AboutSymbolDescription =
-        "Use when one selected C# symbol needs a compact summary: definition, member outline, reference summary, and shallow relations. Prefer candidateId from navlyn_find_symbol or navlyn_resolve_target. Do not use for diff review or as a repository overview; ambiguous queries return candidate information without synthesized combined facts.";
+        "Use when one selected C# symbol needs a compact summary. Use profile light for first-pass definition/member facts; use full only when reference summary and shallow relations are needed. Prefer candidateId from navlyn_find_symbol or navlyn_resolve_target. Do not use for diff review or as a repository overview; ambiguous queries return candidate information without synthesized combined facts.";
 
     private const string RelatedFilesDescription =
         "Use when you need a file-first map of files related to a selected C# symbol. Do not use for change-risk analysis; use navlyn_impact. Results are bounded by CLI limits and preserve truncation fields. Follow with navlyn_about_symbol or navlyn_impact.";
 
     private const string ImpactDescription =
-        "Use before editing a selected C# symbol or when static source impact/risk is explicitly needed. Returns bounded references, callers, calls, implementations, affected files, and optional entrypoint chains. Do not claim runtime, reflection, DI, or config certainty from this static analysis. Escalate to navlyn_context_pack only when the agent needs a reading queue.";
+        "Use before editing a selected C# symbol or when static source impact/risk is explicitly needed. Use profile light for declarations plus cheap local calls; use full or explicit include values for bounded references, callers, implementations, hierarchy, and affected files. Set scope/maxDocuments for broad questions. Do not claim runtime, reflection, DI, or config certainty from this static analysis. Escalate to navlyn_context_pack only when the agent needs a reading queue.";
 
     private const string EntrypointsDescription =
         "Use to understand how a symbol can be reached from static callers or to inspect framework-discovered entrypoints. Symbol mode calls entrypoints; framework mode calls framework-entrypoints. Do not use for full impact; use navlyn_impact. Results are heuristic and bounded.";
 
     private const string ExactNavigationDescription =
-        "Use after navlyn_find_symbol or when you already have an exact C# source position and need precise lower-level Roslyn navigation. Supports allowlist operations: definition, references, callers, calls, implementations, type_hierarchy, and symbol_info. Prefer navlyn_symbol_edges for references/callers/calls/implementations and navlyn_symbol_source for bounded source text. Do not use for broad repository search, diff review, or arbitrary CLI execution.";
+        "Use after navlyn_find_symbol or when you already have an exact C# source position and need precise lower-level Roslyn navigation. Supports allowlist operations: definition, references, callers, calls, implementations, type_hierarchy, and symbol_info. References and callers are scoped expensive searches; calls is local to the containing member. Prefer navlyn_symbol_edges for references/callers/calls/implementations and navlyn_symbol_source for bounded source text. Do not use for broad repository search, diff review, or arbitrary CLI execution.";
 
     private const string TestsForSymbolDescription =
         "Use only when planning or reviewing an edit and related test candidates are needed for a selected C# symbol. Prefer candidateId from navlyn_find_symbol or an exact file/line/column. Do not use for first-pass comprehension, and do not treat this as a test runner; Navlyn reports static facts only.";
@@ -104,6 +112,38 @@ internal static class NavlynMcpTools
             services,
             WorkspaceSummaryTool,
             NavlynToolCommandBuilder.WorkspaceSummary(project, projects, includePackages, includeMsbuildFiles, includePreprocessorSymbols, classification, relationshipLimit, profile),
+            cancellationToken);
+    }
+
+    [McpServerTool(Name = WorkspaceStatusTool, Title = "Navlyn Workspace Status", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(WorkspaceStatusDescription)]
+    public static Task<CallToolResult> WorkspaceStatus(
+        IServiceProvider services,
+        [Description("On-disk cache mode: auto, on, or off. Auto honors navlyn.workspace.json cacheHints.")] string? cache = null,
+        [Description("Optional on-disk cache directory override.")] string? cacheDirectory = null,
+        CancellationToken cancellationToken = default)
+    {
+        return RunAsync(
+            services,
+            WorkspaceStatusTool,
+            NavlynToolCommandBuilder.WorkspaceStatus(cache, cacheDirectory),
+            cancellationToken);
+    }
+
+    [McpServerTool(Name = WorkspaceRefreshTool, Title = "Navlyn Workspace Refresh", ReadOnly = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(WorkspaceRefreshDescription)]
+    public static Task<CallToolResult> WorkspaceRefresh(
+        IServiceProvider services,
+        [Description("On-disk cache mode: auto, on, or off. Auto honors navlyn.workspace.json cacheHints.")] string? cache = null,
+        [Description("Optional on-disk cache directory override.")] string? cacheDirectory = null,
+        [Description("Remove the current on-disk workspace cache manifest before reporting or writing cache state.")] bool? clearCache = null,
+        [Description("Write a fresh lightweight on-disk workspace cache manifest.")] bool? writeCache = null,
+        CancellationToken cancellationToken = default)
+    {
+        return RunAsync(
+            services,
+            WorkspaceRefreshTool,
+            NavlynToolCommandBuilder.WorkspaceRefresh(cache, cacheDirectory, clearCache, writeCache),
             cancellationToken);
     }
 
@@ -220,13 +260,15 @@ internal static class NavlynMcpTools
         [Description("Reference usage kind filters for operation references. Mutually exclusive with usageKind.")] string[]? usageKinds = null,
         [Description("Grouped reference summaries for operation references. Values: file, project, containing-symbol, usage-kind, test-vs-production.")] string[]? groupBy = null,
         [Description("Result limit. Must be 1 or greater.")] int? limit = null,
+        [Description("Search scope for references/callers: file, project, dependent-projects, workspace-set, or solution.")] string? scope = null,
+        [Description("Maximum lexically matching documents for references/callers. Must be 1 or greater.")] int? maxDocuments = null,
         [Description("Include metadata-only symbol facts where supported by calls.")] bool? includeMetadata = null,
         CancellationToken cancellationToken = default)
     {
         return RunAsync(
             services,
             SymbolEdgesTool,
-            NavlynToolCommandBuilder.SymbolEdges(operation, candidateId, file, line, column, project, excludeGenerated, resultProject, resultProjects, resultPath, resultPaths, resultKind, resultKinds, usageKind, usageKinds, groupBy, limit, includeMetadata),
+            NavlynToolCommandBuilder.SymbolEdges(operation, candidateId, file, line, column, project, excludeGenerated, resultProject, resultProjects, resultPath, resultPaths, resultKind, resultKinds, usageKind, usageKinds, groupBy, limit, scope, maxDocuments, includeMetadata),
             cancellationToken);
     }
 
@@ -264,6 +306,9 @@ internal static class NavlynMcpTools
         int? relationLimit = null,
         bool? includeSnippets = null,
         int? snippetLines = null,
+        [Description("Search scope for heavy reference/relation facts: file, project, dependent-projects, workspace-set, or solution.")] string? scope = null,
+        [Description("Maximum lexically matching documents for heavy reference/relation facts. Must be 1 or greater.")] int? maxDocuments = null,
+        [Description("Workflow profile: light omits heavy references/relations; full keeps compatibility behavior.")] string? profile = null,
         string? candidatePolicy = null,
         string? minConfidence = null,
         bool? explainSelection = null,
@@ -272,7 +317,7 @@ internal static class NavlynMcpTools
         return RunAsync(
             services,
             AboutSymbolTool,
-            NavlynToolCommandBuilder.FuzzySymbolCommand("about", query, candidateId, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, memberLimit, referenceLimit, relationLimit, include: null, limit: null, depth: null, includeSnippets, snippetLines, candidatePolicy, minConfidence, explainSelection),
+            NavlynToolCommandBuilder.FuzzySymbolCommand("about", query, candidateId, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, memberLimit, referenceLimit, relationLimit, include: null, limit: null, depth: null, includeSnippets, snippetLines, scope, maxDocuments, profile, candidatePolicy, minConfidence, explainSelection),
             cancellationToken);
     }
 
@@ -302,7 +347,7 @@ internal static class NavlynMcpTools
         return RunAsync(
             services,
             RelatedFilesTool,
-            NavlynToolCommandBuilder.FuzzySymbolCommand("related", query, candidateId, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, memberLimit: null, referenceLimit: null, relationLimit: null, include, limit, depth, includeSnippets, snippetLines, candidatePolicy, minConfidence, explainSelection),
+            NavlynToolCommandBuilder.FuzzySymbolCommand("related", query, candidateId, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, memberLimit: null, referenceLimit: null, relationLimit: null, include, limit, depth, includeSnippets, snippetLines, scope: null, maxDocuments: null, profile: null, candidatePolicy, minConfidence, explainSelection),
             cancellationToken);
     }
 
@@ -324,6 +369,9 @@ internal static class NavlynMcpTools
         int? depth = null,
         bool? includeSnippets = null,
         int? snippetLines = null,
+        [Description("Search scope for heavy references/callers: file, project, dependent-projects, workspace-set, or solution.")] string? scope = null,
+        [Description("Maximum lexically matching documents for heavy references/callers. Must be 1 or greater.")] int? maxDocuments = null,
+        [Description("Workflow profile: light defaults to declarations and local calls; full keeps compatibility behavior.")] string? profile = null,
         string? candidatePolicy = null,
         string? minConfidence = null,
         bool? explainSelection = null,
@@ -332,7 +380,7 @@ internal static class NavlynMcpTools
         return RunAsync(
             services,
             ImpactTool,
-            NavlynToolCommandBuilder.FuzzySymbolCommand("impact", query, candidateId, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, memberLimit: null, referenceLimit: null, relationLimit: null, include, limit, depth, includeSnippets, snippetLines, candidatePolicy, minConfidence, explainSelection),
+            NavlynToolCommandBuilder.FuzzySymbolCommand("impact", query, candidateId, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, memberLimit: null, referenceLimit: null, relationLimit: null, include, limit, depth, includeSnippets, snippetLines, scope, maxDocuments, profile, candidatePolicy, minConfidence, explainSelection),
             cancellationToken);
     }
 
@@ -388,13 +436,15 @@ internal static class NavlynMcpTools
         [Description("Reference usage kind filters for operation references. Mutually exclusive with usageKind.")] string[]? usageKinds = null,
         [Description("Grouped reference summaries for operation references. Values: file, project, containing-symbol, usage-kind, test-vs-production.")] string[]? groupBy = null,
         [Description("Result limit. Supported for references, callers, calls, and implementations. Must be 1 or greater.")] int? limit = null,
+        [Description("Search scope for references/callers: file, project, dependent-projects, workspace-set, or solution.")] string? scope = null,
+        [Description("Maximum lexically matching documents for references/callers. Must be 1 or greater.")] int? maxDocuments = null,
         [Description("Include metadata-only symbol facts where supported by definition and calls.")] bool? includeMetadata = null,
         CancellationToken cancellationToken = default)
     {
         return RunAsync(
             services,
             ExactNavigationTool,
-            NavlynToolCommandBuilder.ExactNavigation(operation, candidateId, file, line, column, project, excludeGenerated, resultProject, resultProjects, resultPath, resultPaths, resultKind, resultKinds, usageKind, usageKinds, groupBy, limit, includeMetadata),
+            NavlynToolCommandBuilder.ExactNavigation(operation, candidateId, file, line, column, project, excludeGenerated, resultProject, resultProjects, resultPath, resultPaths, resultKind, resultKinds, usageKind, usageKinds, groupBy, limit, scope, maxDocuments, includeMetadata),
             cancellationToken);
     }
 

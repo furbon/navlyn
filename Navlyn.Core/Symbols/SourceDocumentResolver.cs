@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.Text;
 using Navlyn.Diagnostics;
 using Navlyn.GeneratedCode;
 using Navlyn.Paths;
+using Navlyn.Workspaces;
 
 namespace Navlyn.Symbols;
 
@@ -36,8 +37,10 @@ internal sealed class SourceDocumentResolver
                 ExitCodes.UsageError);
         }
 
-        Document? document = FindDocument(solution, sourcePaths, project, out string? sourcePath);
-        sourcePath ??= sourcePaths[0];
+        DocumentIndex documentIndex = DocumentIndexProvider.GetOrCreate(solution);
+        DocumentIndexLookupResult lookup = documentIndex.Find(sourcePaths, project);
+        Document? document = lookup.Entry?.Document;
+        string sourcePath = lookup.MatchedSourcePath ?? sourcePaths[0];
 
         if (excludeGenerated && GeneratedCodeFacts.IsGeneratedPath(sourcePath))
         {
@@ -49,7 +52,7 @@ internal sealed class SourceDocumentResolver
 
         if (document is null)
         {
-            if (project is not null && ContainsDocument(solution, sourcePaths))
+            if (project is not null && documentIndex.Contains(sourcePaths))
             {
                 return SourceDocumentResolutionResult.Failed(
                     DiagnosticIds.SourceFileNotInProject,
@@ -68,46 +71,6 @@ internal sealed class SourceDocumentResolver
             DisplayPath: PathDisplay.FromCurrentDirectory(sourcePath),
             Document: document,
             Text: text));
-    }
-
-    private static Document? FindDocument(
-        Solution solution,
-        IReadOnlyList<string> sourcePaths,
-        Project? project,
-        out string? matchedSourcePath)
-    {
-        matchedSourcePath = null;
-        StringComparer pathComparer = OperatingSystem.IsWindows()
-            ? StringComparer.OrdinalIgnoreCase
-            : StringComparer.Ordinal;
-
-        IEnumerable<Project> projects = project is null
-            ? solution.Projects
-            : [project];
-
-        foreach (Document document in projects
-            .OrderBy(project => project.FilePath, StringComparer.Ordinal)
-            .ThenBy(project => project.Name, StringComparer.Ordinal)
-            .SelectMany(project => project.Documents
-                .Where(document => document.FilePath is not null)
-                .OrderBy(document => document.FilePath, StringComparer.Ordinal)
-                .ThenBy(document => document.Name, StringComparer.Ordinal)))
-        {
-            string documentPath = Path.GetFullPath(document.FilePath!);
-            string? matchingSourcePath = sourcePaths.FirstOrDefault(sourcePath => pathComparer.Equals(documentPath, sourcePath));
-            if (matchingSourcePath is not null)
-            {
-                matchedSourcePath = matchingSourcePath;
-                return document;
-            }
-        }
-
-        return null;
-    }
-
-    private static bool ContainsDocument(Solution solution, IReadOnlyList<string> sourcePaths)
-    {
-        return FindDocument(solution, sourcePaths, project: null, out _) is not null;
     }
 
     private static string? GetWorkspaceAnchorPath(Solution solution)

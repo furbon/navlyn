@@ -64,7 +64,7 @@ try {
     $overviewJson = $overview.Stdout | ConvertFrom-Json
     Assert-Equal -Name 'overview workspace' -Actual $overviewJson.workspace -Expected 'navlyn.slnx'
     Assert-Equal -Name 'overview kind' -Actual $overviewJson.kind -Expected 'solution'
-    Assert-Equal -Name 'overview project count' -Actual @($overviewJson.projects).Count -Expected 9
+    Assert-Equal -Name 'overview project count' -Actual @($overviewJson.projects).Count -Expected 10
     $overviewProject = @($overviewJson.projects | Where-Object { $_.path -eq 'navlyn/navlyn.csproj' -and $_.targetFramework -eq 'net10.0' })[0]
     Assert-Equal -Name 'overview project name' -Actual $overviewProject.name -Expected 'navlyn(net10.0)'
 

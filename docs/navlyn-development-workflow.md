@@ -15,7 +15,7 @@ This document captures durable local development checks, command implementation 
 - `AGENTS.md`: repository-local agent guidance. Keep detailed designs out of this file.
 - `.github/copilot-instructions.md`: short GitHub Copilot guidance. Keep it consistent with `AGENTS.md` without duplicating the full workflow.
 
-`.docs/` is intentionally ignored and may contain local prompts, internal backlog notes, or old execution plans. Public docs, CI, and contributor workflow must not depend on `.docs/`.
+Ignored local notes may exist in a checkout, but public docs, CI, and contributor workflow must not depend on ignored planning files.
 
 ## File Format
 
@@ -110,6 +110,13 @@ Release publication and package ownership details live in `docs/navlyn-distribut
 
 The quick script verifies C# file format, builds the solution unless `-NoBuild` is provided, runs xUnit unless `-SkipDotnetTest` is provided, then checks representative CLI behavior for `check`, `overview`, a source-position command, and a stable usage error. Use `-SkipDotnetTest` only in a validation chain that already ran `dotnet test navlyn.slnx --no-build`.
 
+For runtime compatibility changes, run both explicit xUnit lanes after building:
+
+```powershell
+dotnet test navlyn.slnx --framework net8.0 --no-build
+dotnet test navlyn.slnx --framework net10.0 --no-build
+```
+
 ### CLI Contract Validation
 
 ```powershell
@@ -134,23 +141,25 @@ Envelope schemas live in `docs/schemas`. Golden snapshots live under `navlyn.Tes
 
 ```powershell
 ./scripts/measure-navlyn-performance.ps1 -Workspace navlyn.slnx -Scenario quick -Iterations 1 -Warmup 0 -NoBuild
-./scripts/measure-navlyn-performance.ps1 -Workspace navlyn.slnx -Scenario agent-loop -Profile compact -Iterations 3 -NoBuild -Output .docs/perf/navlyn-agent-loop.json
+./scripts/measure-navlyn-performance.ps1 -Workspace navlyn.slnx -Scenario agent-loop -Profile compact -Iterations 3 -NoBuild -Output artifacts/performance-smoke/navlyn-agent-loop.json
 ./scripts/measure-navlyn-performance.ps1 -Workspace navlyn.slnx -Scenario all -Profile evidence -Iterations 1 -Warmup 0 -NoBuild
 ```
 
-The performance script emits structured JSON with elapsed time, stdout/stderr size, exit code, JSON validity, key counts, truncation state, profile, and command arguments. Keep generated reports under ignored local paths such as `.docs/perf/` unless a curated baseline is intentionally being published. The MCP scenario starts a local stdio MCP session and records representative tool-call latency/output-size measurements when the MCP server assembly is built; use `navlyn.Tests.Mcp` coverage for functional MCP validation.
+The performance script emits structured JSON with elapsed time, stdout/stderr size, exit code, JSON validity, key counts, truncation state, profile, and command arguments. Keep generated reports under ignored local paths such as `artifacts/performance-smoke/` unless a curated baseline is intentionally being published. The MCP scenario starts a local stdio MCP session and records representative tool-call latency/output-size measurements when the MCP server assembly is built; use `navlyn.Tests.Mcp` coverage for functional MCP validation.
 
 ### Package And PR Facts Scripts
 
 ```powershell
 ./scripts/test-package-install.ps1
+./scripts/test-package-install.ps1 -Frameworks net8.0
+./scripts/test-package-install.ps1 -Frameworks net10.0
 ./scripts/pack-release.ps1 -Output artifacts/packages
-./scripts/publish-nuget.ps1
+./scripts/publish-nuget.ps1 -DryRun
 ./scripts/write-navlyn-pr-facts.ps1 -Workspace navlyn.slnx -Output artifacts/navlyn-pr-facts
 ```
 
-Package and PR facts scripts write generated output under ignored `artifacts/` paths. Publishing is dry-run by default; pass `-Publish` only from an intentional release environment with `NUGET_API_KEY` set.
-When publishing through GitHub Actions, use the guarded manual workflow with the `nuget-production` environment and `NUGET_API_KEY` environment secret.
+Package and PR facts scripts write generated output under ignored `artifacts/` paths. Package install smoke defaults to both `net8.0` and `net10.0`; pass `-Frameworks` only for focused debugging. Publishing is dry-run by default and `-DryRun` makes that explicit; pass `-Publish` only from an intentional release environment with `NUGET_API_KEY` set.
+When publishing through GitHub Actions, use the guarded manual workflow with the `nuget-production` environment and NuGet Trusted Publishing.
 
 ### Focused Fixture Validation
 
@@ -241,7 +250,7 @@ If unexpected files change while work is in progress, preserve them. If they aff
 
 Navlyn exists to be used by agents and automation on real C#/.NET repositories. Before closing a command change, review whether the current command set lets an agent avoid broad text search for semantic questions.
 
-Use this review when constructing future work:
+Use this review when scoping follow-up work:
 
 - Can an agent discover the relevant file, type, member, or source span without already knowing the exact column?
 - Can it inspect a file or type semantically, not only by name query?
@@ -308,7 +317,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- repo-grap
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review-diff --workspace navlyn.slnx --profile evidence --symbol-limit 1 --impact-limit 1 --diagnostic-limit 1 --related-test-limit 1 --depth 1
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- context-pack --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --profile compact --budget-tokens 2000
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- public-api-diff --workspace navlyn.slnx --base HEAD --project "navlyn(net10.0)" --change-limit 5
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- tests-for-symbol --workspace navlyn.slnx --query RepoGraphResolver --assume-kind NamedType --project "Navlyn.Core(net10.0)" --test-project navlyn.Tests --test-limit 5
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- tests-for-symbol --workspace navlyn.slnx --query RepoGraphResolver --assume-kind NamedType --project "Navlyn.Core(net10.0)" --test-project "navlyn.Tests(net10.0)" --test-limit 5
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query Check
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-at --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23

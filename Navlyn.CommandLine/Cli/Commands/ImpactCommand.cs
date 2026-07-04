@@ -34,11 +34,14 @@ internal static class ImpactCommand
         Option<string> candidatePolicyOption = FuzzyCommandSupport.CreateCandidatePolicyOption("fail");
         Option<string> minConfidenceOption = FuzzyCommandSupport.CreateMinConfidenceOption("medium");
         Option<bool> explainSelectionOption = FuzzyCommandSupport.CreateExplainSelectionOption();
+        Option<string> scopeOption = SharedOptions.CreateSearchScopeOption();
+        Option<int?> maxDocumentsOption = SharedOptions.CreateMaxDocumentsOption();
+        Option<string> profileOption = FuzzyCommandSupport.CreateWorkflowProfileOption();
 
         return WorkspaceCommand.Create(
             "impact",
             "Resolve a fuzzy symbol query and estimate static source areas affected by changes.",
-            [queryOption, candidateIdOption, assumeKindOption, matchOption, caseSensitiveOption, projectOption, excludeGeneratedOption, includeOption, depthOption, limitOption, includeSnippetsOption, snippetLinesOption, candidatePolicyOption, minConfidenceOption, explainSelectionOption],
+            [queryOption, candidateIdOption, assumeKindOption, matchOption, caseSensitiveOption, projectOption, excludeGeneratedOption, includeOption, depthOption, limitOption, includeSnippetsOption, snippetLinesOption, scopeOption, maxDocumentsOption, profileOption, candidatePolicyOption, minConfidenceOption, explainSelectionOption],
             (workspace, parseResult, cancellationToken) => ExecuteAsync(
                 workspace,
                 parseResult.GetValue(queryOption),
@@ -53,6 +56,9 @@ internal static class ImpactCommand
                 parseResult.GetValue(limitOption),
                 parseResult.GetValue(includeSnippetsOption),
                 parseResult.GetValue(snippetLinesOption),
+                parseResult.GetValue(scopeOption)!,
+                parseResult.GetValue(maxDocumentsOption),
+                parseResult.GetValue(profileOption)!,
                 parseResult.GetValue(candidatePolicyOption)!,
                 parseResult.GetValue(minConfidenceOption)!,
                 parseResult.GetValue(explainSelectionOption),
@@ -73,6 +79,9 @@ internal static class ImpactCommand
         int? limit,
         bool includeSnippets,
         int? snippetLines,
+        string scope,
+        int? maxDocuments,
+        string profile,
         string candidatePolicy,
         string minConfidence,
         bool explainSelection,
@@ -83,14 +92,18 @@ internal static class ImpactCommand
         int snippetContext = snippetLines ?? FuzzyDiscoveryResolver.DefaultSnippetLines;
         if (!FuzzyCommandSupport.TryCreateNonNegativeOption("--depth", effectiveDepth, out int exitCode) ||
             !FuzzyCommandSupport.TryCreatePositiveOption("--limit", effectiveLimit, out exitCode) ||
+            !FuzzyCommandSupport.TryCreatePositiveOption("--max-documents", maxDocuments ?? SymbolNavigationSearchOptions.DefaultMaxDocuments, out exitCode) ||
             !FuzzyCommandSupport.TryCreateNonNegativeOption("--snippet-lines", snippetContext, out exitCode))
         {
             return exitCode;
         }
 
+        IReadOnlyList<string> defaultInclude = profile == "light"
+            ? ["declarations", "calls"]
+            : ["references", "callers", "calls", "implementations", "hierarchy"];
         IReadOnlyList<string> includeModes = FuzzyCommandSupport.ParseInclude(
             include,
-            ["references", "callers", "calls", "implementations", "hierarchy"]);
+            defaultInclude);
         if (!FuzzyCommandSupport.ValidateInclude(includeModes, out string? includeError))
         {
             DiagnosticReporter.WriteError(DiagnosticIds.ParseError, includeError!);
@@ -129,7 +142,15 @@ internal static class ImpactCommand
             loadedWorkspace,
             "impact",
             options,
-            new FuzzyFilesOptions(includeModes, effectiveLimit, effectiveDepth, includeSnippets, snippetContext, excludeGenerated),
+            new FuzzyFilesOptions(
+                includeModes,
+                effectiveLimit,
+                effectiveDepth,
+                includeSnippets,
+                snippetContext,
+                excludeGenerated,
+                SymbolNavigationSearchOptions.Create(scope, maxDocuments),
+                profile),
             projects,
             projectOutputs,
             cancellationToken);

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.navlyn.dev/navlyn-workspace.schema.json",
+  "title": "Navlyn Workspace Configuration",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "primaryWorkspace": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Preferred .code-workspace, .slnx, .sln, or .csproj path. Relative paths resolve from navlyn.workspace.json."
+    },
+    "workspaceCandidates": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Candidate files or directories to search when primaryWorkspace is omitted."
+    },
+    "excludes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Relative path prefixes or simple wildcard expressions excluded from candidate selection."
+    },
+    "generatedFolders": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Generated-code folders excluded from workspace candidate selection."
+    },
+    "tests": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "include": {
+          "type": "boolean",
+          "default": true
+        },
+        "projects": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "defaultRootPolicy": {
+      "type": "string",
+      "enum": [
+        "repo-relative",
+        "allow-listed",
+        "all"
+      ],
+      "description": "Default root policy used unless --workspace-root-policy overrides it."
+    },
+    "allowRoots": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Additional roots allowed when defaultRootPolicy or --workspace-root-policy is allow-listed."
+    },
+    "cacheHints": {
+      "type": "object",
+      "description": "Optional hints for the opt-in lightweight .navlyn/cache workspace manifest used by workspace-status and workspace-refresh.",
+      "additionalProperties": true,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "When true, --cache auto inspects or writes the workspace cache manifest. Defaults to false."
+        },
+        "directory": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Cache directory. Relative paths resolve from navlyn.workspace.json. Defaults to .navlyn/cache."
+        }
+      }
+    }
+  }
+}

@@ -1,8 +1,10 @@
 ﻿using Navlyn.Diagnostics;
+using Navlyn.Tests.TestSupport;
 using Navlyn.Workspaces;
 
 namespace Navlyn.Tests.Workspaces;
 
+[Collection(ResolverComponentTestCollection.Name)]
 public sealed class WorkspaceLoaderCodeWorkspaceTests
 {
     [Fact]
@@ -83,6 +85,38 @@ public sealed class WorkspaceLoaderCodeWorkspaceTests
             diagnostic.Message.StartsWith("VS Code workspace folder is outside repository root:", StringComparison.Ordinal));
         Assert.NotNull(result.Workspace);
         result.Workspace.Dispose();
+    }
+
+    [Fact]
+    public async Task LoadAsync_CodeWorkspaceWithOutsideFolderAndRepoRelativePolicy_ReturnsPolicyError()
+    {
+        string repoRoot = FindRepositoryRoot();
+        using TemporaryDirectory codeWorkspaceDirectory = TemporaryDirectory.CreateUnder(repoRoot);
+        using TemporaryDirectory externalDirectory = TemporaryDirectory.Create();
+        string externalProject = Path.Combine(externalDirectory.Path, "Sample.csproj");
+        File.WriteAllText(externalProject, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        string codeWorkspace = Path.Combine(codeWorkspaceDirectory.Path, "outside.code-workspace");
+        File.WriteAllText(codeWorkspace, $$"""
+            {
+                "folders": [
+                    { "path": "{{EscapeJson(externalDirectory.Path)}}" }
+                ]
+            }
+            """);
+
+        WorkspaceLoadResult result = await new WorkspaceLoader().LoadAsync(
+            new FileInfo(codeWorkspace),
+            new WorkspaceLoadOptions(WorkspaceRootPolicy.RepoRelative),
+            CancellationToken.None);
+
+        Assert.NotNull(result.Error);
+        Assert.Equal(DiagnosticIds.WorkspaceRootPolicyViolation, result.Error.DiagnosticId);
     }
 
     private static string EscapeJson(string value)

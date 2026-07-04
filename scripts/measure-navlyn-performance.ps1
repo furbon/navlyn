@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Workspace,
 
-    [ValidateSet('quick', 'file-first', 'agent-loop', 'diff', 'mcp', 'all')]
+    [ValidateSet('quick', 'file-first', 'agent-loop', 'diff', 'mcp', 'daemon', 'cache', 'parallel', 'multi-workspace', 'all')]
     [string]$Scenario = 'quick',
 
     [ValidateSet('compact', 'evidence', 'full')]
@@ -358,6 +358,116 @@ function New-CliCommand {
     }
 }
 
+function Invoke-ParallelMeasuredProcesses {
+    param(
+        [object[]]$Commands,
+        [int]$Iteration,
+        [bool]$IsWarmup
+    )
+
+    $running = New-Object System.Collections.Generic.List[object]
+    foreach ($command in $Commands) {
+        $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+        $startInfo.FileName = 'dotnet'
+        $startInfo.WorkingDirectory = $repoRoot
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        $startInfo.RedirectStandardInput = $null -ne $command.standardInput
+        $startInfo.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+        $startInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+        $startInfo.UseShellExecute = $false
+        foreach ($argument in $command.arguments) {
+            [void]$startInfo.ArgumentList.Add($argument)
+        }
+
+        $process = [System.Diagnostics.Process]::new()
+        $process.StartInfo = $startInfo
+        $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        [void]$process.Start()
+        if ($null -ne $command.standardInput) {
+            $process.StandardInput.Write($command.standardInput)
+            $process.StandardInput.Close()
+        }
+
+        $running.Add([pscustomobject]@{
+            command = $command
+            process = $process
+            stopwatch = $stopwatch
+            stdoutTask = $process.StandardOutput.ReadToEndAsync()
+            stderrTask = $process.StandardError.ReadToEndAsync()
+        })
+    }
+
+    $results = New-Object System.Collections.Generic.List[object]
+    foreach ($entry in $running) {
+        $finished = $entry.process.WaitForExit($TimeoutSeconds * 1000)
+        if (!$finished) {
+            try {
+                $entry.process.Kill($true)
+            }
+            catch {
+            }
+        }
+
+        $entry.stopwatch.Stop()
+        $stdout = $entry.stdoutTask.GetAwaiter().GetResult()
+        $stderr = $entry.stderrTask.GetAwaiter().GetResult()
+        $exitCode = if ($finished) { $entry.process.ExitCode } else { -1 }
+        $jsonValid = $false
+        $topLevelCommand = $null
+        $resultProfile = $null
+        $counts = [pscustomobject]@{}
+        $truncated = $false
+        $warnings = @()
+
+        if ($stdout.Length -gt 0) {
+            try {
+                $parsed = $stdout | ConvertFrom-Json -Depth 100
+                $jsonValid = $true
+                if ($parsed.PSObject.Properties.Name -contains 'command') {
+                    $topLevelCommand = $parsed.command
+                }
+                if ($parsed.PSObject.Properties.Name -contains 'profile') {
+                    $resultProfile = $parsed.profile
+                }
+                if ($parsed.PSObject.Properties.Name -contains 'warnings') {
+                    $warnings = @($parsed.warnings)
+                }
+                $counts = Get-JsonCounts -Value $parsed
+                $truncated = Get-TruncatedFlag -Value $parsed
+            }
+            catch {
+                $jsonValid = $false
+            }
+        }
+
+        $results.Add([pscustomobject]@{
+            name = $entry.command.name
+            kind = 'parallel-cli'
+            iteration = $Iteration
+            warmup = $IsWarmup
+            command = [pscustomobject]@{
+                executable = 'dotnet'
+                arguments = Join-ArgumentsForDisplay -Arguments $entry.command.arguments
+            }
+            exitCode = $exitCode
+            elapsedMs = [int][Math]::Round($entry.stopwatch.Elapsed.TotalMilliseconds)
+            stdoutChars = $stdout.Length
+            stderrChars = $stderr.Length
+            jsonValid = $jsonValid
+            topLevelCommand = $topLevelCommand
+            profile = $resultProfile
+            counts = $counts
+            truncated = $truncated
+            warnings = $warnings
+            timedOut = !$finished
+            skipped = $false
+        })
+    }
+
+    return $results.ToArray()
+}
+
 function New-McpToolCall {
     param(
         [string]$Name,
@@ -656,6 +766,29 @@ function Get-ScenarioCommands {
                 limit = 30
             }
         }
+        'daemon' {
+            $statusRequest = '{"id":"1","method":"workspace/status","cache":{"cacheMode":"off","write":false,"clear":false,"directoryOverride":null}}'
+            $refreshRequest = '{"id":"1","method":"workspace/refresh","cache":{"cacheMode":"off","write":false,"clear":false,"directoryOverride":null}}'
+            $commands += New-CliCommand -Name 'serve-status-stdio' -Arguments @('serve', '--workspace', $workspaceArg) -StandardInput $statusRequest
+            $commands += New-CliCommand -Name 'serve-refresh-stdio' -Arguments @('serve', '--workspace', $workspaceArg) -StandardInput $refreshRequest
+        }
+        'cache' {
+            $cacheDirectory = 'artifacts/performance-cache'
+            $commands += New-CliCommand -Name 'workspace-refresh-cache-cold' -Arguments @('workspace-refresh', '--workspace', $workspaceArg, '--cache', 'on', '--cache-directory', $cacheDirectory, '--clear-cache', '--write-cache')
+            $commands += New-CliCommand -Name 'workspace-status-cache-warm' -Arguments @('workspace-status', '--workspace', $workspaceArg, '--cache', 'on', '--cache-directory', $cacheDirectory)
+            $commands += New-CliCommand -Name 'workspace-refresh-cache-warm' -Arguments @('workspace-refresh', '--workspace', $workspaceArg, '--cache', 'on', '--cache-directory', $cacheDirectory, '--write-cache')
+        }
+        'parallel' {
+            $commands += New-CliCommand -Name 'parallel-repo-graph' -Arguments (Add-ProfileArgument -Arguments @('repo-graph', '--workspace', $workspaceArg, '--relationship-limit', '50'))
+            $commands += New-CliCommand -Name 'parallel-find' -Arguments @('find', '--workspace', $workspaceArg, '--query', $Query, '--assume-kind', $AssumeKind, '--limit', '20')
+            $commands += New-CliCommand -Name 'parallel-outline' -Arguments @('outline', '--workspace', $workspaceArg, '--file', $SourceFile)
+        }
+        'multi-workspace' {
+            $fixtureWorkspace = ConvertTo-RepositoryPath -Path (Join-Path $repoRoot 'tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj')
+            $commands += New-CliCommand -Name 'primary-workspace-check' -Arguments @('check', '--workspace', $workspaceArg)
+            $commands += New-CliCommand -Name 'fixture-workspace-check' -Arguments @('check', '--workspace', $fixtureWorkspace)
+            $commands += New-CliCommand -Name 'fixture-outline' -Arguments @('outline', '--workspace', $fixtureWorkspace, '--file', 'tests/fixtures/SymbolNavigationFixture/FixtureCode.cs')
+        }
     }
 
     return $commands
@@ -663,7 +796,7 @@ function Get-ScenarioCommands {
 
 function Get-ScenarioNames {
     if ($Scenario -eq 'all') {
-        return @('quick', 'file-first', 'agent-loop', 'diff', 'mcp')
+        return @('quick', 'file-first', 'agent-loop', 'diff', 'mcp', 'daemon', 'cache', 'parallel', 'multi-workspace')
     }
 
     return @($Scenario)
@@ -672,6 +805,18 @@ function Get-ScenarioNames {
 $measurements = New-Object System.Collections.Generic.List[object]
 $scenarioNames = Get-ScenarioNames
 foreach ($scenarioName in $scenarioNames) {
+    if ($scenarioName -eq 'parallel') {
+        $commands = Get-ScenarioCommands -ScenarioName $scenarioName
+        for ($iteration = 1; $iteration -le ($Warmup + $Iterations); $iteration++) {
+            $isWarmup = $iteration -le $Warmup
+            $parallelResults = Invoke-ParallelMeasuredProcesses -Commands $commands -Iteration ([Math]::Max(1, $iteration - $Warmup)) -IsWarmup $isWarmup
+            foreach ($parallelResult in $parallelResults) {
+                $measurements.Add($parallelResult)
+            }
+        }
+        continue
+    }
+
     if ($scenarioName -eq 'mcp') {
         if (!(Test-Path -LiteralPath $McpDll)) {
             $measurements.Add((New-SkippedMeasurement -Name 'mcp' -Kind 'mcp' -Reason "MCP server assembly does not exist: $McpDll"))

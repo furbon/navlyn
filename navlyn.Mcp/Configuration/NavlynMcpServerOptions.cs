@@ -11,10 +11,16 @@ internal sealed record NavlynMcpServerOptions(
     IReadOnlyList<string> NavlynArguments,
     string WorkingDirectory,
     int TimeoutMilliseconds,
-    int MaxJsonChars)
+    int MaxJsonChars,
+    string? DaemonPipe,
+    NavlynMcpToolProfile ToolProfile,
+    WorkspaceRootPolicy WorkspaceRootPolicy)
 {
     public const int DefaultTimeoutMilliseconds = 120000;
     public const int DefaultMaxJsonChars = 4000000;
+    public const NavlynMcpToolProfile DefaultToolProfile = NavlynMcpToolProfile.Reader;
+    public const WorkspaceRootPolicy DefaultWorkspaceRootPolicy = WorkspaceRootPolicy.RepoRelative;
+    public const string ToolProfileEnvironmentVariable = "NAVLYN_MCP_TOOL_PROFILE";
 
     public bool UseExternalCli => !string.IsNullOrWhiteSpace(NavlynExecutable);
 
@@ -30,7 +36,18 @@ internal sealed record NavlynMcpServerOptions(
         string? workingDirectory = null;
         int timeoutMilliseconds = DefaultTimeoutMilliseconds;
         int maxJsonChars = DefaultMaxJsonChars;
+        string? daemonPipe = null;
+        NavlynMcpToolProfile toolProfile = DefaultToolProfile;
+        WorkspaceRootPolicy workspaceRootPolicy = DefaultWorkspaceRootPolicy;
         showHelp = false;
+
+        string? environmentProfile = Environment.GetEnvironmentVariable(ToolProfileEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(environmentProfile) && !TryParseToolProfile(environmentProfile, out toolProfile))
+        {
+            options = CreateEmpty();
+            error = $"{ToolProfileEnvironmentVariable} must be one of: reader, review, edit, full.";
+            return false;
+        }
 
         for (int index = 0; index < args.Count; index++)
         {
@@ -92,6 +109,44 @@ internal sealed record NavlynMcpServerOptions(
                     }
 
                     break;
+                case "--daemon-pipe":
+                    if (!TryReadValue(args, ref index, arg, out daemonPipe, out error))
+                    {
+                        options = CreateEmpty();
+                        return false;
+                    }
+
+                    break;
+                case "--tool-profile":
+                    if (!TryReadValue(args, ref index, arg, out string rawToolProfile, out error))
+                    {
+                        options = CreateEmpty();
+                        return false;
+                    }
+
+                    if (!TryParseToolProfile(rawToolProfile, out toolProfile))
+                    {
+                        options = CreateEmpty();
+                        error = "--tool-profile must be one of: reader, review, edit, full.";
+                        return false;
+                    }
+
+                    break;
+                case "--workspace-root-policy":
+                    if (!TryReadValue(args, ref index, arg, out string rawWorkspaceRootPolicy, out error))
+                    {
+                        options = CreateEmpty();
+                        return false;
+                    }
+
+                    if (!WorkspaceLoader.TryParseWorkspaceRootPolicy(rawWorkspaceRootPolicy, out workspaceRootPolicy))
+                    {
+                        options = CreateEmpty();
+                        error = "--workspace-root-policy must be one of: repo-relative, allow-listed, all.";
+                        return false;
+                    }
+
+                    break;
                 default:
                     options = CreateEmpty();
                     error = $"Unknown option: {arg}.";
@@ -146,7 +201,10 @@ internal sealed record NavlynMcpServerOptions(
             NavlynArguments: navlynArguments,
             WorkingDirectory: effectiveWorkingDirectory,
             TimeoutMilliseconds: timeoutMilliseconds,
-            MaxJsonChars: maxJsonChars);
+            MaxJsonChars: maxJsonChars,
+            DaemonPipe: daemonPipe,
+            ToolProfile: toolProfile,
+            WorkspaceRootPolicy: workspaceRootPolicy);
         error = null;
         return true;
     }
@@ -157,13 +215,51 @@ internal sealed record NavlynMcpServerOptions(
         builder.AppendLine("Usage: navlyn-mcp --workspace <path|auto> [options]");
         builder.AppendLine();
         builder.AppendLine("Options:");
-        builder.AppendLine("  --workspace <path|auto>        Required .code-workspace, .slnx, .sln, or .csproj path, or auto to discover one.");
+        builder.AppendLine("  --workspace <path|auto>        Required navlyn.workspace.json, .code-workspace, .slnx, .sln, or .csproj path, or auto to discover one.");
         builder.AppendLine("  --navlyn-executable <command>  Legacy external Navlyn CLI command or executable. Omit for standalone in-process execution.");
         builder.AppendLine("  --navlyn-arg <arg>             Prefix argument for the legacy external CLI path, repeatable.");
         builder.AppendLine("  --working-directory <path>     Working directory for in-process execution or the legacy child process.");
         builder.AppendLine("  --timeout-ms <number>          Per-tool timeout. Defaults to 120000.");
         builder.AppendLine("  --max-json-chars <number>      Max command JSON chars. Defaults to 4000000.");
+        builder.AppendLine("  --daemon-pipe <name>           Optional local navlyn serve named pipe for workspace status/refresh.");
+        builder.AppendLine("  --tool-profile <profile>       MCP tool surface: reader, review, edit, or full. Defaults to reader.");
+        builder.AppendLine("                                  Can also be set with NAVLYN_MCP_TOOL_PROFILE.");
+        builder.AppendLine("  --workspace-root-policy <mode> Workspace root policy: repo-relative, allow-listed, or all. Defaults to repo-relative.");
         return builder.ToString();
+    }
+
+    public static string FormatToolProfile(NavlynMcpToolProfile toolProfile)
+    {
+        return toolProfile switch
+        {
+            NavlynMcpToolProfile.Reader => "reader",
+            NavlynMcpToolProfile.Review => "review",
+            NavlynMcpToolProfile.Edit => "edit",
+            NavlynMcpToolProfile.Full => "full",
+            _ => "reader"
+        };
+    }
+
+    public static bool TryParseToolProfile(string value, out NavlynMcpToolProfile toolProfile)
+    {
+        switch (value.Trim().ToLowerInvariant())
+        {
+            case "reader":
+                toolProfile = NavlynMcpToolProfile.Reader;
+                return true;
+            case "review":
+                toolProfile = NavlynMcpToolProfile.Review;
+                return true;
+            case "edit":
+                toolProfile = NavlynMcpToolProfile.Edit;
+                return true;
+            case "full":
+                toolProfile = NavlynMcpToolProfile.Full;
+                return true;
+            default:
+                toolProfile = DefaultToolProfile;
+                return false;
+        }
     }
 
     private static bool TryReadValue(
@@ -231,6 +327,24 @@ internal sealed record NavlynMcpServerOptions(
 
     private static NavlynMcpServerOptions CreateEmpty()
     {
-        return new NavlynMcpServerOptions("", "", "", [], "", DefaultTimeoutMilliseconds, DefaultMaxJsonChars);
+        return new NavlynMcpServerOptions(
+            "",
+            "",
+            "",
+            [],
+            "",
+            DefaultTimeoutMilliseconds,
+            DefaultMaxJsonChars,
+            DaemonPipe: null,
+            DefaultToolProfile,
+            DefaultWorkspaceRootPolicy);
     }
+}
+
+internal enum NavlynMcpToolProfile
+{
+    Reader,
+    Review,
+    Edit,
+    Full
 }

@@ -4,14 +4,18 @@ All notable public release changes for Navlyn are tracked here.
 
 ## 0.5.0 - 2026-07-04
 
-Release candidate for agent-facing performance, workspace, contract, and OSS readiness.
+Release candidate for agent-facing performance, workspace, contract, runtime, and OSS readiness.
 
-- Added MCP file-first tools for `navlyn_file_outline`, `navlyn_symbol_source`, `navlyn_symbol_edges`, and `navlyn_inspect_file`, with outline `candidateId` flow into source lookup.
-- Added direct warm-path MCP execution for selected file-first tools with session-local workspace reuse, workspace fingerprint metadata, snapshot id, cache status, index status, and cost class.
-- Added .NET 8 and .NET 10 tool assets for `navlyn` and `navlyn-mcp`.
-- Added `.code-workspace` loading, `--workspace auto` support for clear top-level workspace candidates, and diagnostics for invalid, empty, ambiguous, or external-root workspace files.
-- Hardened automation-facing contracts with workflow and MCP envelope schemas plus representative golden output snapshots.
-- Refreshed README, demos, client setup, tool-selection eval guidance, performance docs, known limits, issue templates, package metadata, and release identity for the synchronized `0.5.0` release.
+- Added startup-fixed MCP tool profiles (`reader`, `review`, `edit`, `full`) with profile-gated tool discovery, need-triggered descriptions, and deterministic blocked-call envelopes.
+- Added MCP file-first and selected-symbol tools for `navlyn_file_outline`, `navlyn_symbol_source`, `navlyn_symbol_edges`, `navlyn_inspect_file`, and `navlyn_workspace_status` / `navlyn_workspace_refresh`.
+- Added direct warm-path MCP execution for selected reader tools with session-local workspace reuse, workspace fingerprint metadata, snapshot id, freshness status, cache status, index status, document-index sizing, and cost class.
+- Added `navlyn.workspace.json`, `.code-workspace` loading, `--workspace auto`, repository root policy controls, and diagnostics for invalid, empty, ambiguous, or external-root workspace files.
+- Added workspace status/refresh CLI commands, an opt-in local read-only `navlyn serve` daemon for status/refresh requests, and an opt-in lightweight on-disk workspace index manifest that stores no source text.
+- Added declaration indexing, same-snapshot candidate record reuse, fuzzy semantic enrichment caching, and scoped/budgeted reverse-edge search metadata for `references`, `callers`, `about`, and `impact`.
+- Added focused automation schemas and golden snapshots for MCP profiles/envelopes, target selection, file-first output, workspace status/cache, and scoped search metadata.
+- Added automated tool-selection evals and expanded performance measurement for quick, file-first, agent-loop, MCP warm-loop, daemon, on-disk cache, parallel same-workspace agents, and multi-workspace scenarios.
+- Added .NET 8 and .NET 10 test lanes, tool assets, CI validation, package install smoke coverage, release pack validation, and publish dry-run support for `navlyn` and `navlyn-mcp`.
+- Refreshed README, README_ja, demos, client setup, agent recipes, distribution, discovery, performance, architecture, known limits, issue templates, package metadata, and release identity for the synchronized `0.5.0` release.
 
 ## 0.4.0 - 2026-06-29
 

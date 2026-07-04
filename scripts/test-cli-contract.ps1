@@ -311,7 +311,7 @@ try {
     Assert-Equal -Name 'check valid workspace ok' -Actual $validJson.ok -Expected $true
     Assert-Equal -Name 'check valid workspace workspace' -Actual $validJson.workspace -Expected 'navlyn.slnx'
     Assert-Equal -Name 'check valid workspace kind' -Actual $validJson.kind -Expected 'solution'
-    Assert-Equal -Name 'check valid workspace projects' -Actual $validJson.projects -Expected 9
+    Assert-Equal -Name 'check valid workspace projects' -Actual $validJson.projects -Expected 10
 
     $overview = Invoke-Navlyn `
         -Name 'overview valid workspace' `
@@ -322,7 +322,7 @@ try {
     $overviewProject = @($overviewJson.projects | Where-Object { $_.path -eq 'navlyn/navlyn.csproj' -and $_.targetFramework -eq 'net10.0' })[0]
     Assert-Equal -Name 'overview workspace' -Actual $overviewJson.workspace -Expected 'navlyn.slnx'
     Assert-Equal -Name 'overview kind' -Actual $overviewJson.kind -Expected 'solution'
-    Assert-Equal -Name 'overview project count' -Actual @($overviewJson.projects).Count -Expected 9
+    Assert-Equal -Name 'overview project count' -Actual @($overviewJson.projects).Count -Expected 10
     Assert-Equal -Name 'overview project name' -Actual $overviewProject.name -Expected 'navlyn(net10.0)'
     Assert-Equal -Name 'overview project path' -Actual $overviewProject.path -Expected 'navlyn/navlyn.csproj'
     Assert-Equal -Name 'overview project language' -Actual $overviewProject.language -Expected 'C#'
@@ -336,10 +336,10 @@ try {
     Assert-Empty -Name 'repo-graph stderr' -Text $repoGraph.Stderr
     $repoGraphJson = $repoGraph.Stdout | ConvertFrom-Json
     $repoGraphNavlynProject = @($repoGraphJson.projects.items | Where-Object { $_.path -eq 'navlyn/navlyn.csproj' -and $_.targetFramework -eq 'net10.0' })[0]
-    $repoGraphTestProject = @($repoGraphJson.projects.items | Where-Object { $_.name -eq 'navlyn.Tests' })[0]
+    $repoGraphTestProject = @($repoGraphJson.projects.items | Where-Object { $_.path -eq 'navlyn.Tests/navlyn.Tests.csproj' })[0]
     Assert-Equal -Name 'repo-graph command' -Actual $repoGraphJson.command -Expected 'repo-graph'
     Assert-Equal -Name 'repo-graph workspace' -Actual $repoGraphJson.workspace -Expected 'navlyn.slnx'
-    Assert-Equal -Name 'repo-graph project count' -Actual $repoGraphJson.projects.totalProjects -Expected 9
+    Assert-Equal -Name 'repo-graph project count' -Actual $repoGraphJson.projects.totalProjects -Expected 10
     Assert-Equal -Name 'repo-graph navlyn classification' -Actual $repoGraphNavlynProject.classification.kind -Expected 'tooling'
     Assert-Equal -Name 'repo-graph test classification' -Actual $repoGraphTestProject.classification.kind -Expected 'test'
     Assert-Equal -Name 'repo-graph package edge present' -Actual (@($repoGraphJson.edges.packageReferences | Where-Object { $_.name -eq 'System.CommandLine' }).Count -ge 1) -Expected $true
@@ -358,7 +358,7 @@ try {
 
     $subdirectoryProjectFilter = Invoke-Navlyn `
         -Name 'diagnostics from subdirectory with repo-relative project filter' `
-        -Arguments @('diagnostics', '--workspace', 'navlyn.slnx', '--project', 'navlyn.Tests/navlyn.Tests.csproj', '--limit', '1') `
+        -Arguments @('diagnostics', '--workspace', 'navlyn.slnx', '--project', 'navlyn.Tests(net10.0)', '--limit', '1') `
         -ExpectedExitCode 0 `
         -WorkingDirectory $ProjectDir
 
@@ -451,7 +451,7 @@ try {
 
     $testsForSymbol = Invoke-Navlyn `
         -Name 'tests-for-symbol query mode' `
-        -Arguments @('tests-for-symbol', '--workspace', 'navlyn.slnx', '--query', 'RepoGraphResolver', '--assume-kind', 'NamedType', '--project', 'Navlyn.Core(net10.0)', '--test-project', 'navlyn.Tests', '--test-limit', '5') `
+        -Arguments @('tests-for-symbol', '--workspace', 'navlyn.slnx', '--query', 'RepoGraphResolver', '--assume-kind', 'NamedType', '--project', 'Navlyn.Core(net10.0)', '--test-project', 'navlyn.Tests(net10.0)', '--test-limit', '5') `
         -ExpectedExitCode 0
 
     Assert-Empty -Name 'tests-for-symbol stderr' -Text $testsForSymbol.Stderr
@@ -463,7 +463,7 @@ try {
 
     $testsForDiff = Invoke-Navlyn `
         -Name 'tests-for-diff valid workspace' `
-        -Arguments @('tests-for-diff', '--workspace', 'navlyn.slnx', '--base', 'HEAD', '--head', 'HEAD', '--project', 'navlyn(net10.0)', '--test-project', 'navlyn.Tests', '--symbol-limit', '1', '--test-limit', '1') `
+        -Arguments @('tests-for-diff', '--workspace', 'navlyn.slnx', '--base', 'HEAD', '--head', 'HEAD', '--project', 'navlyn(net10.0)', '--test-project', 'navlyn.Tests(net10.0)', '--symbol-limit', '1', '--test-limit', '1') `
         -ExpectedExitCode 0
 
     Assert-Empty -Name 'tests-for-diff stderr' -Text $testsForDiff.Stderr

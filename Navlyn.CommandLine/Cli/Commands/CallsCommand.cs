@@ -93,6 +93,7 @@ internal static class CallsCommand
             IncludeMetadata: includeMetadata,
             Limit: resultFilter.Limit,
             TotalGroups: filteredCalls.Count,
+            Search: resolution.Search,
             Caller: CallHierarchySymbolResult.FromSymbol(resolution.Caller),
             Calls: limitedCalls.Select(CallHierarchyGroupResult.FromGroup).ToArray()));
 
@@ -119,6 +120,7 @@ internal static class CallsCommand
         bool IncludeMetadata,
         int? Limit,
         int TotalGroups,
+        SymbolNavigationSearchMetadata Search,
         CallHierarchySymbolResult Caller,
         IReadOnlyList<CallHierarchyGroupResult> Calls);
 }

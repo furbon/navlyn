@@ -14,6 +14,9 @@ internal static class NavlynToolCommandBuilder
     private static readonly string[] SnippetPolicyValues = ["none", "signature", "line", "block"];
     private static readonly string[] EntrypointModeValues = ["symbol", "framework"];
     private static readonly string[] ProfileValues = ["compact", "evidence", "full"];
+    private static readonly string[] WorkflowProfileValues = ["light", "full"];
+    private static readonly string[] NavigationScopeValues = ["file", "project", "dependent-projects", "workspace-set", "solution"];
+    private static readonly string[] CacheModeValues = ["auto", "on", "off"];
     private static readonly string[] ExactNavigationOperations = ["definition", "references", "callers", "calls", "implementations", "type_hierarchy", "symbol_info"];
     private static readonly string[] FilteredExactNavigationOperations = ["references", "callers", "calls", "implementations"];
     private static readonly string[] SymbolEdgeOperations = ["references", "callers", "calls", "implementations"];
@@ -48,6 +51,36 @@ internal static class NavlynToolCommandBuilder
         }
 
         return CommandBuildResult.Valid("repo-graph", args);
+    }
+
+    public static CommandBuildResult WorkspaceStatus(string? cache, string? cacheDirectory)
+    {
+        List<string> args = [];
+        if (!TryAddAllowedValue(args, "--cache", cache, CacheModeValues, out string? error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        AddOptionalValue(args, "--cache-directory", cacheDirectory);
+        return CommandBuildResult.Valid("workspace-status", args);
+    }
+
+    public static CommandBuildResult WorkspaceRefresh(
+        string? cache,
+        string? cacheDirectory,
+        bool? clearCache,
+        bool? writeCache)
+    {
+        List<string> args = [];
+        if (!TryAddAllowedValue(args, "--cache", cache, CacheModeValues, out string? error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        AddOptionalValue(args, "--cache-directory", cacheDirectory);
+        AddOptionalFlag(args, "--clear-cache", clearCache);
+        AddOptionalFlag(args, "--write-cache", writeCache);
+        return CommandBuildResult.Valid("workspace-refresh", args);
     }
 
     public static CommandBuildResult FindSymbol(
@@ -181,6 +214,9 @@ internal static class NavlynToolCommandBuilder
         int? depth,
         bool? includeSnippets,
         int? snippetLines,
+        string? scope,
+        int? maxDocuments,
+        string? profile,
         string? candidatePolicy,
         string? minConfidence,
         bool? explainSelection)
@@ -214,7 +250,10 @@ internal static class NavlynToolCommandBuilder
             !TryAddPositiveInt(args, "--relation-limit", relationLimit, out error) ||
             !TryAddPositiveInt(args, "--limit", limit, out error) ||
             !TryAddNonNegativeInt(args, "--depth", depth, out error) ||
-            !TryAddNonNegativeInt(args, "--snippet-lines", snippetLines, out error))
+            !TryAddNonNegativeInt(args, "--snippet-lines", snippetLines, out error) ||
+            !TryAddAllowedValue(args, "--scope", scope, NavigationScopeValues, out error) ||
+            !TryAddPositiveInt(args, "--max-documents", maxDocuments, out error) ||
+            !TryAddAllowedValue(args, "--profile", profile, WorkflowProfileValues, out error))
         {
             return CommandBuildResult.Invalid(error);
         }
@@ -292,6 +331,9 @@ internal static class NavlynToolCommandBuilder
             depth,
             includeSnippets,
             snippetLines,
+            scope: null,
+            maxDocuments: null,
+            profile: null,
             candidatePolicy,
             minConfidence,
             explainSelection);
@@ -541,6 +583,8 @@ internal static class NavlynToolCommandBuilder
         string[]? usageKinds,
         string[]? groupBy,
         int? limit,
+        string? scope,
+        int? maxDocuments,
         bool? includeMetadata)
     {
         if (string.IsNullOrWhiteSpace(operation))
@@ -572,6 +616,51 @@ internal static class NavlynToolCommandBuilder
             usageKinds,
             groupBy,
             limit,
+            scope,
+            maxDocuments,
+            includeMetadata);
+    }
+
+    public static CommandBuildResult SymbolEdges(
+        string operation,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        string? project,
+        bool? excludeGenerated,
+        string? resultProject,
+        string[]? resultProjects,
+        string? resultPath,
+        string[]? resultPaths,
+        string? resultKind,
+        string[]? resultKinds,
+        string? usageKind,
+        string[]? usageKinds,
+        string[]? groupBy,
+        int? limit,
+        bool? includeMetadata)
+    {
+        return SymbolEdges(
+            operation,
+            candidateId,
+            file,
+            line,
+            column,
+            project,
+            excludeGenerated,
+            resultProject,
+            resultProjects,
+            resultPath,
+            resultPaths,
+            resultKind,
+            resultKinds,
+            usageKind,
+            usageKinds,
+            groupBy,
+            limit,
+            scope: null,
+            maxDocuments: null,
             includeMetadata);
     }
 
@@ -601,6 +690,8 @@ internal static class NavlynToolCommandBuilder
         string[]? usageKinds,
         string[]? groupBy,
         int? limit,
+        string? scope,
+        int? maxDocuments,
         bool? includeMetadata)
     {
         if (string.IsNullOrWhiteSpace(operation))
@@ -648,7 +739,9 @@ internal static class NavlynToolCommandBuilder
             !TryAddSingleOrMany(args, "--result-kind", resultKind, resultKinds, "resultKind", "resultKinds", out error) ||
             !TryAddSingleOrManyAllowed(args, "--usage-kind", usageKind, usageKinds, "usageKind", "usageKinds", ReferenceUsageKindValues, out error) ||
             !TryAddManyAllowed(args, "--group-by", groupBy, "groupBy", ReferenceGroupByValues, out error) ||
-            !TryAddPositiveInt(args, "--limit", limit, out error))
+            !TryAddPositiveInt(args, "--limit", limit, out error) ||
+            !TryAddAllowedValue(args, "--scope", normalizedOperation is "references" or "callers" ? scope : null, NavigationScopeValues, out error) ||
+            !TryAddPositiveInt(args, "--max-documents", normalizedOperation is "references" or "callers" ? maxDocuments : null, out error))
         {
             return CommandBuildResult.Invalid(error);
         }
@@ -660,6 +753,49 @@ internal static class NavlynToolCommandBuilder
 
         AddOptionalFlag(args, "--include-metadata", includeMetadata);
         return CommandBuildResult.Valid(ToCliExactNavigationCommand(normalizedOperation), args);
+    }
+
+    public static CommandBuildResult ExactNavigation(
+        string operation,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        string? project,
+        bool? excludeGenerated,
+        string? resultProject,
+        string[]? resultProjects,
+        string? resultPath,
+        string[]? resultPaths,
+        string? resultKind,
+        string[]? resultKinds,
+        string? usageKind,
+        string[]? usageKinds,
+        string[]? groupBy,
+        int? limit,
+        bool? includeMetadata)
+    {
+        return ExactNavigation(
+            operation,
+            candidateId,
+            file,
+            line,
+            column,
+            project,
+            excludeGenerated,
+            resultProject,
+            resultProjects,
+            resultPath,
+            resultPaths,
+            resultKind,
+            resultKinds,
+            usageKind,
+            usageKinds,
+            groupBy,
+            limit,
+            scope: null,
+            maxDocuments: null,
+            includeMetadata);
     }
 
     public static CommandBuildResult TestsForSymbol(

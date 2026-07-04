@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.navlyn.dev/navlyn-symbol-search-metadata.schema.json",
+  "title": "Navlyn Symbol Search Metadata",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "scope",
+    "costClass",
+    "partial",
+    "candidateProjectCount",
+    "searchedProjectCount",
+    "candidateDocumentCount",
+    "prefilteredDocumentCount",
+    "searchedDocumentCount",
+    "lexicalPrefilterApplied",
+    "maxDocuments",
+    "rerunHints"
+  ],
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": [
+        "file",
+        "project",
+        "dependent-projects",
+        "workspace-set",
+        "solution"
+      ]
+    },
+    "costClass": {
+      "type": "string",
+      "enum": [
+        "local",
+        "file",
+        "project",
+        "workspace",
+        "solution"
+      ]
+    },
+    "partial": { "type": "boolean" },
+    "candidateProjectCount": { "type": "integer", "minimum": 0 },
+    "searchedProjectCount": { "type": "integer", "minimum": 0 },
+    "candidateDocumentCount": { "type": "integer", "minimum": 0 },
+    "prefilteredDocumentCount": { "type": "integer", "minimum": 0 },
+    "searchedDocumentCount": { "type": "integer", "minimum": 0 },
+    "lexicalPrefilterApplied": { "type": "boolean" },
+    "maxDocuments": { "type": "integer", "minimum": 1 },
+    "truncationReason": {
+      "type": "string",
+      "enum": [
+        "document-budget"
+      ]
+    },
+    "nextScope": {
+      "type": "string",
+      "enum": [
+        "project",
+        "dependent-projects",
+        "workspace-set",
+        "solution"
+      ]
+    },
+    "rerunHints": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

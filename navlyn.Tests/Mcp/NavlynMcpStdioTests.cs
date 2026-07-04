@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
+using Navlyn.Mcp.Configuration;
 using Navlyn.Mcp.Tools;
 
 namespace Navlyn.Tests.Mcp;
@@ -26,7 +27,8 @@ public sealed class NavlynMcpStdioTests
                     "--workspace", Path.Combine(repoRoot, "navlyn.slnx"),
                     "--working-directory", repoRoot,
                     "--timeout-ms", "60000",
-                    "--max-json-chars", "4000000"
+                    "--max-json-chars", "4000000",
+                    "--tool-profile", "full"
                 ],
                 WorkingDirectory = repoRoot
             },
@@ -47,6 +49,8 @@ public sealed class NavlynMcpStdioTests
 
         IList<McpClientTool> tools = await client.ListToolsAsync(cancellationToken: timeout.Token);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.WorkspaceSummaryTool);
+        Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.WorkspaceStatusTool);
+        Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.WorkspaceRefreshTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.ResolveTargetTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.FindSymbolTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.FileOutlineTool);
@@ -55,6 +59,7 @@ public sealed class NavlynMcpStdioTests
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.InspectFileTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.ExactNavigationTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.BatchTool);
+        Assert.Equal(ExpectedFullTools, tools.Select(tool => tool.Name));
         McpClientTool workspaceTool = Assert.Single(tools, tool => tool.Name == NavlynMcpTools.WorkspaceSummaryTool);
         Assert.NotNull(workspaceTool.ReturnJsonSchema);
 
@@ -82,8 +87,28 @@ public sealed class NavlynMcpStdioTests
         JsonElement structured = result.StructuredContent.Value;
         Assert.True(structured.GetProperty("ok").GetBoolean());
         Assert.Equal(NavlynMcpTools.WorkspaceSummaryTool, structured.GetProperty("tool").GetString());
+        Assert.Equal("direct", structured.GetProperty("metadata").GetProperty("executionPath").GetString());
+        Assert.False(structured.GetProperty("metadata").GetProperty("workspaceCacheHit").GetBoolean());
+        Assert.Equal("fresh", structured.GetProperty("metadata").GetProperty("freshnessStatus").GetString());
+        Assert.True(structured.GetProperty("metadata").GetProperty("documentIndexDocumentCount").GetInt32() > 0);
         Assert.Equal("repo-graph", structured.GetProperty("sourceCommand").GetProperty("command").GetString());
         Assert.Equal("repo-graph", structured.GetProperty("result").GetProperty("command").GetString());
+
+        CallToolResult statusResult = await client.CallToolAsync(
+            NavlynMcpTools.WorkspaceStatusTool,
+            new Dictionary<string, object?>
+            {
+                ["cache"] = "off"
+            },
+            cancellationToken: timeout.Token);
+
+        Assert.False(statusResult.IsError, statusResult.StructuredContent?.ToString());
+        JsonElement statusStructured = statusResult.StructuredContent!.Value;
+        Assert.True(statusStructured.GetProperty("ok").GetBoolean());
+        Assert.Equal("direct", statusStructured.GetProperty("metadata").GetProperty("executionPath").GetString());
+        Assert.True(statusStructured.GetProperty("metadata").GetProperty("workspaceCacheHit").GetBoolean());
+        Assert.Equal("workspace-status", statusStructured.GetProperty("result").GetProperty("command").GetString());
+        Assert.Equal("disabled", statusStructured.GetProperty("result").GetProperty("cache").GetProperty("status").GetString());
 
         CallToolResult outlineResult = await client.CallToolAsync(
             NavlynMcpTools.FileOutlineTool,
@@ -97,7 +122,7 @@ public sealed class NavlynMcpStdioTests
         JsonElement outlineStructured = outlineResult.StructuredContent!.Value;
         Assert.True(outlineStructured.GetProperty("ok").GetBoolean());
         Assert.Equal("direct", outlineStructured.GetProperty("metadata").GetProperty("executionPath").GetString());
-        Assert.False(outlineStructured.GetProperty("metadata").GetProperty("workspaceCacheHit").GetBoolean());
+        Assert.True(outlineStructured.GetProperty("metadata").GetProperty("workspaceCacheHit").GetBoolean());
         Assert.Equal("warm", outlineStructured.GetProperty("metadata").GetProperty("indexStatus").GetString());
         Assert.Equal("cheap-file-first", outlineStructured.GetProperty("metadata").GetProperty("costClass").GetString());
         Assert.Equal(
@@ -131,7 +156,7 @@ public sealed class NavlynMcpStdioTests
         Assert.NotEmpty(resourceResult.Contents);
         TextResourceContents resourceText = Assert.IsType<TextResourceContents>(resourceResult.Contents[0]);
         using JsonDocument resourceJson = JsonDocument.Parse(resourceText.Text);
-        Assert.True(resourceJson.RootElement.GetProperty("ok").GetBoolean());
+        Assert.True(resourceJson.RootElement.GetProperty("ok").GetBoolean(), resourceText.Text);
         Assert.Equal("repo-graph", resourceJson.RootElement.GetProperty("result").GetProperty("command").GetString());
 
         GetPromptResult promptResult = await client.GetPromptAsync(
@@ -160,6 +185,175 @@ public sealed class NavlynMcpStdioTests
         Assert.Equal(NavlynMcpTools.FindSymbolTool, errorStructured.GetProperty("tool").GetString());
         Assert.Equal("NAVLYN1004", errorStructured.GetProperty("error").GetProperty("code").GetString());
     }
+
+    [Theory]
+    [MemberData(nameof(ProfileToolData))]
+    public async Task StdioServer_ListsToolsForProfileInDeterministicOrder(string profile, string[] expectedTools)
+    {
+        await using McpClient client = await CreateClientAsync(profile);
+
+        IList<McpClientTool> tools = await client.ListToolsAsync();
+
+        Assert.Equal(expectedTools, tools.Select(tool => tool.Name));
+    }
+
+    [Fact]
+    public async Task StdioServer_BlocksCallsOutsideSelectedToolProfile()
+    {
+        await using McpClient client = await CreateClientAsync("reader");
+
+        CallToolResult result = await client.CallToolAsync(
+            NavlynMcpTools.BatchTool,
+            new Dictionary<string, object?>());
+
+        Assert.True(result.IsError);
+        Assert.NotNull(result.StructuredContent);
+        JsonElement structured = result.StructuredContent.Value;
+        Assert.False(structured.GetProperty("ok").GetBoolean());
+        Assert.Equal(NavlynMcpTools.BatchTool, structured.GetProperty("tool").GetString());
+        Assert.Equal("NAVLYN_MCP_TOOL_PROFILE", structured.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task StdioServer_ReaderToolDescriptionsKeepNeedTriggeredGuidance()
+    {
+        await using McpClient client = await CreateClientAsync("reader");
+
+        IList<McpClientTool> tools = await client.ListToolsAsync();
+
+        McpClientTool fileOutline = Assert.Single(tools, tool => tool.Name == NavlynMcpTools.FileOutlineTool);
+        Assert.Contains("Do not use for tests", fileOutline.Description, StringComparison.Ordinal);
+        McpClientTool resolveTarget = Assert.Single(tools, tool => tool.Name == NavlynMcpTools.ResolveTargetTool);
+        Assert.Contains("standard first symbol entry", resolveTarget.Description, StringComparison.Ordinal);
+    }
+
+    public static IEnumerable<object[]> ProfileToolData()
+    {
+        yield return ["reader", ExpectedReaderTools];
+        yield return ["review", ExpectedReviewTools];
+        yield return ["edit", ExpectedEditTools];
+        yield return ["full", ExpectedFullTools];
+    }
+
+    private static async Task<McpClient> CreateClientAsync(string profile)
+    {
+        string repoRoot = FindRepositoryRoot();
+        string serverDll = Path.Combine(repoRoot, "navlyn.Mcp", "bin", "Debug", GetCurrentTargetFramework(), "navlyn.Mcp.dll");
+        Assert.True(File.Exists(serverDll), $"MCP server assembly does not exist: {serverDll}");
+
+        StdioClientTransport transport = new(
+            new StdioClientTransportOptions
+            {
+                Command = "dotnet",
+                Arguments =
+                [
+                    serverDll,
+                    "--workspace", Path.Combine(repoRoot, "navlyn.slnx"),
+                    "--working-directory", repoRoot,
+                    "--timeout-ms", "60000",
+                    "--max-json-chars", "4000000",
+                    "--tool-profile", profile
+                ],
+                WorkingDirectory = repoRoot
+            },
+            NullLoggerFactory.Instance);
+
+        return await McpClient.CreateAsync(
+            transport,
+            new McpClientOptions
+            {
+                ClientInfo = new Implementation
+                {
+                    Name = "navlyn-tests",
+                    Version = "0.5.0"
+                }
+            },
+            NullLoggerFactory.Instance);
+    }
+
+    private static readonly string[] ExpectedReaderTools =
+    [
+        NavlynMcpTools.WorkspaceSummaryTool,
+        NavlynMcpTools.WorkspaceStatusTool,
+        NavlynMcpTools.WorkspaceRefreshTool,
+        NavlynMcpTools.ResolveTargetTool,
+        NavlynMcpTools.FindSymbolTool,
+        NavlynMcpTools.FileOutlineTool,
+        NavlynMcpTools.InspectFileTool,
+        NavlynMcpTools.SymbolSourceTool,
+        NavlynMcpTools.SymbolEdgesTool,
+        NavlynMcpTools.AboutSymbolTool,
+        NavlynMcpTools.RelatedFilesTool,
+        NavlynMcpTools.ExactNavigationTool
+    ];
+
+    private static readonly string[] ExpectedReviewTools =
+    [
+        NavlynMcpTools.WorkspaceSummaryTool,
+        NavlynMcpTools.WorkspaceStatusTool,
+        NavlynMcpTools.WorkspaceRefreshTool,
+        NavlynMcpTools.ResolveTargetTool,
+        NavlynMcpTools.FindSymbolTool,
+        NavlynMcpTools.FileOutlineTool,
+        NavlynMcpTools.InspectFileTool,
+        NavlynMcpTools.SymbolSourceTool,
+        NavlynMcpTools.SymbolEdgesTool,
+        NavlynMcpTools.AboutSymbolTool,
+        NavlynMcpTools.RelatedFilesTool,
+        NavlynMcpTools.ImpactTool,
+        NavlynMcpTools.EntrypointsTool,
+        NavlynMcpTools.ExactNavigationTool,
+        NavlynMcpTools.TestsForDiffTool,
+        NavlynMcpTools.PublicApiDiffTool,
+        NavlynMcpTools.ReviewDiffTool,
+        NavlynMcpTools.ContextPackTool
+    ];
+
+    private static readonly string[] ExpectedEditTools =
+    [
+        NavlynMcpTools.WorkspaceSummaryTool,
+        NavlynMcpTools.WorkspaceStatusTool,
+        NavlynMcpTools.WorkspaceRefreshTool,
+        NavlynMcpTools.ResolveTargetTool,
+        NavlynMcpTools.FindSymbolTool,
+        NavlynMcpTools.FileOutlineTool,
+        NavlynMcpTools.InspectFileTool,
+        NavlynMcpTools.SymbolSourceTool,
+        NavlynMcpTools.SymbolEdgesTool,
+        NavlynMcpTools.AboutSymbolTool,
+        NavlynMcpTools.RelatedFilesTool,
+        NavlynMcpTools.ImpactTool,
+        NavlynMcpTools.EntrypointsTool,
+        NavlynMcpTools.ExactNavigationTool,
+        NavlynMcpTools.TestsForSymbolTool,
+        NavlynMcpTools.DiImpactTool,
+        NavlynMcpTools.ContextPackTool
+    ];
+
+    private static readonly string[] ExpectedFullTools =
+    [
+        NavlynMcpTools.WorkspaceSummaryTool,
+        NavlynMcpTools.WorkspaceStatusTool,
+        NavlynMcpTools.WorkspaceRefreshTool,
+        NavlynMcpTools.ResolveTargetTool,
+        NavlynMcpTools.FindSymbolTool,
+        NavlynMcpTools.FileOutlineTool,
+        NavlynMcpTools.InspectFileTool,
+        NavlynMcpTools.SymbolSourceTool,
+        NavlynMcpTools.SymbolEdgesTool,
+        NavlynMcpTools.AboutSymbolTool,
+        NavlynMcpTools.RelatedFilesTool,
+        NavlynMcpTools.ImpactTool,
+        NavlynMcpTools.EntrypointsTool,
+        NavlynMcpTools.ExactNavigationTool,
+        NavlynMcpTools.TestsForSymbolTool,
+        NavlynMcpTools.TestsForDiffTool,
+        NavlynMcpTools.DiImpactTool,
+        NavlynMcpTools.PublicApiDiffTool,
+        NavlynMcpTools.ReviewDiffTool,
+        NavlynMcpTools.ContextPackTool,
+        NavlynMcpTools.BatchTool
+    ];
 
     private static string FindRepositoryRoot()
     {

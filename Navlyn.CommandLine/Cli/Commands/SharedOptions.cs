@@ -1,5 +1,7 @@
 ﻿using System.CommandLine;
 
+using Navlyn.Symbols;
+
 namespace Navlyn.Cli.Commands;
 
 internal static class SharedOptions
@@ -8,9 +10,20 @@ internal static class SharedOptions
     {
         return new Option<FileInfo>("--workspace")
         {
-            Description = "Path to a .code-workspace, .slnx, .sln, or .csproj workspace, or auto.",
+            Description = "Path to a navlyn.workspace.json, .code-workspace, .slnx, .sln, or .csproj workspace, or auto.",
             Required = true
         };
+    }
+
+    public static Option<string?> CreateWorkspaceRootPolicyOption()
+    {
+        Option<string?> option = new("--workspace-root-policy")
+        {
+            Description = "Workspace root policy: repo-relative, allow-listed, or all."
+        };
+
+        option.AcceptOnlyFromAmong("repo-relative", "allow-listed", "all");
+        return option;
     }
 
     public static Option<string> CreateQueryOption()
@@ -47,6 +60,26 @@ internal static class SharedOptions
         return new Option<int?>("--limit")
         {
             Description = "Maximum number of symbol matches to return. Must be 1 or greater."
+        };
+    }
+
+    public static Option<string> CreateSearchScopeOption()
+    {
+        Option<string> option = new("--scope")
+        {
+            Description = "Search scope for expensive navigation: file, project, dependent-projects, workspace-set, or solution.",
+            DefaultValueFactory = _ => SymbolNavigationSearchOptions.DefaultScope
+        };
+
+        option.AcceptOnlyFromAmong([.. SymbolNavigationSearchScopes.Values]);
+        return option;
+    }
+
+    public static Option<int?> CreateMaxDocumentsOption()
+    {
+        return new Option<int?>("--max-documents")
+        {
+            Description = $"Maximum lexically matching documents to search before returning partial results. Defaults to {SymbolNavigationSearchOptions.DefaultMaxDocuments}."
         };
     }
 

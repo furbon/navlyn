@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.navlyn.dev/navlyn-file-outline-result.schema.json",
+  "title": "Navlyn File Outline Result",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "file",
+    "entries"
+  ],
+  "properties": {
+    "file": { "type": "string", "minLength": 1 },
+    "project": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "excludeGenerated": { "type": "boolean" },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "name",
+          "kind",
+          "facts",
+          "candidateId",
+          "path",
+          "line",
+          "column",
+          "endLine",
+          "endColumn"
+        ],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "kind": { "type": "string", "minLength": 1 },
+          "container": { "type": [ "string", "null" ] },
+          "facts": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "candidateId": {
+            "type": "string",
+            "pattern": "^sym:v1:"
+          },
+          "path": { "type": "string", "minLength": 1 },
+          "line": { "type": "integer", "minimum": 1 },
+          "column": { "type": "integer", "minimum": 1 },
+          "endLine": { "type": "integer", "minimum": 1 },
+          "endColumn": { "type": "integer", "minimum": 1 }
+        }
+      }
+    }
+  }
+}

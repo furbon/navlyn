@@ -101,6 +101,9 @@ internal static class NavlynCli
         rootCommand.Subcommands.Add(PackageImpactCommand.Create());
         rootCommand.Subcommands.Add(DiagnosticsCommand.Create());
         rootCommand.Subcommands.Add(BatchCommand.Create());
+        rootCommand.Subcommands.Add(WorkspaceStatusCommand.Create());
+        rootCommand.Subcommands.Add(WorkspaceRefreshCommand.Create());
+        rootCommand.Subcommands.Add(ServeCommand.Create());
         return rootCommand;
     }
 }

@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Navlyn.Cli;
 using Navlyn.Mcp.Configuration;
 using Navlyn.Mcp.Tools;
+using Navlyn.Workspaces;
 
 namespace Navlyn.Mcp.Execution;
 
@@ -105,7 +106,14 @@ internal sealed class NavlynInProcessCommandAdapter(NavlynMcpServerOptions optio
 
     internal List<string> BuildArguments(string cliCommand, IReadOnlyList<string> arguments)
     {
-        List<string> fullArguments = [cliCommand, "--workspace", options.WorkspaceArgument];
+        List<string> fullArguments =
+        [
+            cliCommand,
+            "--workspace",
+            options.WorkspaceArgument,
+            "--workspace-root-policy",
+            WorkspaceLoader.FormatWorkspaceRootPolicy(options.WorkspaceRootPolicy)
+        ];
         fullArguments.AddRange(arguments);
         return fullArguments;
     }

@@ -16,11 +16,13 @@ internal static class ReferencesCommand
         Option<string[]> usageKindOption = CreateUsageKindOption();
         Option<string[]> groupByOption = CreateGroupByOption();
         Option<int?> limitOption = SharedOptions.CreateLimitOption();
+        Option<string> scopeOption = SharedOptions.CreateSearchScopeOption();
+        Option<int?> maxDocumentsOption = SharedOptions.CreateMaxDocumentsOption();
 
         return SourcePositionCommand.Create(
             "references",
             "Find source references for the C# symbol at a source position.",
-            [resultProjectOption, resultPathOption, resultKindOption, usageKindOption, groupByOption, limitOption],
+            [resultProjectOption, resultPathOption, resultKindOption, usageKindOption, groupByOption, limitOption, scopeOption, maxDocumentsOption],
             (workspace, options, parseResult, cancellationToken) => ExecuteAsync(
                 workspace,
                 options,
@@ -30,6 +32,8 @@ internal static class ReferencesCommand
                 parseResult.GetValue(usageKindOption) ?? [],
                 parseResult.GetValue(groupByOption) ?? [],
                 parseResult.GetValue(limitOption),
+                parseResult.GetValue(scopeOption)!,
+                parseResult.GetValue(maxDocumentsOption),
                 cancellationToken));
     }
 
@@ -42,8 +46,15 @@ internal static class ReferencesCommand
         IReadOnlyList<string> usageKindValues,
         IReadOnlyList<string> groupByValues,
         int? limit,
+        string scope,
+        int? maxDocuments,
         CancellationToken cancellationToken)
     {
+        if (!FuzzyCommandSupport.TryCreatePositiveOption("--max-documents", maxDocuments ?? SymbolNavigationSearchOptions.DefaultMaxDocuments, out int exitCode))
+        {
+            return exitCode;
+        }
+
         if (!NavigationResultOptions.TryCreate(
             loadedWorkspace,
             resultProjectFilters,
@@ -73,6 +84,7 @@ internal static class ReferencesCommand
             options.Column,
             options.Project,
             options.ExcludeGenerated,
+            SymbolNavigationSearchOptions.Create(scope, maxDocuments),
             cancellationToken);
 
         if (result.Error is not null)
@@ -105,6 +117,7 @@ internal static class ReferencesCommand
             ExcludeGenerated: options.ExcludeGenerated,
             Limit: resultFilter.Limit,
             TotalMatches: filteredReferences.Count,
+            Search: resolution.Search,
             UsageKindCounts: ReferenceUsageTaxonomy.CreateCounts(filteredReferences),
             Symbol: new ReferencesSymbolResult(
                 Name: resolution.Symbol.Name,
@@ -201,6 +214,7 @@ internal static class ReferencesCommand
         bool ExcludeGenerated,
         int? Limit,
         int TotalMatches,
+        SymbolNavigationSearchMetadata Search,
         IReadOnlyList<ReferenceUsageCount> UsageKindCounts,
         ReferencesSymbolResult Symbol,
         IReadOnlyList<ReferenceLocationResult> References,

@@ -8,7 +8,9 @@
             "command": "navlyn-mcp",
             "args": [
               "--workspace",
-              "${workspaceFolder}/YourRepo.slnx"
+              "${workspaceFolder}/navlyn.workspace.json",
+              "--tool-profile",
+              "reader"
             ],
             "cwd": "${workspaceFolder}"
           }

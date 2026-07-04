@@ -1,6 +1,4 @@
-﻿using System.Security.Cryptography;
-using System.Text;
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Navlyn.Mcp.Configuration;
 using Navlyn.Symbols;
 using Navlyn.Workspaces;
@@ -10,6 +8,7 @@ namespace Navlyn.Mcp.Execution;
 internal sealed class NavlynMcpWorkspaceCache(NavlynMcpServerOptions options) : IDisposable
 {
     private readonly SemaphoreSlim loadLock = new(1, 1);
+    private readonly WorkspaceSnapshotManager workspaceManager = new();
     private CachedWorkspace? cachedWorkspace;
 
     public async Task<NavlynMcpWorkspaceCacheResult> GetAsync(CancellationToken cancellationToken)
@@ -27,14 +26,42 @@ internal sealed class NavlynMcpWorkspaceCache(NavlynMcpServerOptions options) : 
                 return NavlynMcpWorkspaceCacheResult.Succeeded(cachedWorkspace, cacheHit: true);
             }
 
-            WorkspaceLoadResult loadResult = await new WorkspaceLoader().LoadAsync(new FileInfo(options.Workspace), cancellationToken);
+            WorkspaceSnapshotManagerResult loadResult = await workspaceManager.GetAsync(
+                new FileInfo(options.Workspace),
+                new WorkspaceLoadOptions(options.WorkspaceRootPolicy),
+                cancellationToken);
             if (loadResult.Error is not null)
             {
                 return NavlynMcpWorkspaceCacheResult.Failed(loadResult.Error, loadResult.Diagnostics);
             }
 
-            cachedWorkspace = new CachedWorkspace(loadResult.Workspace!, CreateFingerprint(loadResult.Workspace!));
-            return NavlynMcpWorkspaceCacheResult.Succeeded(cachedWorkspace, cacheHit: false);
+            cachedWorkspace = new CachedWorkspace(loadResult.Snapshot!);
+            return NavlynMcpWorkspaceCacheResult.Succeeded(cachedWorkspace, loadResult.CacheHit);
+        }
+        finally
+        {
+            loadLock.Release();
+        }
+    }
+
+    public async Task<NavlynMcpWorkspaceCacheResult> RefreshAsync(CancellationToken cancellationToken)
+    {
+        await loadLock.WaitAsync(cancellationToken);
+        try
+        {
+            cachedWorkspace = null;
+
+            WorkspaceSnapshotManagerResult loadResult = await workspaceManager.RefreshAsync(
+                new FileInfo(options.Workspace),
+                new WorkspaceLoadOptions(options.WorkspaceRootPolicy),
+                cancellationToken);
+            if (loadResult.Error is not null)
+            {
+                return NavlynMcpWorkspaceCacheResult.Failed(loadResult.Error, loadResult.Diagnostics);
+            }
+
+            cachedWorkspace = new CachedWorkspace(loadResult.Snapshot!);
+            return NavlynMcpWorkspaceCacheResult.Succeeded(cachedWorkspace, loadResult.CacheHit);
         }
         finally
         {
@@ -44,39 +71,24 @@ internal sealed class NavlynMcpWorkspaceCache(NavlynMcpServerOptions options) : 
 
     public void Dispose()
     {
-        cachedWorkspace?.Workspace.Dispose();
+        workspaceManager.Dispose();
         loadLock.Dispose();
     }
 
-    private static string CreateFingerprint(LoadedWorkspace workspace)
-    {
-        string canonical = string.Join(
-            "\n",
-            [
-                workspace.FullPath,
-                workspace.Kind,
-                .. workspace.Projects.Select(project => string.Join(
-                    "|",
-                    [
-                        project.Name,
-                        project.Path ?? "",
-                        project.TargetFramework ?? "",
-                        project.AssemblyName ?? ""
-                    ]))
-            ]);
-
-        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
-        return Convert.ToHexString(hash).ToLowerInvariant()[..16];
-    }
-
-    internal sealed class CachedWorkspace(LoadedWorkspace workspace, string fingerprint)
+    internal sealed class CachedWorkspace(WorkspaceSnapshot snapshot)
     {
         private readonly object candidateGate = new();
         private readonly Dictionary<string, NavlynMcpCandidateTarget> candidateTargets = new(StringComparer.Ordinal);
 
-        public LoadedWorkspace Workspace { get; } = workspace;
+        public LoadedWorkspace Workspace => snapshot.Workspace;
 
-        public string Fingerprint { get; } = fingerprint;
+        public string Fingerprint => snapshot.Fingerprint;
+
+        public string SnapshotId => snapshot.SnapshotId;
+
+        public string FreshnessStatus => snapshot.FreshnessStatus;
+
+        public DocumentIndex DocumentIndex => snapshot.DocumentIndex;
 
         public void RecordCandidateTarget(OutlineEntry entry)
         {

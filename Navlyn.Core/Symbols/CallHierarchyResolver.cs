@@ -18,6 +18,27 @@ internal sealed class CallHierarchyResolver
         bool excludeGenerated,
         CancellationToken cancellationToken)
     {
+        return await ResolveCallersAsync(
+            solution,
+            file,
+            line,
+            column,
+            project,
+            excludeGenerated,
+            SymbolNavigationSearchOptions.Default,
+            cancellationToken);
+    }
+
+    public async Task<CallersResolutionResult> ResolveCallersAsync(
+        Solution solution,
+        FileInfo file,
+        int line,
+        int column,
+        Project? project,
+        bool excludeGenerated,
+        SymbolNavigationSearchOptions searchOptions,
+        CancellationToken cancellationToken)
+    {
         SourceSymbolResolutionResult result = await new SourceSymbolResolver().ResolveAsync(
             solution,
             file,
@@ -33,9 +54,17 @@ internal sealed class CallHierarchyResolver
         }
 
         SourceSymbolResolution resolution = result.Resolution!;
+        SymbolNavigationSearchPlan searchPlan = await SymbolNavigationSearchPlanner.CreateAsync(
+            solution,
+            resolution,
+            searchOptions,
+            excludeGenerated,
+            cancellationToken);
+
         IReadOnlyList<ISymbol> targetSymbols = await FindRelatedTargetSymbolsAsync(
             solution,
             resolution.Symbol,
+            searchPlan.Projects,
             cancellationToken);
 
         List<CallHierarchyGroup> groups = [];
@@ -44,6 +73,7 @@ internal sealed class CallHierarchyResolver
             IEnumerable<SymbolCallerInfo> callers = await SymbolFinder.FindCallersAsync(
                 targetSymbol,
                 solution,
+                searchPlan.Documents,
                 cancellationToken);
 
             foreach (SymbolCallerInfo caller in callers)
@@ -78,7 +108,8 @@ internal sealed class CallHierarchyResolver
             Line: resolution.Line,
             Column: resolution.Column,
             Symbol: CreateInputSymbol(resolution.Symbol),
-            Callers: mergedGroups));
+            Callers: mergedGroups,
+            Search: searchPlan.Metadata));
     }
 
     public async Task<CallsResolutionResult> ResolveCallsAsync(
@@ -186,12 +217,14 @@ internal sealed class CallHierarchyResolver
             Line: line,
             Column: column,
             Caller: CreateInputSymbol(callerSymbol),
-            Calls: MergeGroups(groups)));
+            Calls: MergeGroups(groups),
+            Search: SymbolNavigationSearchMetadata.Local()));
     }
 
     private static async Task<IReadOnlyList<ISymbol>> FindRelatedTargetSymbolsAsync(
         Solution solution,
         ISymbol symbol,
+        IReadOnlyList<Project> projects,
         CancellationToken cancellationToken)
     {
         List<ISymbol> symbols = [symbol];
@@ -214,17 +247,17 @@ internal sealed class CallHierarchyResolver
 
         if (symbol is IMethodSymbol or IPropertySymbol or IEventSymbol)
         {
-            ImmutableHashSet<Project> projects = solution.Projects.ToImmutableHashSet();
+            ImmutableHashSet<Project> projectSet = projects.ToImmutableHashSet();
             IEnumerable<ISymbol> implementations = await SymbolFinder.FindImplementationsAsync(
                 symbol,
                 solution,
-                projects,
+                projectSet,
                 cancellationToken);
 
             IEnumerable<ISymbol> overrides = await SymbolFinder.FindOverridesAsync(
                 symbol,
                 solution,
-                projects,
+                projectSet,
                 cancellationToken);
 
             symbols.AddRange(implementations);
@@ -515,14 +548,16 @@ internal sealed record CallersResolution(
     int Line,
     int Column,
     CallHierarchySymbol Symbol,
-    IReadOnlyList<CallHierarchyGroup> Callers);
+    IReadOnlyList<CallHierarchyGroup> Callers,
+    SymbolNavigationSearchMetadata Search);
 
 internal sealed record CallsResolution(
     string File,
     int Line,
     int Column,
     CallHierarchySymbol Caller,
-    IReadOnlyList<CallHierarchyGroup> Calls);
+    IReadOnlyList<CallHierarchyGroup> Calls,
+    SymbolNavigationSearchMetadata Search);
 
 internal sealed record CallHierarchySymbol(
     string Name,

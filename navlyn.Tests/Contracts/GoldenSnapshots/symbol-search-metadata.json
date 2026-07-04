@@ -1,0 +1,18 @@
+{
+  "scope": "dependent-projects",
+  "costClass": "workspace",
+  "partial": true,
+  "candidateProjectCount": 4,
+  "searchedProjectCount": 2,
+  "candidateDocumentCount": 120,
+  "prefilteredDocumentCount": 40,
+  "searchedDocumentCount": 10,
+  "lexicalPrefilterApplied": true,
+  "maxDocuments": 10,
+  "truncationReason": "document-budget",
+  "nextScope": "solution",
+  "rerunHints": [
+    "Increase --max-documents above 10 to search more lexically matching documents.",
+    "Rerun with --scope solution for the broadest search."
+  ]
+}

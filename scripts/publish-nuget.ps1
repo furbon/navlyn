@@ -4,6 +4,7 @@ param(
     [string[]]$PackagePath = @(),
     [string]$PackageSource = 'https://api.nuget.org/v3/index.json',
     [string]$ApiKeyEnvironmentVariable = 'NUGET_API_KEY',
+    [switch]$DryRun,
     [switch]$Publish
 )
 
@@ -11,6 +12,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
+
+if ($DryRun -and $Publish) {
+    throw 'Specify either -DryRun or -Publish, not both.'
+}
 
 if ($PackagePath.Count -eq 0) {
     $manifestPath = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $Manifest))
@@ -33,7 +38,7 @@ foreach ($package in $resolvedPackages) {
     }
 }
 
-if (!$Publish) {
+if ($DryRun -or !$Publish) {
     Write-Host 'Dry run only. Pass -Publish to push packages.'
     foreach ($package in $resolvedPackages) {
         Write-Host "Would push $package to $PackageSource"

@@ -60,6 +60,8 @@ internal sealed class SourceSymbolResolver
             Line: line,
             Column: column,
             Position: position,
+            DocumentId: sourceDocument.Document.Id,
+            ProjectId: sourceDocument.Document.Project.Id,
             SyntaxTree: root.SyntaxTree,
             ProjectName: sourceDocument.Document.Project.Name,
             Symbol: symbol));
@@ -136,6 +138,8 @@ internal sealed record SourceSymbolResolution(
     int Line,
     int Column,
     int Position,
+    DocumentId DocumentId,
+    ProjectId ProjectId,
     SyntaxTree SyntaxTree,
     string ProjectName,
     ISymbol Symbol);

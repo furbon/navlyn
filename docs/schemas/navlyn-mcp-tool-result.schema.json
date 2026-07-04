@@ -49,6 +49,7 @@
         "executionPath": {
           "enum": [
             "direct",
+            "daemon",
             "cli",
             "in-process"
           ]
@@ -58,6 +59,7 @@
             "cold",
             "warming",
             "warm",
+            "daemon",
             "stale",
             "partial",
             "unavailable"
@@ -74,6 +76,7 @@
             "cold",
             "warming",
             "warm",
+            "daemon",
             "stale",
             "partial",
             "unavailable"
@@ -87,6 +90,27 @@
         },
         "costClass": {
           "type": "string"
+        },
+        "freshnessStatus": {
+          "enum": [
+            "fresh",
+            "stale",
+            "unknown"
+          ]
+        },
+        "documentIndexDocumentCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "documentIndexEstimatedBytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
         }
       }
     },

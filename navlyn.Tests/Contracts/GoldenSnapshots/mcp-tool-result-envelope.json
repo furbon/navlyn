@@ -19,7 +19,8 @@
     "workspaceFingerprint": "fingerprint",
     "indexStatus": "warm",
     "snapshotId": "fingerprint",
-    "costClass": "semantic-lookup"
+    "costClass": "semantic-lookup",
+    "freshnessStatus": "fresh"
   },
   "recommendedNextAction": {
     "action": {
