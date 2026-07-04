@@ -1,0 +1,38 @@
+{
+  "file": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs",
+  "line": 6,
+  "column": 23,
+  "selectionInput": {
+    "mode": "candidateId",
+    "candidateId": "sym:v1:0123456789abcdef"
+  },
+  "view": "declaration",
+  "limits": {
+    "maxLines": 80,
+    "budgetTokens": 4000
+  },
+  "symbol": {
+    "name": "CheckCommand",
+    "kind": "NamedType",
+    "container": "Navlyn.Cli.Commands",
+    "facts": {
+      "displayName": "CheckCommand",
+      "fullyQualifiedName": "Navlyn.Cli.Commands.CheckCommand",
+      "kind": "NamedType",
+      "isSource": true,
+      "isMetadata": false
+    }
+  },
+  "slices": [
+    {
+      "kind": "declaration",
+      "path": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs",
+      "startLine": 6,
+      "endLine": 31,
+      "text": "internal static class CheckCommand",
+      "truncated": false
+    }
+  ],
+  "truncated": false,
+  "warnings": []
+}

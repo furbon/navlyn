@@ -150,6 +150,7 @@ internal sealed class FuzzyDiscoveryResolver
                 Members: null,
                 References: null,
                 Relations: null,
+                Profile: aboutOptions.Profile,
                 SelectionInput: envelope.SelectionInput,
                 SelectionExplanation: envelope.SelectionExplanation);
         }
@@ -163,25 +164,31 @@ internal sealed class FuzzyDiscoveryResolver
             aboutOptions.ExcludeGenerated,
             cancellationToken);
 
-        FuzzyReferenceSummary references = await ResolveReferenceSummaryAsync(
-            workspace.Solution,
-            projects,
-            candidate,
-            new FuzzyLocationOptions(
-                Limit: aboutOptions.ReferenceLimit,
-                FileLimit: DefaultReferenceFileLimit,
-                IncludeSnippets: aboutOptions.IncludeSnippets,
-                SnippetLines: aboutOptions.SnippetLines,
-                ExcludeGenerated: aboutOptions.ExcludeGenerated),
-            cancellationToken);
+        FuzzyReferenceSummary? references = aboutOptions.Profile == "light"
+            ? null
+            : await ResolveReferenceSummaryAsync(
+                workspace.Solution,
+                projects,
+                candidate,
+                new FuzzyLocationOptions(
+                    Limit: aboutOptions.ReferenceLimit,
+                    FileLimit: DefaultReferenceFileLimit,
+                    IncludeSnippets: aboutOptions.IncludeSnippets,
+                    SnippetLines: aboutOptions.SnippetLines,
+                    ExcludeGenerated: aboutOptions.ExcludeGenerated,
+                    NavigationSearchOptions: aboutOptions.SearchOptions),
+                cancellationToken);
 
-        FuzzyRelationSummary relations = await ResolveRelationSummaryAsync(
-            workspace.Solution,
-            projects,
-            candidate,
-            aboutOptions.RelationLimit,
-            aboutOptions.ExcludeGenerated,
-            cancellationToken);
+        FuzzyRelationSummary? relations = aboutOptions.Profile == "light"
+            ? null
+            : await ResolveRelationSummaryAsync(
+                workspace.Solution,
+                projects,
+                candidate,
+                aboutOptions.RelationLimit,
+                aboutOptions.ExcludeGenerated,
+                aboutOptions.SearchOptions,
+                cancellationToken);
 
         return new FuzzyAboutResult(
             Query: envelope.Query,
@@ -211,6 +218,7 @@ internal sealed class FuzzyDiscoveryResolver
             Members: members,
             References: references,
             Relations: relations,
+            Profile: aboutOptions.Profile,
             SelectionInput: envelope.SelectionInput,
             SelectionExplanation: envelope.SelectionExplanation);
     }
@@ -227,10 +235,10 @@ internal sealed class FuzzyDiscoveryResolver
         FuzzyCandidateResolution resolution = await ResolveCandidatesAsync(projects, options, cancellationToken);
         FuzzyFindResult envelope = CreateFindResult(workspace.DisplayPath, intent, options, projectFilters, resolution);
 
-        IReadOnlyList<FuzzyRelatedFile>? files = null;
+        FuzzyRelatedFilesResolution? relatedFiles = null;
         if (resolution.SelectedCandidate is not null)
         {
-            files = await ResolveRelatedFilesAsync(
+            relatedFiles = await ResolveRelatedFilesAsync(
                 workspace.Solution,
                 projects,
                 resolution.SelectedCandidate,
@@ -257,9 +265,11 @@ internal sealed class FuzzyDiscoveryResolver
             Include: filesOptions.Include,
             Depth: filesOptions.Depth,
             Limit: filesOptions.Limit,
-            TotalFiles: files?.Count,
-            Files: files is null ? null : [.. files.Take(filesOptions.Limit)],
-            Truncated: files is null ? null : files.Count > filesOptions.Limit,
+            TotalFiles: relatedFiles?.Files.Count,
+            Files: relatedFiles?.Files,
+            Truncated: relatedFiles is null ? null : relatedFiles.Files.Count > filesOptions.Limit,
+            Search: relatedFiles?.Searches.Count > 0 ? relatedFiles.Searches : null,
+            Profile: filesOptions.Profile,
             SelectionInput: envelope.SelectionInput,
             SelectionExplanation: envelope.SelectionExplanation);
     }
@@ -343,13 +353,41 @@ internal sealed class FuzzyDiscoveryResolver
         FuzzyQueryOptions options,
         CancellationToken cancellationToken)
     {
+        if (projects.Count == 0)
+        {
+            return new FuzzyCandidateResolution(
+                Confidence: "none",
+                TotalCandidates: 0,
+                Candidates: [],
+                SelectedCandidate: null,
+                Alternatives: null,
+                Warnings: [],
+                Error: null);
+        }
+
         IReadOnlyList<SymbolDeclaration> declarations;
+        DeclarationIndex declarationIndex = await DeclarationIndexProvider.GetOrCreateAsync(projects[0].Solution, cancellationToken);
         if (options.CandidateId is not null && !FuzzyCandidateIdentity.TryParseCandidateId(options.CandidateId))
         {
             return FuzzyCandidateResolution.WithError(
                 DiagnosticIds.InvalidCandidateId,
                 $"Invalid candidate id: {options.CandidateId}.",
                 ExitCodes.UsageError);
+        }
+
+        if (options.CandidateId is not null &&
+            declarationIndex.TryGetCandidateRecord(options.CandidateId, projects, options.ExcludeGenerated, out CandidateRecord candidateRecord))
+        {
+            FuzzySymbolCandidate candidate = AddSelectionReason(candidateRecord.Candidate, "candidate-id-match");
+            return new FuzzyCandidateResolution(
+                Confidence: "high",
+                TotalCandidates: 1,
+                Candidates: [candidate],
+                SelectedCandidate: candidate,
+                Alternatives: null,
+                Warnings: [],
+                Error: null,
+                SelectionExplanation: CreateSelectionExplanation(options, "high", candidate, selected: true, []));
         }
 
         if (options.CandidateId is null && options.Match == "regex")
@@ -364,18 +402,23 @@ internal sealed class FuzzyDiscoveryResolver
                 return FuzzyCandidateResolution.WithWarning($"Invalid regex: {error}");
             }
 
-            declarations = await new SymbolDeclarationFinder().FindAsync(
+            IReadOnlyList<DeclarationIndexEntry> syntaxMatches = declarationIndex.SearchSyntax(
                 projects,
-                matcher,
-                options.ExcludeGenerated,
-                cancellationToken);
+                options,
+                matcher.IsMatch);
+            declarations = await declarationIndex.EnrichAsync(syntaxMatches, cancellationToken);
+        }
+        else if (options.CandidateId is not null)
+        {
+            declarations = await declarationIndex.EnrichAllAsync(projects, options.ExcludeGenerated, cancellationToken);
         }
         else
         {
-            declarations = await new SymbolDeclarationFinder().FindAllAsync(
+            IReadOnlyList<DeclarationIndexEntry> syntaxMatches = declarationIndex.SearchSyntax(
                 projects,
-                options.ExcludeGenerated,
-                cancellationToken);
+                options,
+                name => IsPotentialNameMatch(name, options));
+            declarations = await declarationIndex.EnrichAsync(syntaxMatches, cancellationToken);
         }
 
         IReadOnlyList<string> assumedKinds = options.CandidateId is null
@@ -385,6 +428,11 @@ internal sealed class FuzzyDiscoveryResolver
             .Select(declaration => CreateRankedCandidate(declaration, options, assumedKinds, projects))
             .OfType<RankedCandidate>()
             .Where(candidate => options.CandidateId is null || candidate.Symbol.CandidateId == options.CandidateId)
+            .Select(candidate =>
+            {
+                declarationIndex.RecordCandidate(candidate.Symbol, projects);
+                return candidate;
+            })
             .OrderBy(candidate => candidate.Rank.MatchRank)
             .ThenBy(candidate => candidate.Rank.AssumedKindRank)
             .ThenBy(candidate => candidate.Rank.TypeLikeRank)
@@ -572,6 +620,23 @@ internal sealed class FuzzyDiscoveryResolver
         }
 
         return -1;
+    }
+
+    private static bool IsPotentialNameMatch(string name, FuzzyQueryOptions options)
+    {
+        StringComparison comparison = options.CaseSensitive == true
+            ? StringComparison.Ordinal
+            : StringComparison.OrdinalIgnoreCase;
+
+        return options.Match switch
+        {
+            "exact" => string.Equals(name, options.Query, comparison),
+            "contains" => name.Contains(options.Query, comparison),
+            _ => string.Equals(name, options.Query, StringComparison.Ordinal) ||
+                options.CaseSensitive != true && string.Equals(name, options.Query, StringComparison.OrdinalIgnoreCase) ||
+                name.Contains(options.Query, comparison) ||
+                NormalizeName(name) == NormalizeName(options.Query)
+        };
     }
 
     private static FuzzySymbolCandidate? SelectCandidate(
@@ -807,6 +872,7 @@ internal sealed class FuzzyDiscoveryResolver
             candidate.Column,
             FindCandidateProject(projects, candidate),
             options.ExcludeGenerated,
+            options.SearchOptions,
             cancellationToken);
 
         if (result.Error is not null)
@@ -863,6 +929,7 @@ internal sealed class FuzzyDiscoveryResolver
             filteredReferences.Count > references.Count,
             references,
             files,
+            Search: result.Resolution.Search,
             UsageKindCounts: ReferenceUsageTaxonomy.CreateCounts(filteredReferences),
             Groups: ReferenceUsageTaxonomy.CreateGroups(filteredReferences, options.GroupBy));
     }
@@ -923,12 +990,14 @@ internal sealed class FuzzyDiscoveryResolver
         FuzzySymbolCandidate candidate,
         int limit,
         bool excludeGenerated,
+        SymbolNavigationSearchOptions searchOptions,
         CancellationToken cancellationToken)
     {
         IReadOnlyList<FuzzySymbolLocation> callers = [];
         IReadOnlyList<FuzzySymbolLocation> calls = [];
         IReadOnlyList<FuzzySymbolLocation> implementations = [];
         FuzzyHierarchySummary? hierarchy = null;
+        SymbolNavigationSearchMetadata? callersSearch = null;
 
         Project? project = FindCandidateProject(projects, candidate);
         if (candidate.Kind is "Method" or "Property" or "Event")
@@ -940,10 +1009,12 @@ internal sealed class FuzzyDiscoveryResolver
                 candidate.Column,
                 project,
                 excludeGenerated,
+                searchOptions,
                 cancellationToken);
 
             if (callersResult.Error is null)
             {
+                callersSearch = callersResult.Resolution!.Search;
                 callers = [.. callersResult.Resolution!.Callers
                     .Select(group => ToSymbolLocation(group.Symbol))
                     .Take(limit)];
@@ -1014,10 +1085,10 @@ internal sealed class FuzzyDiscoveryResolver
                 ImplementedMembers: [.. resolution.ImplementedMembers.Select(ToSymbolLocation).Take(limit)]);
         }
 
-        return new FuzzyRelationSummary(callers, calls, implementations, hierarchy);
+        return new FuzzyRelationSummary(callers, calls, implementations, hierarchy, CallersSearch: callersSearch);
     }
 
-    private static async Task<IReadOnlyList<FuzzyRelatedFile>> ResolveRelatedFilesAsync(
+    private static async Task<FuzzyRelatedFilesResolution> ResolveRelatedFilesAsync(
         Solution solution,
         IReadOnlyList<Project> projects,
         FuzzySymbolCandidate candidate,
@@ -1026,6 +1097,7 @@ internal sealed class FuzzyDiscoveryResolver
         CancellationToken cancellationToken)
     {
         Dictionary<string, RelatedFileBuilder> files = new(StringComparer.Ordinal);
+        List<SymbolNavigationSearchMetadata> searches = [];
         Project? project = FindCandidateProject(projects, candidate);
 
         if (options.Include.Contains("declarations", StringComparer.Ordinal))
@@ -1041,6 +1113,11 @@ internal sealed class FuzzyDiscoveryResolver
                 candidate,
                 new FuzzyLocationOptions(options.Limit, options.Limit, options.IncludeSnippets, options.SnippetLines, options.ExcludeGenerated),
                 cancellationToken);
+
+            if (references.Search is not null)
+            {
+                searches.Add(references.Search);
+            }
 
             foreach (FuzzySourceLocation reference in references.References)
             {
@@ -1059,10 +1136,12 @@ internal sealed class FuzzyDiscoveryResolver
                     candidate.Column,
                     project,
                     options.ExcludeGenerated,
+                    options.SearchOptions,
                     cancellationToken);
 
                 if (result.Error is null)
                 {
+                    searches.Add(result.Resolution!.Search);
                     foreach (CallHierarchyGroup group in result.Resolution!.Callers)
                     {
                         foreach (CallHierarchyLocation location in group.Locations)
@@ -1149,12 +1228,14 @@ internal sealed class FuzzyDiscoveryResolver
             }
         }
 
-        return [.. files.Values
+        IReadOnlyList<FuzzyRelatedFile> relatedFiles = [.. files.Values
             .Select(builder => builder.Build())
             .OrderBy(file => ReasonPriority(file.Reasons))
             .ThenBy(file => file.ImpactLevel ?? "", StringComparer.Ordinal)
             .ThenBy(file => file.Path, StringComparer.Ordinal)
             .Take(options.Limit)];
+
+        return new FuzzyRelatedFilesResolution(relatedFiles, searches);
     }
 
     private static async Task<IReadOnlyList<FuzzyEntrypointChain>> ResolveEntrypointChainsAsync(
@@ -1489,11 +1570,15 @@ internal sealed record FuzzyLocationOptions(
     int SnippetLines,
     bool ExcludeGenerated = false,
     IReadOnlyList<string>? UsageKindFilters = null,
-    IReadOnlyList<string>? GroupByValues = null)
+    IReadOnlyList<string>? GroupByValues = null,
+    SymbolNavigationSearchOptions? NavigationSearchOptions = null)
 {
     public IReadOnlyList<string> UsageKinds { get; } = UsageKindFilters ?? [];
 
     public IReadOnlyList<string> GroupBy { get; } = GroupByValues ?? [];
+
+    public SymbolNavigationSearchOptions SearchOptions { get; } =
+        NavigationSearchOptions ?? SymbolNavigationSearchOptions.Default;
 }
 
 internal sealed record FuzzyAboutOptions(
@@ -1502,7 +1587,13 @@ internal sealed record FuzzyAboutOptions(
     int RelationLimit,
     bool IncludeSnippets,
     int SnippetLines,
-    bool ExcludeGenerated);
+    bool ExcludeGenerated,
+    SymbolNavigationSearchOptions? NavigationSearchOptions = null,
+    string Profile = "full")
+{
+    public SymbolNavigationSearchOptions SearchOptions { get; } =
+        NavigationSearchOptions ?? SymbolNavigationSearchOptions.Default;
+}
 
 internal sealed record FuzzyFilesOptions(
     IReadOnlyList<string> Include,
@@ -1510,7 +1601,13 @@ internal sealed record FuzzyFilesOptions(
     int Depth,
     bool IncludeSnippets,
     int SnippetLines,
-    bool ExcludeGenerated);
+    bool ExcludeGenerated,
+    SymbolNavigationSearchOptions? NavigationSearchOptions = null,
+    string Profile = "full")
+{
+    public SymbolNavigationSearchOptions SearchOptions { get; } =
+        NavigationSearchOptions ?? SymbolNavigationSearchOptions.Default;
+}
 
 internal sealed record FuzzyEntrypointsOptions(
     int Depth,
@@ -1645,6 +1742,7 @@ internal sealed record FuzzyAboutResult(
     FuzzyReferenceSummary? References,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     FuzzyRelationSummary? Relations,
+    string Profile = "full",
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     FuzzySelectionInput? SelectionInput = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -1678,6 +1776,9 @@ internal sealed record FuzzyFilesResult(
     IReadOnlyList<FuzzyRelatedFile>? Files,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     bool? Truncated = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<SymbolNavigationSearchMetadata>? Search = null,
+    string Profile = "full",
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     FuzzySelectionInput? SelectionInput = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -1783,6 +1884,8 @@ internal sealed record FuzzyReferenceSummary(
     IReadOnlyList<FuzzySourceLocation> References,
     IReadOnlyList<FuzzyReferenceFileSummary> Files,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    SymbolNavigationSearchMetadata? Search = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     IReadOnlyList<ReferenceUsageCount>? UsageKindCounts = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     IReadOnlyList<ReferenceUsageGroup>? Groups = null);
@@ -1839,7 +1942,9 @@ internal sealed record FuzzyRelationSummary(
     IReadOnlyList<FuzzySymbolLocation> Calls,
     IReadOnlyList<FuzzySymbolLocation> Implementations,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    FuzzyHierarchySummary? Hierarchy);
+    FuzzyHierarchySummary? Hierarchy,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    SymbolNavigationSearchMetadata? CallersSearch = null);
 
 internal sealed record FuzzyHierarchySummary(
     IReadOnlyList<FuzzySymbolLocation> BaseTypes,
@@ -1856,6 +1961,10 @@ internal sealed record FuzzyRelatedFile(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? ImpactLevel,
     IReadOnlyList<FuzzySourceLocation> Locations);
+
+internal sealed record FuzzyRelatedFilesResolution(
+    IReadOnlyList<FuzzyRelatedFile> Files,
+    IReadOnlyList<SymbolNavigationSearchMetadata> Searches);
 
 internal sealed record FuzzyEntrypointChain(
     IReadOnlyList<FuzzySymbolLocation> Symbols,

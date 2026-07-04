@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$NoBuild,
+    [switch]$SkipDotnetTest,
     [switch]$ShowOutput
 )
 
@@ -29,12 +30,17 @@ try {
 
     Assert-NavlynDllExists
 
-    Write-Host 'Running xUnit tests...'
-    Invoke-CheckedProcess `
-        -Name 'dotnet test' `
-        -FilePath 'dotnet' `
-        -Arguments @('test', $script:NavlynTestSolutionPath, '--no-build') `
-        -ExpectedExitCode 0 | Out-Null
+    if (!$SkipDotnetTest) {
+        Write-Host 'Running xUnit tests...'
+        Invoke-CheckedProcess `
+            -Name 'dotnet test' `
+            -FilePath 'dotnet' `
+            -Arguments @('test', $script:NavlynTestSolutionPath, '--no-build') `
+            -ExpectedExitCode 0 | Out-Null
+    }
+    else {
+        Write-Host 'Skipping xUnit tests because -SkipDotnetTest was specified.'
+    }
 
     Write-Host 'Running quick CLI checks...'
 
@@ -58,9 +64,9 @@ try {
     $overviewJson = $overview.Stdout | ConvertFrom-Json
     Assert-Equal -Name 'overview workspace' -Actual $overviewJson.workspace -Expected 'navlyn.slnx'
     Assert-Equal -Name 'overview kind' -Actual $overviewJson.kind -Expected 'solution'
-    Assert-Equal -Name 'overview project count' -Actual @($overviewJson.projects).Count -Expected 5
-    $overviewProject = @($overviewJson.projects | Where-Object { $_.name -eq 'navlyn' })[0]
-    Assert-Equal -Name 'overview project name' -Actual $overviewProject.name -Expected 'navlyn'
+    Assert-Equal -Name 'overview project count' -Actual @($overviewJson.projects).Count -Expected 10
+    $overviewProject = @($overviewJson.projects | Where-Object { $_.path -eq 'navlyn/navlyn.csproj' -and $_.targetFramework -eq 'net10.0' })[0]
+    Assert-Equal -Name 'overview project name' -Actual $overviewProject.name -Expected 'navlyn(net10.0)'
 
     $symbolAt = Invoke-Navlyn `
         -Name 'symbol-at declaration' `

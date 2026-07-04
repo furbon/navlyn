@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.navlyn.dev/navlyn-workspace-status-result.schema.json",
+  "title": "Navlyn Workspace Status Result",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "command",
+    "workspace",
+    "snapshot",
+    "cache",
+    "versions"
+  ],
+  "properties": {
+    "command": {
+      "type": "string",
+      "enum": [
+        "workspace-status",
+        "workspace-refresh"
+      ]
+    },
+    "workspace": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "path",
+        "fullPath",
+        "kind",
+        "projectCount",
+        "documentCount",
+        "projects"
+      ],
+      "properties": {
+        "path": { "type": "string" },
+        "fullPath": { "type": "string" },
+        "kind": { "type": "string" },
+        "projectCount": { "type": "integer", "minimum": 0 },
+        "documentCount": { "type": "integer", "minimum": 0 },
+        "projects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "name",
+              "language"
+            ],
+            "properties": {
+              "name": { "type": "string" },
+              "path": { "type": [ "string", "null" ] },
+              "language": { "type": "string" },
+              "assemblyName": { "type": [ "string", "null" ] },
+              "targetFramework": { "type": [ "string", "null" ] }
+            }
+          }
+        }
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "fingerprint",
+        "snapshotId",
+        "freshnessStatus",
+        "documentIndexDocumentCount",
+        "documentIndexEstimatedBytes"
+      ],
+      "properties": {
+        "fingerprint": { "type": "string" },
+        "snapshotId": { "type": "string" },
+        "freshnessStatus": { "type": "string" },
+        "documentIndexDocumentCount": { "type": "integer", "minimum": 0 },
+        "documentIndexEstimatedBytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "cache": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "enabled",
+        "mode",
+        "directory",
+        "manifestPath",
+        "status",
+        "writeRequested",
+        "clearRequested",
+        "staleReasons",
+        "candidateRecordsStored"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "on",
+            "off"
+          ]
+        },
+        "directory": { "type": "string" },
+        "manifestPath": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": [
+            "disabled",
+            "missing",
+            "fresh",
+            "stale",
+            "invalid"
+          ]
+        },
+        "currentFingerprint": { "type": [ "string", "null" ] },
+        "cachedFingerprint": { "type": [ "string", "null" ] },
+        "createdUtc": { "type": [ "string", "null" ] },
+        "writeRequested": { "type": "boolean" },
+        "clearRequested": { "type": "boolean" },
+        "staleReasons": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "candidateRecordsStored": { "type": "boolean" },
+        "candidateRecordsReason": { "type": "string" },
+        "cachedProjectCount": { "type": [ "integer", "null" ], "minimum": 0 },
+        "cachedDocumentCount": { "type": [ "integer", "null" ], "minimum": 0 },
+        "cachedDeclarationCount": { "type": [ "integer", "null" ], "minimum": 0 }
+      }
+    },
+    "versions": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "navlynVersion",
+        "roslynVersion",
+        "dotNetRuntimeVersion"
+      ],
+      "properties": {
+        "navlynVersion": { "type": "string" },
+        "roslynVersion": { "type": "string" },
+        "dotNetRuntimeVersion": { "type": "string" }
+      }
+    }
+  }
+}

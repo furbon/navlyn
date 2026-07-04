@@ -1,0 +1,17 @@
+{
+  "$schema": "docs/schemas/navlyn-workspace.schema.json",
+  "primaryWorkspace": "navlyn.slnx",
+  "excludes": [
+    "artifacts",
+    "bin",
+    "obj"
+  ],
+  "generatedFolders": [],
+  "tests": {
+    "include": true
+  },
+  "defaultRootPolicy": "repo-relative",
+  "cacheHints": {
+    "enabled": false
+  }
+}

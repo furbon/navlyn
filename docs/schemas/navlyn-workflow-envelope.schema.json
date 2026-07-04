@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.navlyn.dev/navlyn-workflow-envelope.schema.json",
+  "title": "Navlyn Workflow Envelope",
+  "description": "Shared envelope for profiled Navlyn CLI workflow output. Command-specific facts are intentionally additive and remain outside this envelope-first schema.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion",
+    "navlynVersion",
+    "workspace",
+    "kind",
+    "command",
+    "profile",
+    "configuration",
+    "reproCommand"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "navlyn.workflow.v1"
+    },
+    "navlynVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workspace": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "type": "string",
+      "minLength": 1
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profile": {
+      "enum": [
+        "compact",
+        "evidence",
+        "full"
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "reproCommand": {
+      "type": "object",
+      "required": [
+        "executable",
+        "arguments"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "executable": {
+          "type": "string",
+          "minLength": 1
+        },
+        "arguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "highlights": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "profileLimits": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "truncated": {
+      "type": "boolean"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "nextActions": {
+      "description": "Conditional command hints. They are not a required checklist.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "command": "workspace-status",
+  "workspace": {
+    "path": "navlyn.slnx",
+    "fullPath": "D:/repo/navlyn.slnx",
+    "kind": "solution",
+    "projectCount": 1,
+    "documentCount": 12,
+    "projects": [
+      {
+        "name": "Navlyn.Core(net10.0)",
+        "path": "Navlyn.Core/Navlyn.Core.csproj",
+        "language": "C#",
+        "assemblyName": "Navlyn.Core",
+        "targetFramework": "net10.0"
+      }
+    ]
+  },
+  "snapshot": {
+    "fingerprint": "workspace-fingerprint",
+    "snapshotId": "workspace-fingerprint",
+    "freshnessStatus": "fresh",
+    "documentIndexDocumentCount": 12,
+    "documentIndexEstimatedBytes": 2048
+  },
+  "cache": {
+    "enabled": true,
+    "mode": "on",
+    "directory": "D:/repo/.navlyn/cache",
+    "manifestPath": "D:/repo/.navlyn/cache/workspace-index.json",
+    "status": "stale",
+    "source": "navlyn.workspace.json",
+    "configEnabled": true,
+    "currentFingerprint": "current-fingerprint",
+    "cachedFingerprint": "cached-fingerprint",
+    "createdUtc": "2026-07-04T00:00:00.0000000+00:00",
+    "writeRequested": false,
+    "clearRequested": false,
+    "staleReasons": [
+      "tracked workspace files or version fingerprints changed"
+    ],
+    "candidateRecordsStored": false,
+    "candidateRecordsReason": "Candidate ids are session-local and are not persisted until a stable cross-process candidate contract is available.",
+    "cachedProjectCount": 1,
+    "cachedDocumentCount": 12,
+    "cachedDeclarationCount": 34
+  },
+  "versions": {
+    "navlynVersion": "<version>",
+    "roslynVersion": "5.3.0",
+    "dotNetRuntimeVersion": "10.0.0"
+  }
+}

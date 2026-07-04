@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Navlyn.Mcp.Configuration;
 using Navlyn.Mcp.Tools;
+using Navlyn.Workspaces;
 
 namespace Navlyn.Mcp.Execution;
 
@@ -96,7 +97,15 @@ internal sealed class NavlynCliRunner(NavlynMcpServerOptions options) : INavlynC
 
     internal List<string> BuildArguments(string cliCommand, IReadOnlyList<string> arguments)
     {
-        List<string> fullArguments = [.. options.NavlynArguments, cliCommand, "--workspace", options.WorkspaceArgument];
+        List<string> fullArguments =
+        [
+            .. options.NavlynArguments,
+            cliCommand,
+            "--workspace",
+            options.WorkspaceArgument,
+            "--workspace-root-policy",
+            WorkspaceLoader.FormatWorkspaceRootPolicy(options.WorkspaceRootPolicy)
+        ];
         fullArguments.AddRange(arguments);
         return fullArguments;
     }

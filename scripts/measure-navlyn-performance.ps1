@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Workspace,
 
-    [ValidateSet('quick', 'agent-loop', 'diff', 'mcp', 'all')]
+    [ValidateSet('quick', 'file-first', 'agent-loop', 'diff', 'mcp', 'daemon', 'cache', 'parallel', 'multi-workspace', 'all')]
     [string]$Scenario = 'quick',
 
     [ValidateSet('compact', 'evidence', 'full')]
@@ -29,6 +29,12 @@ param(
 
     [string]$AssumeKind = 'NamedType',
 
+    [string]$SourceFile = 'Navlyn.CommandLine/Cli/Commands/CheckCommand.cs',
+
+    [int]$SourceLine = 6,
+
+    [int]$SourceColumn = 23,
+
     [string]$Base = $null,
 
     [string]$Head = $null
@@ -50,6 +56,10 @@ if ($TimeoutSeconds -lt 1) {
 }
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$TargetFrameworkScript = Join-Path $repoRoot 'scripts/lib/navlyn-target-framework.ps1'
+
+. $TargetFrameworkScript
+
 $workspacePath = if ([System.IO.Path]::IsPathRooted($Workspace)) {
     [System.IO.Path]::GetFullPath($Workspace)
 }
@@ -63,8 +73,7 @@ if (!(Test-Path -LiteralPath $workspacePath)) {
 function Get-ProjectTargetFramework {
     param([string]$ProjectPath)
 
-    [xml]$projectXml = Get-Content -Raw -LiteralPath $ProjectPath
-    return [string]$projectXml.Project.PropertyGroup.TargetFramework
+    return Get-NavlynPreferredTargetFramework -ProjectPath $ProjectPath
 }
 
 if ([string]::IsNullOrWhiteSpace($NavlynDll)) {
@@ -172,6 +181,10 @@ function Get-TruncatedFlag {
         return $false
     }
 
+    if ($Value -is [string] -or $Value.GetType().IsPrimitive -or $Value -is [decimal]) {
+        return $false
+    }
+
     if ($Value.PSObject.Properties.Name -contains 'truncated' -and $Value.truncated -eq $true) {
         return $true
     }
@@ -264,8 +277,14 @@ function Invoke-MeasuredProcess {
             if ($parsed.PSObject.Properties.Name -contains 'warnings') {
                 $warnings = @($parsed.warnings)
             }
-            $counts = Get-JsonCounts -Value $parsed
-            $truncated = Get-TruncatedFlag -Value $parsed
+            try {
+                $counts = Get-JsonCounts -Value $parsed
+                $truncated = Get-TruncatedFlag -Value $parsed
+            }
+            catch {
+                $counts = [pscustomobject]@{}
+                $truncated = $false
+            }
         }
         catch {
             $jsonValid = $false
@@ -337,6 +356,116 @@ function New-CliCommand {
         arguments = @($NavlynDll) + $Arguments
         standardInput = $StandardInput
     }
+}
+
+function Invoke-ParallelMeasuredProcesses {
+    param(
+        [object[]]$Commands,
+        [int]$Iteration,
+        [bool]$IsWarmup
+    )
+
+    $running = New-Object System.Collections.Generic.List[object]
+    foreach ($command in $Commands) {
+        $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+        $startInfo.FileName = 'dotnet'
+        $startInfo.WorkingDirectory = $repoRoot
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        $startInfo.RedirectStandardInput = $null -ne $command.standardInput
+        $startInfo.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+        $startInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+        $startInfo.UseShellExecute = $false
+        foreach ($argument in $command.arguments) {
+            [void]$startInfo.ArgumentList.Add($argument)
+        }
+
+        $process = [System.Diagnostics.Process]::new()
+        $process.StartInfo = $startInfo
+        $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        [void]$process.Start()
+        if ($null -ne $command.standardInput) {
+            $process.StandardInput.Write($command.standardInput)
+            $process.StandardInput.Close()
+        }
+
+        $running.Add([pscustomobject]@{
+            command = $command
+            process = $process
+            stopwatch = $stopwatch
+            stdoutTask = $process.StandardOutput.ReadToEndAsync()
+            stderrTask = $process.StandardError.ReadToEndAsync()
+        })
+    }
+
+    $results = New-Object System.Collections.Generic.List[object]
+    foreach ($entry in $running) {
+        $finished = $entry.process.WaitForExit($TimeoutSeconds * 1000)
+        if (!$finished) {
+            try {
+                $entry.process.Kill($true)
+            }
+            catch {
+            }
+        }
+
+        $entry.stopwatch.Stop()
+        $stdout = $entry.stdoutTask.GetAwaiter().GetResult()
+        $stderr = $entry.stderrTask.GetAwaiter().GetResult()
+        $exitCode = if ($finished) { $entry.process.ExitCode } else { -1 }
+        $jsonValid = $false
+        $topLevelCommand = $null
+        $resultProfile = $null
+        $counts = [pscustomobject]@{}
+        $truncated = $false
+        $warnings = @()
+
+        if ($stdout.Length -gt 0) {
+            try {
+                $parsed = $stdout | ConvertFrom-Json -Depth 100
+                $jsonValid = $true
+                if ($parsed.PSObject.Properties.Name -contains 'command') {
+                    $topLevelCommand = $parsed.command
+                }
+                if ($parsed.PSObject.Properties.Name -contains 'profile') {
+                    $resultProfile = $parsed.profile
+                }
+                if ($parsed.PSObject.Properties.Name -contains 'warnings') {
+                    $warnings = @($parsed.warnings)
+                }
+                $counts = Get-JsonCounts -Value $parsed
+                $truncated = Get-TruncatedFlag -Value $parsed
+            }
+            catch {
+                $jsonValid = $false
+            }
+        }
+
+        $results.Add([pscustomobject]@{
+            name = $entry.command.name
+            kind = 'parallel-cli'
+            iteration = $Iteration
+            warmup = $IsWarmup
+            command = [pscustomobject]@{
+                executable = 'dotnet'
+                arguments = Join-ArgumentsForDisplay -Arguments $entry.command.arguments
+            }
+            exitCode = $exitCode
+            elapsedMs = [int][Math]::Round($entry.stopwatch.Elapsed.TotalMilliseconds)
+            stdoutChars = $stdout.Length
+            stderrChars = $stderr.Length
+            jsonValid = $jsonValid
+            topLevelCommand = $topLevelCommand
+            profile = $resultProfile
+            counts = $counts
+            truncated = $truncated
+            warnings = $warnings
+            timedOut = !$finished
+            skipped = $false
+        })
+    }
+
+    return $results.ToArray()
 }
 
 function New-McpToolCall {
@@ -420,7 +549,7 @@ function Invoke-McpToolScenario {
                 capabilities = @{}
                 clientInfo = @{
                     name = 'navlyn-performance'
-                    version = '0.4.0'
+                    version = '0.5.0'
                 }
             }
         }
@@ -456,6 +585,7 @@ function Invoke-McpToolScenario {
             $counts = [pscustomobject]@{}
             $truncated = $false
             $warnings = @()
+            $metadata = $null
             try {
                 $parsed = $responseJson | ConvertFrom-Json -Depth 100
                 $jsonValid = $true
@@ -470,6 +600,9 @@ function Invoke-McpToolScenario {
                     }
 
                     $structured = $parsed.result.structuredContent
+                    if ($structured.PSObject.Properties.Name -contains 'metadata') {
+                        $metadata = $structured.metadata
+                    }
                     if ($structured.PSObject.Properties.Name -contains 'result') {
                         $inner = $structured.result
                         if ($inner.PSObject.Properties.Name -contains 'command') {
@@ -481,8 +614,14 @@ function Invoke-McpToolScenario {
                         if ($inner.PSObject.Properties.Name -contains 'warnings') {
                             $warnings = @($inner.warnings)
                         }
-                        $counts = Get-JsonCounts -Value $inner
-                        $truncated = Get-TruncatedFlag -Value $inner
+                        try {
+                            $counts = Get-JsonCounts -Value $inner
+                            $truncated = Get-TruncatedFlag -Value $inner
+                        }
+                        catch {
+                            $counts = [pscustomobject]@{}
+                            $truncated = $false
+                        }
                     }
                 }
             }
@@ -514,6 +653,7 @@ function Invoke-McpToolScenario {
                 counts = $counts
                 truncated = $truncated
                 warnings = $warnings
+                metadata = $metadata
                 timedOut = $false
                 skipped = $false
             })
@@ -562,6 +702,11 @@ function Get-ScenarioCommands {
             $commands += New-CliCommand -Name 'find' -Arguments @('find', '--workspace', $workspaceArg, '--query', $Query, '--assume-kind', $AssumeKind, '--limit', '20')
             $commands += New-CliCommand -Name 'context-pack' -Arguments (Add-ProfileArgument -Arguments @('context-pack', '--workspace', $workspaceArg, '--query', $Query, '--assume-kind', $AssumeKind, '--budget-tokens', '2000'))
         }
+        'file-first' {
+            $commands += New-CliCommand -Name 'outline' -Arguments @('outline', '--workspace', $workspaceArg, '--file', $SourceFile)
+            $commands += New-CliCommand -Name 'symbol-source' -Arguments @('symbol-source', '--workspace', $workspaceArg, '--file', $SourceFile, '--line', $SourceLine.ToString([System.Globalization.CultureInfo]::InvariantCulture), '--column', $SourceColumn.ToString([System.Globalization.CultureInfo]::InvariantCulture), '--view', 'declaration', '--max-lines', '80', '--budget-tokens', '2000')
+            $commands += New-CliCommand -Name 'calls' -Arguments @('calls', '--workspace', $workspaceArg, '--file', $SourceFile, '--line', $SourceLine.ToString([System.Globalization.CultureInfo]::InvariantCulture), '--column', $SourceColumn.ToString([System.Globalization.CultureInfo]::InvariantCulture), '--limit', '30')
+        }
         'agent-loop' {
             $commands += New-CliCommand -Name 'repo-graph' -Arguments (Add-ProfileArgument -Arguments @('repo-graph', '--workspace', $workspaceArg))
             $commands += New-CliCommand -Name 'find' -Arguments @('find', '--workspace', $workspaceArg, '--query', $Query, '--assume-kind', $AssumeKind, '--limit', '20')
@@ -602,17 +747,47 @@ function Get-ScenarioCommands {
                 relationshipLimit = 50
                 profile = $Profile
             }
-            $commands += New-McpToolCall -Name 'navlyn_find_symbol' -Arguments @{
-                query = $Query
-                assumeKind = $AssumeKind
-                limit = 20
+            $commands += New-McpToolCall -Name 'navlyn_file_outline' -Arguments @{
+                file = $SourceFile
             }
-            $commands += New-McpToolCall -Name 'navlyn_context_pack' -Arguments @{
-                query = $Query
-                assumeKind = $AssumeKind
+            $commands += New-McpToolCall -Name 'navlyn_symbol_source' -Arguments @{
+                file = $SourceFile
+                line = $SourceLine
+                column = $SourceColumn
+                view = 'declaration'
+                maxLines = 80
                 budgetTokens = 2000
-                profile = $Profile
             }
+            $commands += New-McpToolCall -Name 'navlyn_symbol_edges' -Arguments @{
+                operation = 'calls'
+                file = $SourceFile
+                line = $SourceLine
+                column = $SourceColumn
+                limit = 30
+            }
+        }
+        'daemon' {
+            $statusRequest = '{"id":"1","method":"workspace/status","cache":{"cacheMode":"off","write":false,"clear":false,"directoryOverride":null}}'
+            $refreshRequest = '{"id":"1","method":"workspace/refresh","cache":{"cacheMode":"off","write":false,"clear":false,"directoryOverride":null}}'
+            $commands += New-CliCommand -Name 'serve-status-stdio' -Arguments @('serve', '--workspace', $workspaceArg) -StandardInput $statusRequest
+            $commands += New-CliCommand -Name 'serve-refresh-stdio' -Arguments @('serve', '--workspace', $workspaceArg) -StandardInput $refreshRequest
+        }
+        'cache' {
+            $cacheDirectory = 'artifacts/performance-cache'
+            $commands += New-CliCommand -Name 'workspace-refresh-cache-cold' -Arguments @('workspace-refresh', '--workspace', $workspaceArg, '--cache', 'on', '--cache-directory', $cacheDirectory, '--clear-cache', '--write-cache')
+            $commands += New-CliCommand -Name 'workspace-status-cache-warm' -Arguments @('workspace-status', '--workspace', $workspaceArg, '--cache', 'on', '--cache-directory', $cacheDirectory)
+            $commands += New-CliCommand -Name 'workspace-refresh-cache-warm' -Arguments @('workspace-refresh', '--workspace', $workspaceArg, '--cache', 'on', '--cache-directory', $cacheDirectory, '--write-cache')
+        }
+        'parallel' {
+            $commands += New-CliCommand -Name 'parallel-repo-graph' -Arguments (Add-ProfileArgument -Arguments @('repo-graph', '--workspace', $workspaceArg, '--relationship-limit', '50'))
+            $commands += New-CliCommand -Name 'parallel-find' -Arguments @('find', '--workspace', $workspaceArg, '--query', $Query, '--assume-kind', $AssumeKind, '--limit', '20')
+            $commands += New-CliCommand -Name 'parallel-outline' -Arguments @('outline', '--workspace', $workspaceArg, '--file', $SourceFile)
+        }
+        'multi-workspace' {
+            $fixtureWorkspace = ConvertTo-RepositoryPath -Path (Join-Path $repoRoot 'tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj')
+            $commands += New-CliCommand -Name 'primary-workspace-check' -Arguments @('check', '--workspace', $workspaceArg)
+            $commands += New-CliCommand -Name 'fixture-workspace-check' -Arguments @('check', '--workspace', $fixtureWorkspace)
+            $commands += New-CliCommand -Name 'fixture-outline' -Arguments @('outline', '--workspace', $fixtureWorkspace, '--file', 'tests/fixtures/SymbolNavigationFixture/FixtureCode.cs')
         }
     }
 
@@ -621,7 +796,7 @@ function Get-ScenarioCommands {
 
 function Get-ScenarioNames {
     if ($Scenario -eq 'all') {
-        return @('quick', 'agent-loop', 'diff', 'mcp')
+        return @('quick', 'file-first', 'agent-loop', 'diff', 'mcp', 'daemon', 'cache', 'parallel', 'multi-workspace')
     }
 
     return @($Scenario)
@@ -630,6 +805,18 @@ function Get-ScenarioNames {
 $measurements = New-Object System.Collections.Generic.List[object]
 $scenarioNames = Get-ScenarioNames
 foreach ($scenarioName in $scenarioNames) {
+    if ($scenarioName -eq 'parallel') {
+        $commands = Get-ScenarioCommands -ScenarioName $scenarioName
+        for ($iteration = 1; $iteration -le ($Warmup + $Iterations); $iteration++) {
+            $isWarmup = $iteration -le $Warmup
+            $parallelResults = Invoke-ParallelMeasuredProcesses -Commands $commands -Iteration ([Math]::Max(1, $iteration - $Warmup)) -IsWarmup $isWarmup
+            foreach ($parallelResult in $parallelResults) {
+                $measurements.Add($parallelResult)
+            }
+        }
+        continue
+    }
+
     if ($scenarioName -eq 'mcp') {
         if (!(Test-Path -LiteralPath $McpDll)) {
             $measurements.Add((New-SkippedMeasurement -Name 'mcp' -Kind 'mcp' -Reason "MCP server assembly does not exist: $McpDll"))

@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param(
     [switch]$NoBuild,
+    [ValidateSet('lookup', 'definition', 'references', 'edges', 'source', 'all')]
+    [string[]]$Suite = @('all'),
     [switch]$ShowOutput
 )
 
@@ -16,9 +18,11 @@ $FixtureSourcePath = Join-Path $RepoRoot 'tests/fixtures/SymbolNavigationFixture
 $GeneratedSourcePath = Join-Path $RepoRoot 'tests/fixtures/SymbolNavigationFixture/GeneratedThing.g.cs'
 $FixtureDisplayPath = 'tests/fixtures/SymbolNavigationFixture/FixtureCode.cs'
 $GeneratedDisplayPath = 'tests/fixtures/SymbolNavigationFixture/GeneratedThing.g.cs'
+$TargetFrameworkScript = Join-Path $RepoRoot 'scripts/lib/navlyn-target-framework.ps1'
 
-[xml]$ProjectXml = Get-Content -Raw -LiteralPath $ProjectPath
-$TargetFramework = [string]$ProjectXml.Project.PropertyGroup.TargetFramework
+. $TargetFrameworkScript
+
+$TargetFramework = Get-NavlynPreferredTargetFramework -ProjectPath $ProjectPath
 $NavlynDll = Join-Path $ProjectDir "bin/Debug/$TargetFramework/navlyn.dll"
 
 function Invoke-CheckedProcess {
@@ -196,6 +200,23 @@ function Assert-Contains {
 
     if ($Text.IndexOf($Expected, [StringComparison]::Ordinal) -lt 0) {
         throw "$Name did not contain expected text '$Expected'. Actual text: $Text"
+    }
+}
+
+function Assert-Matches {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Actual,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Pattern
+    )
+
+    if (-not [regex]::IsMatch($Actual, $Pattern)) {
+        throw "$Name did not match expected pattern '$Pattern'. Actual text: $Actual"
     }
 }
 
@@ -1266,6 +1287,15 @@ function Assert-CallsMetadataBehavior {
     Assert-Equal -Name "$Name metadata call location end column advances" -Actual ($location.endColumn -gt $location.column) -Expected $true
 }
 
+function Test-SymbolNavigationSuite {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    return (@($Suite) -contains 'all') -or (@($Suite) -contains $Name)
+}
+
 Push-Location $RepoRoot
 try {
     Write-Host 'Restoring symbol navigation fixture...'
@@ -1288,8 +1318,9 @@ try {
         throw "Navlyn executable was not found: $NavlynDll. Run without -NoBuild first."
     }
 
-    Write-Host 'Running symbol navigation checks...'
+    Write-Host "Running symbol navigation checks ($($Suite -join ',') suite)..."
 
+    if (Test-SymbolNavigationSuite -Name 'lookup') {
     Assert-SymbolsExact `
         -Name 'symbols partial type declarations' `
         -Query 'Widget' `
@@ -1805,7 +1836,9 @@ try {
         -ExpectedContainer 'SymbolNavigationFixture.WidgetMarkerAttribute' `
         -ExpectedDeclarationLineContains 'public sealed class WidgetMarkerAttribute : Attribute;' `
         -ExpectedDeclarationTarget 'WidgetMarkerAttribute'
+    }
 
+    if (Test-SymbolNavigationSuite -Name 'definition') {
     Assert-Definition `
         -Name 'definition type reference' `
         -QueryLineContains 'Widget widget = Widget.CreateDefault();' `
@@ -2101,7 +2134,9 @@ try {
         -ExpectedContainer 'System' `
         -ExpectedAssembly 'System.Runtime' `
         -ExpectedDocumentationCommentId 'T:System.String'
+    }
 
+    if (Test-SymbolNavigationSuite -Name 'references') {
     Assert-References `
         -Name 'references type reference' `
         -QueryLineContains 'Widget widget = Widget.CreateDefault();' `
@@ -2315,7 +2350,9 @@ try {
             (New-ExpectedDefinition -LineContains 'public AliasRunner CreateRunner()' -Target 'AliasRunner'),
             (New-ExpectedDefinition -LineContains 'return new AliasRunner();' -Target 'AliasRunner')
         )
+    }
 
+    if (Test-SymbolNavigationSuite -Name 'edges') {
     Assert-Implementations `
         -Name 'implementations interface type' `
         -QueryLineContains 'public interface IWidgetFormatter' `
@@ -2584,7 +2621,9 @@ try {
         -ExpectedCalleeContainer 'SymbolNavigationFixture.NumberBox' `
         -ExpectedLocationLineContains 'int indexed = total[0];' `
         -ExpectedLocationTarget 'total'
+    }
 
+    if (Test-SymbolNavigationSuite -Name 'source') {
     $formatPosition = Get-SourcePosition `
         -LineContains 'string formatted = widget.Format(3);' `
         -Target 'Format'
@@ -2783,6 +2822,7 @@ try {
     $numberBoxEntry = @($outlineJson.entries | Where-Object { $_.name -eq 'NumberBox' -and $_.kind -eq 'NamedType' })[0]
     $operatorEntry = @($outlineJson.entries | Where-Object { $_.name -eq 'op_Addition' -and $_.kind -eq 'Method' })[0]
     Assert-Equal -Name 'outline fixture contains NumberBox' -Actual $numberBoxEntry.name -Expected 'NumberBox'
+    Assert-Matches -Name 'outline fixture candidate id' -Actual $numberBoxEntry.candidateId -Pattern '^sym:v1:[0-9a-f]{32}$'
     Assert-Equal -Name 'outline fixture operator flag' -Actual $operatorEntry.facts.isOperator -Expected $true
 
     $hierarchyPosition = Get-SourcePosition `
@@ -2829,6 +2869,7 @@ try {
     $symbolsFilteredJson = $symbolsFiltered.Stdout | ConvertFrom-Json
     Assert-Equal -Name 'symbols filtered total' -Actual $symbolsFilteredJson.totalMatches -Expected 2
     Assert-Equal -Name 'symbols filtered first container' -Actual @($symbolsFilteredJson.matches)[0].container -Expected 'SymbolNavigationFixture.Widget'
+    }
 
     Write-Host 'Symbol navigation checks passed.'
 }

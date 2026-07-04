@@ -23,7 +23,7 @@ public sealed class TestDiscoveryResolverComponentTests(ResolverComponentTestFix
             snippetLines: 1,
             CancellationToken.None);
 
-        Assert.Contains(result.TestProjects, project => project.Name == "navlyn.Tests");
+        Assert.Contains(result.TestProjects, project => project.Path == "navlyn.Tests/navlyn.Tests.csproj");
         Assert.Contains(result.Candidates, candidate => candidate.Framework == "xunit" && candidate.Name == "Discover_NavlynSolution_FindsXunitTests");
     }
 }

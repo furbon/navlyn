@@ -12,9 +12,11 @@ $SolutionPath = Join-Path $RepoRoot 'navlyn.slnx'
 $ProjectPath = Join-Path $RepoRoot 'navlyn/navlyn.csproj'
 $ProjectDir = Join-Path $RepoRoot 'navlyn'
 $FixtureProject = Join-Path $RepoRoot 'tests/fixtures/FuzzyDiscoveryFixture/FuzzyDiscoveryFixture.csproj'
+$TargetFrameworkScript = Join-Path $RepoRoot 'scripts/lib/navlyn-target-framework.ps1'
 
-[xml]$ProjectXml = Get-Content -Raw -LiteralPath $ProjectPath
-$TargetFramework = [string]$ProjectXml.Project.PropertyGroup.TargetFramework
+. $TargetFrameworkScript
+
+$TargetFramework = Get-NavlynPreferredTargetFramework -ProjectPath $ProjectPath
 $NavlynDll = Join-Path $ProjectDir "bin/Debug/$TargetFramework/navlyn.dll"
 
 function Join-ProcessArguments {

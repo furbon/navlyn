@@ -13,6 +13,27 @@ internal sealed class ReferencesResolver
         bool excludeGenerated,
         CancellationToken cancellationToken)
     {
+        return await ResolveAsync(
+            solution,
+            file,
+            line,
+            column,
+            project,
+            excludeGenerated,
+            SymbolNavigationSearchOptions.Default,
+            cancellationToken);
+    }
+
+    public async Task<ReferencesResolutionResult> ResolveAsync(
+        Solution solution,
+        FileInfo file,
+        int line,
+        int column,
+        Project? project,
+        bool excludeGenerated,
+        SymbolNavigationSearchOptions searchOptions,
+        CancellationToken cancellationToken)
+    {
         SourceSymbolResolutionResult result = await new SourceSymbolResolver().ResolveAsync(
             solution,
             file,
@@ -28,9 +49,17 @@ internal sealed class ReferencesResolver
         }
 
         SourceSymbolResolution resolution = result.Resolution!;
+        SymbolNavigationSearchPlan searchPlan = await SymbolNavigationSearchPlanner.CreateAsync(
+            solution,
+            resolution,
+            searchOptions,
+            excludeGenerated,
+            cancellationToken);
+
         IEnumerable<ReferencedSymbol> referencedSymbols = await SymbolFinder.FindReferencesAsync(
             resolution.Symbol,
             solution,
+            searchPlan.Documents,
             cancellationToken: cancellationToken);
 
         List<SymbolReferenceLocation> referenceLocations = [];
@@ -67,7 +96,8 @@ internal sealed class ReferencesResolver
                 Kind: resolution.Symbol.Kind.ToString(),
                 Container: SymbolNavigationFacts.GetContainer(resolution.Symbol),
                 Facts: SymbolFactsBuilder.Create(resolution.Symbol, resolution.ProjectName)),
-            References: references));
+            References: references,
+            Search: searchPlan.Metadata));
     }
 
     private static async Task<SymbolReferenceLocation?> CreateLocationAsync(
@@ -162,7 +192,8 @@ internal sealed record ReferencesResolution(
     int Line,
     int Column,
     ReferencesSymbol Symbol,
-    IReadOnlyList<SymbolReferenceLocation> References);
+    IReadOnlyList<SymbolReferenceLocation> References,
+    SymbolNavigationSearchMetadata Search);
 
 internal sealed record ReferencesSymbol(string Name, string Kind, string? Container, SymbolFacts Facts);
 

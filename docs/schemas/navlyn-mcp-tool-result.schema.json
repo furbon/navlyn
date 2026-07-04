@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.navlyn.dev/navlyn-mcp-tool-result.schema.json",
+  "title": "Navlyn MCP Tool Result Envelope",
+  "description": "Shared outer envelope for Navlyn MCP structured content. The result object is the command-specific Navlyn JSON documented by the CLI contract.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "ok",
+    "tool",
+    "workspace"
+  ],
+  "properties": {
+    "ok": {
+      "type": "boolean"
+    },
+    "tool": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceCommand": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "command",
+        "arguments"
+      ],
+      "properties": {
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "arguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "workspace": {
+      "type": "string",
+      "minLength": 1
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "executionPath": {
+          "enum": [
+            "direct",
+            "daemon",
+            "cli",
+            "in-process"
+          ]
+        },
+        "workspaceCacheStatus": {
+          "enum": [
+            "cold",
+            "warming",
+            "warm",
+            "daemon",
+            "stale",
+            "partial",
+            "unavailable"
+          ]
+        },
+        "workspaceCacheHit": {
+          "type": "boolean"
+        },
+        "workspaceFingerprint": {
+          "type": "string"
+        },
+        "indexStatus": {
+          "enum": [
+            "cold",
+            "warming",
+            "warm",
+            "daemon",
+            "stale",
+            "partial",
+            "unavailable"
+          ]
+        },
+        "snapshotId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "costClass": {
+          "type": "string"
+        },
+        "freshnessStatus": {
+          "enum": [
+            "fresh",
+            "stale",
+            "unknown"
+          ]
+        },
+        "documentIndexDocumentCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "documentIndexEstimatedBytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "recommendedNextAction": {
+      "$ref": "#/$defs/followUpAction"
+    },
+    "optionalFollowUps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/followUpAction"
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "exitCode": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "stderr": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "ok": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "sourceCommand",
+          "result"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "ok": {
+            "const": false
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "error"
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "followUpAction": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "action",
+        "when",
+        "costClass",
+        "runByDefault"
+      ],
+      "properties": {
+        "action": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "when": {
+          "type": "string",
+          "minLength": 1
+        },
+        "costClass": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runByDefault": {
+          "const": false
+        }
+      }
+    }
+  }
+}

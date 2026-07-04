@@ -1,0 +1,23 @@
+{
+  "file": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs",
+  "entries": [
+    {
+      "name": "CheckCommand",
+      "kind": "NamedType",
+      "container": "Navlyn.Cli.Commands",
+      "facts": {
+        "displayName": "CheckCommand",
+        "fullyQualifiedName": "Navlyn.Cli.Commands.CheckCommand",
+        "kind": "NamedType",
+        "isSource": true,
+        "isMetadata": false
+      },
+      "candidateId": "sym:v1:0123456789abcdef",
+      "path": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs",
+      "line": 6,
+      "column": 23,
+      "endLine": 31,
+      "endColumn": 2
+    }
+  ]
+}

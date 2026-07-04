@@ -862,6 +862,11 @@ internal static partial class BatchCommand
             return request.Failed(error!);
         }
 
+        if (!TryGetNavigationSearchOptions(request.Payload, out SymbolNavigationSearchOptions searchOptions, out error))
+        {
+            return request.Failed(error!);
+        }
+
         if (!TryGetReferenceUsageOptions(
             request.Payload,
             out IReadOnlyList<string> usageKinds,
@@ -878,6 +883,7 @@ internal static partial class BatchCommand
             options.Column,
             options.Project,
             options.ExcludeGenerated,
+            searchOptions,
             cancellationToken);
 
         if (result.Error is not null)
@@ -907,6 +913,7 @@ internal static partial class BatchCommand
             ExcludeGenerated: options.ExcludeGenerated,
             Limit: resultFilter.Filter.Limit,
             TotalMatches: filteredReferences.Count,
+            Search: resolution.Search,
             UsageKindCounts: ReferenceUsageTaxonomy.CreateCounts(filteredReferences),
             Symbol: new SourceSymbolResult(
                 Name: resolution.Symbol.Name,
@@ -1032,6 +1039,11 @@ internal static partial class BatchCommand
             return request.Failed(error!);
         }
 
+        if (!TryGetNavigationSearchOptions(request.Payload, out SymbolNavigationSearchOptions searchOptions, out error))
+        {
+            return request.Failed(error!);
+        }
+
         CallersResolutionResult result = await new CallHierarchyResolver().ResolveCallersAsync(
             loadedWorkspace.Solution,
             options.File,
@@ -1039,6 +1051,7 @@ internal static partial class BatchCommand
             options.Column,
             options.Project,
             options.ExcludeGenerated,
+            searchOptions,
             cancellationToken);
 
         if (result.Error is not null)
@@ -1065,6 +1078,7 @@ internal static partial class BatchCommand
             ExcludeGenerated: options.ExcludeGenerated,
             Limit: resultFilter.Filter.Limit,
             TotalGroups: filteredCallers.Count,
+            Search: resolution.Search,
             Symbol: CallHierarchySymbolResult.FromSymbol(resolution.Symbol),
             Callers: limitedCallers.Select(CallHierarchyGroupResult.FromGroup).ToArray()));
     }
@@ -1185,6 +1199,7 @@ internal static partial class BatchCommand
             IncludeMetadata: includeMetadata ?? false,
             Limit: resultFilter.Filter.Limit,
             TotalGroups: filteredCalls.Count,
+            Search: resolution.Search,
             Caller: CallHierarchySymbolResult.FromSymbol(resolution.Caller),
             Calls: limitedCalls.Select(CallHierarchyGroupResult.FromGroup).ToArray()));
     }
@@ -1361,7 +1376,9 @@ internal static partial class BatchCommand
             !TryGetFuzzySnippetOptions(request.Payload, out bool includeSnippets, out int snippetLines, out error) ||
             !TryGetOptionalInt(request.Payload, "memberLimit", out int? memberLimit, out error) ||
             !TryGetOptionalInt(request.Payload, "referenceLimit", out int? referenceLimit, out error) ||
-            !TryGetOptionalInt(request.Payload, "relationLimit", out int? relationLimit, out error))
+            !TryGetOptionalInt(request.Payload, "relationLimit", out int? relationLimit, out error) ||
+            !TryGetNavigationSearchOptions(request.Payload, out SymbolNavigationSearchOptions searchOptions, out error) ||
+            !TryGetLightFullProfile(request.Payload, out string profile, out error))
         {
             return request.Failed(error!);
         }
@@ -1384,7 +1401,7 @@ internal static partial class BatchCommand
         return request.Success(await resolver.AboutAsync(
             loadedWorkspace,
             options,
-            new FuzzyAboutOptions(effectiveMemberLimit, effectiveReferenceLimit, effectiveRelationLimit, includeSnippets, snippetLines, options.ExcludeGenerated),
+            new FuzzyAboutOptions(effectiveMemberLimit, effectiveReferenceLimit, effectiveRelationLimit, includeSnippets, snippetLines, options.ExcludeGenerated, searchOptions, profile),
             projects,
             projectFilters,
             cancellationToken));
@@ -1408,7 +1425,14 @@ internal static partial class BatchCommand
             out BatchError? error) ||
             !TryGetFuzzySnippetOptions(request.Payload, out bool includeSnippets, out int snippetLines, out error) ||
             !TryGetOptionalInt(request.Payload, "limit", out int? limit, out error) ||
-            !TryGetOptionalInt(request.Payload, "depth", out int? depth, out error))
+            !TryGetOptionalInt(request.Payload, "depth", out int? depth, out error) ||
+            !TryGetNavigationSearchOptions(request.Payload, out SymbolNavigationSearchOptions searchOptions, out error))
+        {
+            return request.Failed(error!);
+        }
+
+        string profile = "full";
+        if (intent == "impact" && !TryGetLightFullProfile(request.Payload, out profile, out error))
         {
             return request.Failed(error!);
         }
@@ -1426,7 +1450,7 @@ internal static partial class BatchCommand
         }
 
         IReadOnlyList<string> defaultIncludes = intent == "impact"
-            ? ["references", "callers", "calls", "implementations", "hierarchy"]
+            ? profile == "light" ? ["declarations", "calls"] : ["references", "callers", "calls", "implementations", "hierarchy"]
             : ["declarations", "references", "callers", "calls", "implementations", "hierarchy"];
         IReadOnlyList<string> include = includeValues.Count == 0
             ? defaultIncludes
@@ -1450,7 +1474,7 @@ internal static partial class BatchCommand
             loadedWorkspace,
             intent,
             options,
-            new FuzzyFilesOptions(include, effectiveLimit, effectiveDepth, includeSnippets, snippetLines, options.ExcludeGenerated),
+            new FuzzyFilesOptions(include, effectiveLimit, effectiveDepth, includeSnippets, snippetLines, options.ExcludeGenerated, searchOptions, profile),
             projects,
             projectFilters,
             cancellationToken));
@@ -2125,6 +2149,67 @@ internal static partial class BatchCommand
         if (!ReferenceUsageTaxonomy.TryNormalizeGroupKinds(groupByValues, out groupBy, out string? groupError))
         {
             error = BatchError.FromDiagnostic(DiagnosticIds.ParseError, groupError!);
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    private static bool TryGetNavigationSearchOptions(
+        JsonElement payload,
+        out SymbolNavigationSearchOptions options,
+        out BatchError? error)
+    {
+        options = SymbolNavigationSearchOptions.Default;
+
+        if (!TryGetOptionalString(payload, "scope", out string? scope, out error) ||
+            !TryGetOptionalInt(payload, "maxDocuments", out int? maxDocuments, out error))
+        {
+            return false;
+        }
+
+        if (scope is not null &&
+            !SymbolNavigationSearchScopes.Values.Contains(scope.Trim(), StringComparer.Ordinal))
+        {
+            error = BatchError.FromDiagnostic(
+                DiagnosticIds.ParseError,
+                "scope must be file, project, dependent-projects, workspace-set, or solution.");
+            return false;
+        }
+
+        if (maxDocuments <= 0)
+        {
+            error = BatchError.FromDiagnostic(DiagnosticIds.InvalidLimit, "maxDocuments must be 1 or greater.");
+            return false;
+        }
+
+        options = SymbolNavigationSearchOptions.Create(scope, maxDocuments);
+        error = null;
+        return true;
+    }
+
+    private static bool TryGetLightFullProfile(
+        JsonElement payload,
+        out string profile,
+        out BatchError? error)
+    {
+        profile = "full";
+        if (!TryGetOptionalString(payload, "profile", out string? value, out error))
+        {
+            return false;
+        }
+
+        if (value is null)
+        {
+            error = null;
+            return true;
+        }
+
+        profile = value.Trim();
+        if (profile is not ("light" or "full"))
+        {
+            error = BatchError.FromDiagnostic(DiagnosticIds.ParseError, "profile must be light or full.");
             return false;
         }
 

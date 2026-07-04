@@ -365,6 +365,7 @@ internal static partial class BatchCommand
         bool ExcludeGenerated,
         int? Limit,
         int TotalMatches,
+        SymbolNavigationSearchMetadata Search,
         IReadOnlyList<ReferenceUsageCount> UsageKindCounts,
         SourceSymbolResult Symbol,
         IReadOnlyList<ReferenceLocationResult> References,
@@ -429,6 +430,7 @@ internal static partial class BatchCommand
         bool ExcludeGenerated,
         int? Limit,
         int TotalGroups,
+        SymbolNavigationSearchMetadata Search,
         CallHierarchySymbolResult Symbol,
         IReadOnlyList<CallHierarchyGroupResult> Callers);
 
@@ -452,6 +454,7 @@ internal static partial class BatchCommand
         bool IncludeMetadata,
         int? Limit,
         int TotalGroups,
+        SymbolNavigationSearchMetadata Search,
         CallHierarchySymbolResult Caller,
         IReadOnlyList<CallHierarchyGroupResult> Calls);
 

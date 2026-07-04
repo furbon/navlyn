@@ -84,6 +84,31 @@ public sealed class RelationshipResolverComponentTests(ResolverComponentTestFixt
     }
 
     [Fact]
+    public async Task CallHierarchyResolver_Callers_ReportsScopedSearchMetadata()
+    {
+        SourcePosition query = fixture.SymbolNavigationSource.Position(
+            "string FormatWidget(Widget widget);",
+            "FormatWidget");
+
+        CallersResolutionResult result = await new CallHierarchyResolver().ResolveCallersAsync(
+            fixture.SymbolNavigationWorkspace.Solution,
+            fixture.SymbolNavigationSource.File,
+            query.Line,
+            query.Column,
+            project: null,
+            excludeGenerated: true,
+            searchOptions: new SymbolNavigationSearchOptions(SymbolNavigationSearchScopes.File, 10),
+            cancellationToken: CancellationToken.None);
+
+        CallersResolution resolution = ResolverAssert.NoError(result.Resolution, result.Error);
+        Assert.Equal(SymbolNavigationSearchScopes.File, resolution.Search.Scope);
+        Assert.Equal("moderate", resolution.Search.CostClass);
+        Assert.False(resolution.Search.Partial);
+        Assert.Equal(1, resolution.Search.SearchedDocumentCount);
+        Assert.Equal(1, resolution.Search.SearchedProjectCount);
+    }
+
+    [Fact]
     public async Task CallHierarchyResolver_Calls_NormalizesPropertyAndEventAccesses()
     {
         SourcePosition query = fixture.SymbolNavigationSource.Position(
@@ -127,6 +152,34 @@ public sealed class RelationshipResolverComponentTests(ResolverComponentTestFixt
 
         ReferencesResolution resolution = ResolverAssert.NoError(result.Resolution, result.Error);
         Assert.Contains(resolution.References, reference => reference.UsageKind == "invoke");
+    }
+
+    [Fact]
+    public async Task ReferencesResolver_DocumentBudget_ReturnsPartialSearchMetadata()
+    {
+        SourcePosition query = fixture.SymbolNavigationSource.Position(
+            "namespace SymbolNavigationFixture;",
+            "SymbolNavigationFixture");
+
+        ReferencesResolutionResult result = await new ReferencesResolver().ResolveAsync(
+            fixture.SymbolNavigationWorkspace.Solution,
+            fixture.SymbolNavigationSource.File,
+            query.Line,
+            query.Column,
+            project: null,
+            excludeGenerated: false,
+            searchOptions: new SymbolNavigationSearchOptions(SymbolNavigationSearchScopes.Solution, 1),
+            cancellationToken: CancellationToken.None);
+
+        ReferencesResolution resolution = ResolverAssert.NoError(result.Resolution, result.Error);
+        Assert.Equal(SymbolNavigationSearchScopes.Solution, resolution.Search.Scope);
+        Assert.Equal("expensive", resolution.Search.CostClass);
+        Assert.True(resolution.Search.LexicalPrefilterApplied);
+        Assert.True(resolution.Search.Partial);
+        Assert.Equal(1, resolution.Search.SearchedDocumentCount);
+        Assert.True(resolution.Search.PrefilteredDocumentCount > resolution.Search.SearchedDocumentCount);
+        Assert.Equal("document-budget", resolution.Search.TruncationReason);
+        Assert.Contains(resolution.Search.RerunHints, hint => hint.Contains("--max-documents", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 ﻿using Navlyn.Mcp.Configuration;
 using Navlyn.Mcp.Execution;
 using Navlyn.Mcp.Tools;
+using Navlyn.Workspaces;
 
 namespace Navlyn.Tests.Mcp;
 
@@ -13,7 +14,17 @@ public sealed class NavlynInProcessCommandAdapterTests
 
         IReadOnlyList<string> arguments = adapter.BuildArguments("find", ["--query", "WorkspaceLoader"]);
 
-        Assert.Equal(["find", "--workspace", "navlyn.slnx", "--query", "WorkspaceLoader"], arguments);
+        Assert.Equal(
+            [
+                "find",
+                "--workspace",
+                "navlyn.slnx",
+                "--workspace-root-policy",
+                WorkspaceLoader.FormatWorkspaceRootPolicy(NavlynMcpServerOptions.DefaultWorkspaceRootPolicy),
+                "--query",
+                "WorkspaceLoader"
+            ],
+            arguments);
     }
 
     [Fact]
@@ -24,7 +35,7 @@ public sealed class NavlynInProcessCommandAdapterTests
         NavlynToolResult result = await adapter.RunAsync(
             NavlynMcpTools.WorkspaceSummaryTool,
             "repo-graph",
-            ["--project", "Navlyn.Core", "--relationship-limit", "10", "--profile", "compact"],
+            ["--project", "Navlyn.Core(net10.0)", "--relationship-limit", "10", "--profile", "compact"],
             standardInput: null,
             CancellationToken.None);
 
@@ -59,7 +70,7 @@ public sealed class NavlynInProcessCommandAdapterTests
         NavlynToolResult result = await adapter.RunAsync(
             NavlynMcpTools.WorkspaceSummaryTool,
             "repo-graph",
-            ["--project", "Navlyn.Core", "--relationship-limit", "10"],
+            ["--project", "Navlyn.Core(net10.0)", "--relationship-limit", "10"],
             standardInput: null,
             CancellationToken.None);
 
@@ -77,7 +88,10 @@ public sealed class NavlynInProcessCommandAdapterTests
             NavlynArguments: [],
             WorkingDirectory: repoRoot,
             TimeoutMilliseconds: NavlynMcpServerOptions.DefaultTimeoutMilliseconds,
-            MaxJsonChars: maxJsonChars);
+            MaxJsonChars: maxJsonChars,
+            DaemonPipe: null,
+            ToolProfile: NavlynMcpServerOptions.DefaultToolProfile,
+            WorkspaceRootPolicy: NavlynMcpServerOptions.DefaultWorkspaceRootPolicy);
     }
 
     private static string FindRepositoryRoot()

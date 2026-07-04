@@ -5,8 +5,9 @@
 - [ ] `dotnet restore navlyn.slnx`
 - [ ] `dotnet build navlyn.slnx`
 - [ ] `dotnet test navlyn.slnx --no-build`
-- [ ] `./scripts/test-quick.ps1 -NoBuild`
-- [ ] `./scripts/test-cli-contract.ps1 -NoBuild` if CLI/MCP contract changed
+- [ ] `./scripts/test-quick.ps1 -NoBuild -SkipDotnetTest`
+- [ ] `./scripts/test-cli-contract.ps1 -NoBuild -Suite core` if CLI/MCP contract changed
+- [ ] `./scripts/test-cli-contract.ps1 -NoBuild -Suite all` if broad workflow/domain contract changed
 - [ ] `./scripts/test-release.ps1` if release/package behavior changed
 
 ## Contract And Docs

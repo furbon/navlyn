@@ -1,0 +1,62 @@
+{
+  "ok": true,
+  "tool": "navlyn_find_symbol",
+  "sourceCommand": {
+    "command": "find",
+    "arguments": [
+      "find",
+      "--workspace",
+      "navlyn.slnx",
+      "--query",
+      "SymbolSourceResolver"
+    ]
+  },
+  "workspace": "navlyn.slnx",
+  "metadata": {
+    "executionPath": "direct",
+    "workspaceCacheStatus": "warm",
+    "workspaceCacheHit": true,
+    "workspaceFingerprint": "fingerprint",
+    "indexStatus": "warm",
+    "snapshotId": "fingerprint",
+    "costClass": "semantic-lookup",
+    "freshnessStatus": "fresh"
+  },
+  "recommendedNextAction": {
+    "action": {
+      "command": "symbol-source",
+      "file": "Navlyn.Core/Symbols/SymbolSourceResolver.cs",
+      "line": 12,
+      "column": 1
+    },
+    "when": "Run only if the current result does not answer the user's question.",
+    "costClass": "cheap-file-first",
+    "runByDefault": false
+  },
+  "optionalFollowUps": [
+    {
+      "action": {
+        "command": "related-files",
+        "symbol": "Navlyn.Symbols.SymbolSourceResolver"
+      },
+      "when": "Run only if the current result does not answer the user's question.",
+      "costClass": "workspace-summary",
+      "runByDefault": false
+    }
+  ],
+  "result": {
+    "command": "find",
+    "nextActions": [
+      {
+        "command": "symbol-source",
+        "file": "Navlyn.Core/Symbols/SymbolSourceResolver.cs",
+        "line": 12,
+        "column": 1
+      },
+      {
+        "command": "related-files",
+        "symbol": "Navlyn.Symbols.SymbolSourceResolver"
+      }
+    ]
+  }
+}

@@ -1,6 +1,9 @@
 # Navlyn Distribution
 
-This document is the release packaging and publication runbook for Navlyn.
+This document explains how Navlyn is packaged, installed, validated, and published. It is useful for two audiences:
+
+- users who want to know what gets installed and which runtime assets are included;
+- maintainers who need the release packaging and publication runbook.
 
 Discovery-channel copy, GitHub About/topics suggestions, VS Code MCP install-link notes, and registry boundaries live in [`navlyn-discovery-channels.md`](navlyn-discovery-channels.md).
 
@@ -10,6 +13,12 @@ Navlyn is distributed as two separate .NET tool packages:
 - `navlyn-mcp`: the standalone read-only stdio MCP server.
 
 Keeping the packages separate lets CLI users install only `navlyn` and MCP users install only `navlyn-mcp`. The two packages share the same Navlyn core engine; `navlyn-mcp` does not require a separate `navlyn` CLI installation for normal use.
+
+The installed tools are local .NET tools. They do not install a background service, browser extension, editor plugin, or hosted component.
+
+Both tool packages include `net8.0` and `net10.0` assets. The .NET SDK selects the compatible tool asset during install or restore. Semantic workspace loading still requires an installed .NET SDK/MSBuild that can load the target repository.
+
+Release validation installs both .NET 8 and .NET 10 SDKs, runs the xUnit suite on both target frameworks, and runs package install smoke tests with `dotnet tool install --framework net8.0` and `--framework net10.0`.
 
 ## User Install Shape
 
@@ -25,14 +34,22 @@ Installed command names are:
 - `navlyn`
 - `navlyn-mcp`
 
+First smoke after install:
+
+```powershell
+navlyn check --workspace path/to/YourRepo.slnx
+navlyn repo-graph --workspace path/to/YourRepo.slnx --profile compact
+navlyn-mcp --help
+```
+
 ## Repository-Local Tool Manifest
 
 For teams and agent workspaces, prefer a repository-local .NET tool manifest when you want every contributor and CI job to use the same Navlyn versions:
 
 ```powershell
 dotnet new tool-manifest
-dotnet tool install navlyn --version 0.4.0
-dotnet tool install navlyn-mcp --version 0.4.0
+dotnet tool install navlyn --version 0.5.0
+dotnet tool install navlyn-mcp --version 0.5.0
 dotnet tool restore
 dotnet tool run navlyn -- check --workspace path/to/YourRepo.slnx
 ```
@@ -50,7 +67,7 @@ The installed stdio server shape is:
 ```json
 {
   "command": "navlyn-mcp",
-  "args": ["--workspace", "path/to/YourRepo.slnx"]
+  "args": ["--workspace", "path/to/YourRepo.slnx", "--tool-profile", "reader"]
 }
 ```
 
@@ -58,11 +75,11 @@ For VS Code workspace configuration, use `.vscode/mcp.json` with a `servers` obj
 
 For local development from this repository, use [`../examples/mcp/local-development.json`](../examples/mcp/local-development.json). For installed tools, use [`../examples/mcp/dotnet-tool.json`](../examples/mcp/dotnet-tool.json).
 
-When an agent needs several facts from one workspace, prefer the MCP `navlyn_batch` tool or CLI `navlyn batch` with examples from [`../examples/batch`](../examples/batch). This reduces repeated workspace load cost and keeps tool selection smaller.
+When an agent needs several facts from one workspace, prefer CLI `navlyn batch`, or MCP `navlyn_batch` from `--tool-profile full`, with examples from [`../examples/batch`](../examples/batch). This reduces repeated workspace load cost after the needed facts are known.
 
 ## Release Identity
 
-The current public release target is `0.4.0`.
+The current public release target is `0.5.0`.
 
 Keep `navlyn` and `navlyn-mcp` versions synchronized for the initial public releases. Both packages should use the same repository URL, license expression, README, package icon, author, and release notes discipline.
 
@@ -93,9 +110,11 @@ Run a local pack/install smoke before publishing:
 
 ```powershell
 ./scripts/test-package-install.ps1
+./scripts/test-package-install.ps1 -Frameworks net8.0
+./scripts/test-package-install.ps1 -Frameworks net10.0
 ```
 
-The script packs both tools, installs them from a local package source, and verifies three install shapes: `navlyn` only, `navlyn-mcp` only, and both tools together. It runs:
+The script packs both tools, installs them from a local package source, and verifies three install shapes for each requested target framework: `navlyn` only, `navlyn-mcp` only, and both tools together. It runs:
 
 - `navlyn --help`
 - `navlyn check --workspace navlyn.slnx`
@@ -120,7 +139,7 @@ By default this runs release validation before packing. Use `-NoValidation` only
 Publishing is opt-in. Dry-run is the default:
 
 ```powershell
-./scripts/publish-nuget.ps1
+./scripts/publish-nuget.ps1 -DryRun
 ```
 
 To publish from GitHub Actions, use NuGet Trusted Publishing. The publish workflow exchanges the GitHub OIDC token for a short-lived NuGet API key shortly before pushing packages, then passes that temporary value to this script as `NUGET_API_KEY`.
@@ -154,7 +173,7 @@ The workflow must run release validation before packing and publishing. Normal `
 
 After packages are published and install smoke passes from NuGet:
 
-1. Create a `v0.4.0` tag.
+1. Create a `v0.5.0` tag.
 2. Create a GitHub Release using the `CHANGELOG.md` entry.
 3. Link to the NuGet install commands.
 4. Optionally attach `navlyn-release-pack.json` and package artifacts for traceability.
@@ -166,8 +185,8 @@ Do not create the public release before package smoke and dry-run publish have s
 After NuGet indexing completes, test installation from the public feed in a clean shell:
 
 ```powershell
-dotnet tool install --global navlyn --version 0.4.0
-dotnet tool install --global navlyn-mcp --version 0.4.0
+dotnet tool install --global navlyn --version 0.5.0
+dotnet tool install --global navlyn-mcp --version 0.5.0
 navlyn --help
 navlyn-mcp --help
 navlyn check --workspace path/to/YourRepo.slnx
@@ -194,8 +213,8 @@ NuGet packages are immutable after publication. If a bad package is published:
 - Run `./scripts/test-release.ps1`.
 - Run `./scripts/test-package-install.ps1`.
 - Run `./scripts/pack-release.ps1`.
-- Dry-run `./scripts/publish-nuget.ps1`.
+- Dry-run `./scripts/publish-nuget.ps1 -DryRun`.
 - Publish with `-Publish` only from an intentional release environment.
 - Create the GitHub Release only after package publication and post-release smoke succeed.
 
-Generated packages, package smoke tools, release manifests, performance reports, binlogs, and local notes belong under ignored `artifacts/` or `.docs/` paths and should not be committed.
+Generated packages, package smoke tools, release manifests, performance reports, binlogs, and local notes belong under ignored local paths such as `artifacts/` and should not be committed.

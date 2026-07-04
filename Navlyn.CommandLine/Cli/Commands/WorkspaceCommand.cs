@@ -21,11 +21,26 @@ internal static class WorkspaceCommand
         IEnumerable<Option> options,
         Func<LoadedWorkspace, ParseResult, CancellationToken, Task<int>> executeAsync)
     {
+        return CreateWithWorkspaceInput(
+            name,
+            description,
+            options,
+            (workspace, _, parseResult, cancellationToken) => executeAsync(workspace, parseResult, cancellationToken));
+    }
+
+    public static Command CreateWithWorkspaceInput(
+        string name,
+        string description,
+        IEnumerable<Option> options,
+        Func<LoadedWorkspace, FileInfo, ParseResult, CancellationToken, Task<int>> executeAsync)
+    {
         Option<FileInfo> workspaceOption = SharedOptions.CreateWorkspaceOption();
+        Option<string?> workspaceRootPolicyOption = SharedOptions.CreateWorkspaceRootPolicyOption();
 
         Command command = new(name, description)
         {
-            workspaceOption
+            workspaceOption,
+            workspaceRootPolicyOption
         };
 
         foreach (Option option in options)
@@ -36,7 +51,8 @@ internal static class WorkspaceCommand
         command.SetAction((ParseResult parseResult, CancellationToken cancellationToken) =>
         {
             FileInfo workspace = parseResult.GetValue(workspaceOption)!;
-            return ExecuteWithWorkspaceAsync(workspace, parseResult, executeAsync, cancellationToken);
+            string? workspaceRootPolicy = parseResult.GetValue(workspaceRootPolicyOption);
+            return ExecuteWithWorkspaceAsync(workspace, workspaceRootPolicy, parseResult, executeAsync, cancellationToken);
         });
 
         return command;
@@ -57,11 +73,13 @@ internal static class WorkspaceCommand
 
     private static async Task<int> ExecuteWithWorkspaceAsync(
         FileInfo workspace,
+        string? workspaceRootPolicy,
         ParseResult parseResult,
-        Func<LoadedWorkspace, ParseResult, CancellationToken, Task<int>> executeAsync,
+        Func<LoadedWorkspace, FileInfo, ParseResult, CancellationToken, Task<int>> executeAsync,
         CancellationToken cancellationToken)
     {
-        WorkspaceLoadResult loadResult = await new WorkspaceLoader().LoadAsync(workspace, cancellationToken);
+        WorkspaceLoadOptions options = new(ParseWorkspaceRootPolicy(workspaceRootPolicy));
+        WorkspaceLoadResult loadResult = await new WorkspaceLoader().LoadAsync(workspace, options, cancellationToken);
 
         foreach (WorkspaceLoadDiagnostic diagnostic in loadResult.Diagnostics)
         {
@@ -75,6 +93,18 @@ internal static class WorkspaceCommand
         }
 
         using LoadedWorkspace workspaceHandle = loadResult.Workspace!;
-        return await executeAsync(workspaceHandle, parseResult, cancellationToken);
+        return await executeAsync(workspaceHandle, workspace, parseResult, cancellationToken);
+    }
+
+    private static WorkspaceRootPolicy? ParseWorkspaceRootPolicy(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return WorkspaceLoader.TryParseWorkspaceRootPolicy(value, out WorkspaceRootPolicy policy)
+            ? policy
+            : null;
     }
 }

@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.navlyn.dev/navlyn-resolve-target-result.schema.json",
+  "title": "Navlyn Resolve Target Result",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "workspace",
+    "kind",
+    "command",
+    "selectionInput",
+    "confidence",
+    "candidateCount",
+    "totalCandidates",
+    "recommendedNextActions",
+    "warnings"
+  ],
+  "properties": {
+    "workspace": { "type": "string", "minLength": 1 },
+    "kind": { "type": "string", "minLength": 1 },
+    "command": { "const": "resolve-target" },
+    "selectionInput": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "query",
+            "candidateId",
+            "sourcePosition"
+          ]
+        },
+        "query": { "type": "string" },
+        "candidateId": { "type": "string", "pattern": "^sym:v1:" },
+        "file": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "selectedTarget": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "name",
+        "kind",
+        "facts"
+      ],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "container": { "type": [ "string", "null" ] },
+        "facts": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "path": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "endColumn": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "candidateId": { "type": "string", "pattern": "^sym:v1:" },
+    "selector": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "confidence": {
+      "type": "string",
+      "enum": [
+        "high",
+        "medium",
+        "low",
+        "ambiguous",
+        "none"
+      ]
+    },
+    "ambiguityReason": { "type": "string" },
+    "candidateCount": { "type": "integer", "minimum": 0 },
+    "totalCandidates": { "type": "integer", "minimum": 0 },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "recommendedNextActions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

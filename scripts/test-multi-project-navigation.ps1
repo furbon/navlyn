@@ -20,9 +20,11 @@ $AppDisplayPath = 'tests/fixtures/MultiProjectFixture/App/CrossProjectRunner.cs'
 $LibraryDisplayPath = 'tests/fixtures/MultiProjectFixture/Library/SharedWidget.cs'
 $AppProjectDisplayPath = 'tests/fixtures/MultiProjectFixture/App/App.csproj'
 $LibraryProjectDisplayPath = 'tests/fixtures/MultiProjectFixture/Library/Library.csproj'
+$TargetFrameworkScript = Join-Path $RepoRoot 'scripts/lib/navlyn-target-framework.ps1'
 
-[xml]$ProjectXml = Get-Content -Raw -LiteralPath $ProjectPath
-$TargetFramework = [string]$ProjectXml.Project.PropertyGroup.TargetFramework
+. $TargetFrameworkScript
+
+$TargetFramework = Get-NavlynPreferredTargetFramework -ProjectPath $ProjectPath
 $NavlynDll = Join-Path $ProjectDir "bin/Debug/$TargetFramework/navlyn.dll"
 
 function Invoke-CheckedProcess {

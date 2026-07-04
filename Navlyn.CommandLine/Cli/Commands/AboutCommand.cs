@@ -36,11 +36,14 @@ internal static class AboutCommand
         Option<string> candidatePolicyOption = FuzzyCommandSupport.CreateCandidatePolicyOption("fail");
         Option<string> minConfidenceOption = FuzzyCommandSupport.CreateMinConfidenceOption("medium");
         Option<bool> explainSelectionOption = FuzzyCommandSupport.CreateExplainSelectionOption();
+        Option<string> scopeOption = SharedOptions.CreateSearchScopeOption();
+        Option<int?> maxDocumentsOption = SharedOptions.CreateMaxDocumentsOption();
+        Option<string> profileOption = FuzzyCommandSupport.CreateWorkflowProfileOption();
 
         return WorkspaceCommand.Create(
             "about",
             "Resolve a fuzzy symbol query and return a compact semantic summary.",
-            [queryOption, candidateIdOption, assumeKindOption, matchOption, caseSensitiveOption, projectOption, excludeGeneratedOption, memberLimitOption, referenceLimitOption, relationLimitOption, includeSnippetsOption, snippetLinesOption, candidatePolicyOption, minConfidenceOption, explainSelectionOption],
+            [queryOption, candidateIdOption, assumeKindOption, matchOption, caseSensitiveOption, projectOption, excludeGeneratedOption, memberLimitOption, referenceLimitOption, relationLimitOption, includeSnippetsOption, snippetLinesOption, scopeOption, maxDocumentsOption, profileOption, candidatePolicyOption, minConfidenceOption, explainSelectionOption],
             (workspace, parseResult, cancellationToken) => ExecuteAsync(
                 workspace,
                 parseResult.GetValue(queryOption),
@@ -55,6 +58,9 @@ internal static class AboutCommand
                 parseResult.GetValue(relationLimitOption),
                 parseResult.GetValue(includeSnippetsOption),
                 parseResult.GetValue(snippetLinesOption),
+                parseResult.GetValue(scopeOption)!,
+                parseResult.GetValue(maxDocumentsOption),
+                parseResult.GetValue(profileOption)!,
                 parseResult.GetValue(candidatePolicyOption)!,
                 parseResult.GetValue(minConfidenceOption)!,
                 parseResult.GetValue(explainSelectionOption),
@@ -75,6 +81,9 @@ internal static class AboutCommand
         int? relationLimit,
         bool includeSnippets,
         int? snippetLines,
+        string scope,
+        int? maxDocuments,
+        string profile,
         string candidatePolicy,
         string minConfidence,
         bool explainSelection,
@@ -87,6 +96,7 @@ internal static class AboutCommand
         if (!FuzzyCommandSupport.TryCreatePositiveOption("--member-limit", effectiveMemberLimit, out int exitCode) ||
             !FuzzyCommandSupport.TryCreatePositiveOption("--reference-limit", effectiveReferenceLimit, out exitCode) ||
             !FuzzyCommandSupport.TryCreatePositiveOption("--relation-limit", effectiveRelationLimit, out exitCode) ||
+            !FuzzyCommandSupport.TryCreatePositiveOption("--max-documents", maxDocuments ?? SymbolNavigationSearchOptions.DefaultMaxDocuments, out exitCode) ||
             !FuzzyCommandSupport.TryCreateNonNegativeOption("--snippet-lines", snippetContext, out exitCode))
         {
             return exitCode;
@@ -123,7 +133,15 @@ internal static class AboutCommand
         FuzzyAboutResult result = await resolver.AboutAsync(
             loadedWorkspace,
             options,
-            new FuzzyAboutOptions(effectiveMemberLimit, effectiveReferenceLimit, effectiveRelationLimit, includeSnippets, snippetContext, excludeGenerated),
+            new FuzzyAboutOptions(
+                effectiveMemberLimit,
+                effectiveReferenceLimit,
+                effectiveRelationLimit,
+                includeSnippets,
+                snippetContext,
+                excludeGenerated,
+                SymbolNavigationSearchOptions.Create(scope, maxDocuments),
+                profile),
             projects,
             projectOutputs,
             cancellationToken);

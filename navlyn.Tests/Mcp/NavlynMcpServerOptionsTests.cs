@@ -1,5 +1,7 @@
 ﻿using Navlyn.Mcp.Configuration;
 
+using Navlyn.Workspaces;
+
 namespace Navlyn.Tests.Mcp;
 
 public sealed class NavlynMcpServerOptionsTests
@@ -24,6 +26,8 @@ public sealed class NavlynMcpServerOptionsTests
         Assert.Equal(repoRoot, options.WorkingDirectory);
         Assert.Null(options.NavlynExecutable);
         Assert.False(options.UseExternalCli);
+        Assert.Equal(NavlynMcpToolProfile.Reader, options.ToolProfile);
+        Assert.Equal(WorkspaceRootPolicy.RepoRelative, options.WorkspaceRootPolicy);
     }
 
     [Fact]
@@ -51,6 +55,134 @@ public sealed class NavlynMcpServerOptionsTests
         Assert.Equal(["navlyn.dll", "--no-build"], options.NavlynArguments);
         Assert.Equal(30000, options.TimeoutMilliseconds);
         Assert.Equal(1000, options.MaxJsonChars);
+    }
+
+    [Fact]
+    public void TryParse_ToolProfile_OverridesDefault()
+    {
+        string repoRoot = FindRepositoryRoot();
+
+        bool valid = NavlynMcpServerOptions.TryParse(
+            ["--workspace", Path.Combine(repoRoot, "navlyn.slnx"), "--tool-profile", "full"],
+            out NavlynMcpServerOptions options,
+            out string? error,
+            out _);
+
+        Assert.True(valid);
+        Assert.Null(error);
+        Assert.Equal(NavlynMcpToolProfile.Full, options.ToolProfile);
+    }
+
+    [Fact]
+    public void TryParse_WorkspaceRootPolicy_OverridesDefault()
+    {
+        string repoRoot = FindRepositoryRoot();
+
+        bool valid = NavlynMcpServerOptions.TryParse(
+            ["--workspace", Path.Combine(repoRoot, "navlyn.slnx"), "--workspace-root-policy", "allow-listed"],
+            out NavlynMcpServerOptions options,
+            out string? error,
+            out _);
+
+        Assert.True(valid);
+        Assert.Null(error);
+        Assert.Equal(WorkspaceRootPolicy.AllowListed, options.WorkspaceRootPolicy);
+    }
+
+    [Fact]
+    public void TryParse_DaemonPipe_StoresExplicitPipeName()
+    {
+        string repoRoot = FindRepositoryRoot();
+
+        bool valid = NavlynMcpServerOptions.TryParse(
+            ["--workspace", Path.Combine(repoRoot, "navlyn.slnx"), "--daemon-pipe", "navlyn-test"],
+            out NavlynMcpServerOptions options,
+            out string? error,
+            out _);
+
+        Assert.True(valid);
+        Assert.Null(error);
+        Assert.Equal("navlyn-test", options.DaemonPipe);
+    }
+
+    [Fact]
+    public void TryParse_InvalidWorkspaceRootPolicy_ReturnsUsageError()
+    {
+        string repoRoot = FindRepositoryRoot();
+
+        bool valid = NavlynMcpServerOptions.TryParse(
+            ["--workspace", Path.Combine(repoRoot, "navlyn.slnx"), "--workspace-root-policy", "wide-open"],
+            out _,
+            out string? error,
+            out _);
+
+        Assert.False(valid);
+        Assert.Equal("--workspace-root-policy must be one of: repo-relative, allow-listed, all.", error);
+    }
+
+    [Fact]
+    public void TryParse_ToolProfileEnvironment_ProvidesDefault()
+    {
+        string repoRoot = FindRepositoryRoot();
+        string? previous = Environment.GetEnvironmentVariable(NavlynMcpServerOptions.ToolProfileEnvironmentVariable);
+        Environment.SetEnvironmentVariable(NavlynMcpServerOptions.ToolProfileEnvironmentVariable, "review");
+
+        try
+        {
+            bool valid = NavlynMcpServerOptions.TryParse(
+                ["--workspace", Path.Combine(repoRoot, "navlyn.slnx")],
+                out NavlynMcpServerOptions options,
+                out string? error,
+                out _);
+
+            Assert.True(valid);
+            Assert.Null(error);
+            Assert.Equal(NavlynMcpToolProfile.Review, options.ToolProfile);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(NavlynMcpServerOptions.ToolProfileEnvironmentVariable, previous);
+        }
+    }
+
+    [Fact]
+    public void TryParse_CommandLineToolProfile_OverridesEnvironment()
+    {
+        string repoRoot = FindRepositoryRoot();
+        string? previous = Environment.GetEnvironmentVariable(NavlynMcpServerOptions.ToolProfileEnvironmentVariable);
+        Environment.SetEnvironmentVariable(NavlynMcpServerOptions.ToolProfileEnvironmentVariable, "review");
+
+        try
+        {
+            bool valid = NavlynMcpServerOptions.TryParse(
+                ["--workspace", Path.Combine(repoRoot, "navlyn.slnx"), "--tool-profile", "edit"],
+                out NavlynMcpServerOptions options,
+                out string? error,
+                out _);
+
+            Assert.True(valid);
+            Assert.Null(error);
+            Assert.Equal(NavlynMcpToolProfile.Edit, options.ToolProfile);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(NavlynMcpServerOptions.ToolProfileEnvironmentVariable, previous);
+        }
+    }
+
+    [Fact]
+    public void TryParse_InvalidToolProfile_ReturnsUsageError()
+    {
+        string repoRoot = FindRepositoryRoot();
+
+        bool valid = NavlynMcpServerOptions.TryParse(
+            ["--workspace", Path.Combine(repoRoot, "navlyn.slnx"), "--tool-profile", "everything"],
+            out _,
+            out string? error,
+            out _);
+
+        Assert.False(valid);
+        Assert.Equal("--tool-profile must be one of: reader, review, edit, full.", error);
     }
 
     [Fact]
@@ -107,6 +239,46 @@ public sealed class NavlynMcpServerOptionsTests
         Assert.Null(error);
         Assert.Equal(workspace, options.Workspace);
         Assert.Equal("sample.slnx", options.WorkspaceArgument);
+    }
+
+    [Fact]
+    public void TryParse_WorkspaceAuto_PrefersCodeWorkspaceOverSlnx()
+    {
+        using TemporaryDirectory temp = TemporaryDirectory.Create();
+        string workspace = Path.Combine(temp.Path, "sample.code-workspace");
+        File.WriteAllText(workspace, """{"folders":[{"path":"."}]}""");
+        File.WriteAllText(Path.Combine(temp.Path, "sample.slnx"), "");
+
+        bool valid = NavlynMcpServerOptions.TryParse(
+            ["--workspace", "auto", "--working-directory", temp.Path],
+            out NavlynMcpServerOptions options,
+            out string? error,
+            out _);
+
+        Assert.True(valid);
+        Assert.Null(error);
+        Assert.Equal(workspace, options.Workspace);
+        Assert.Equal("sample.code-workspace", options.WorkspaceArgument);
+    }
+
+    [Fact]
+    public void TryParse_WorkspaceAuto_PrefersNavlynWorkspaceOverCodeWorkspace()
+    {
+        using TemporaryDirectory temp = TemporaryDirectory.Create();
+        string workspace = Path.Combine(temp.Path, "navlyn.workspace.json");
+        File.WriteAllText(workspace, """{"primaryWorkspace":"sample.slnx"}""");
+        File.WriteAllText(Path.Combine(temp.Path, "sample.code-workspace"), """{"folders":[{"path":"."}]}""");
+
+        bool valid = NavlynMcpServerOptions.TryParse(
+            ["--workspace", "auto", "--working-directory", temp.Path],
+            out NavlynMcpServerOptions options,
+            out string? error,
+            out _);
+
+        Assert.True(valid);
+        Assert.Null(error);
+        Assert.Equal(workspace, options.Workspace);
+        Assert.Equal("navlyn.workspace.json", options.WorkspaceArgument);
     }
 
     [Fact]

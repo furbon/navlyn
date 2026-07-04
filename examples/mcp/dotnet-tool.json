@@ -2,6 +2,8 @@
   "command": "navlyn-mcp",
   "args": [
     "--workspace",
-    "navlyn.slnx"
+    "navlyn.workspace.json",
+    "--tool-profile",
+    "reader"
   ]
 }
