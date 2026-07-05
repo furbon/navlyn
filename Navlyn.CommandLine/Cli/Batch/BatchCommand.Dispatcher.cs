@@ -23,6 +23,7 @@ internal static partial class BatchCommand
             "outline" => await ExecuteOutlineAsync(loadedWorkspace, defaults, request, cancellationToken),
             "symbol-at" => await ExecuteSymbolAtAsync(loadedWorkspace, defaults, request, cancellationToken),
             "symbol-info" => await ExecuteSymbolInfoAsync(loadedWorkspace, defaults, request, cancellationToken),
+            "symbol-source" => await ExecuteSymbolSourceAsync(loadedWorkspace, defaults, request, cancellationToken),
             "definition" => await ExecuteDefinitionAsync(loadedWorkspace, defaults, request, cancellationToken),
             "references" => await ExecuteReferencesAsync(loadedWorkspace, defaults, request, cancellationToken),
             "implementations" => await ExecuteImplementationsAsync(loadedWorkspace, defaults, request, cancellationToken),

@@ -8,11 +8,12 @@ Navlyn commands are grouped by investigation style:
 
 | Family | Commands | Purpose |
 | --- | --- | --- |
-| Workspace facts | `check`, `overview`, `repo-graph`, `diagnostics`, `symbol-diagnostics`, `diagnostic-pack` | Load workspaces and report deterministic repository, project, package, and compiler facts. |
+| Workspace facts | `doctor`, `check`, `overview`, `repo-graph`, `diagnostics`, `symbol-diagnostics`, `diagnostic-pack` | Diagnose setup, load workspaces, and report deterministic repository, project, package, and compiler facts. |
 | Workspace lifecycle | `workspace-status`, `workspace-refresh`, `serve` | Report workspace freshness, manage the opt-in `.navlyn/cache` manifest, and run a local read-only daemon. |
 | Fuzzy investigations | `find`, `resolve-target`, `where-used`, `about`, `related`, `impact`, `entrypoints` | Resolve approximate symbol intent into candidates, selected target envelopes, selected-symbol summaries, related files, impact, and entrypoint chains. |
 | Diff and review | `changed-symbols`, `impact-diff`, `diagnostics-diff`, `review-diff`, `review-pack` | Produce evidence-first facts for Git diffs and review workflows. |
 | Context and batching | `context-pack`, `batch` | Build bounded agent reading material and run multiple machine-readable requests through one workspace load. |
+| Agent evidence | `edit-preflight`, `post-edit-guard`, `wrong-symbol-guard`, `change-intent-pack`, `agent-handoff-pack`, `confidence-ledger` | Anchor intended edits, compare post-edit diffs to the anchor, and produce handoff/confidence evidence for coding agents. |
 | Public API and tests | `public-api-diff`, `tests-for-symbol`, `tests-for-diff` | Compare source-level public/protected API surface and discover related test candidates. |
 | Framework and DI | `framework-entrypoints`, `di-graph`, `where-registered`, `di-impact` | Report framework-aware entrypoints and source-level Microsoft.Extensions.DependencyInjection facts. |
 | .NET application domains | `route-map`, `route-impact`, `options-graph`, `config-impact`, `where-handled`, `message-flow`, `ef-model`, `entity-impact`, `package-usage`, `package-impact` | Report source-level ASP.NET Core route/auth, options/configuration, MediatR, EF Core, and package usage facts. |
@@ -29,6 +30,7 @@ Navlyn commands are grouped by investigation style:
 - Paths are repository-relative when possible and use `/` separators in JSON output.
 - Usage errors return exit code `2`.
 - Runtime or workspace load failures return exit code `1`.
+- Guard commands such as `post-edit-guard` and `wrong-symbol-guard` still write deterministic JSON to stdout when a policy check fails; they return exit code `1` for failed guard policy and `2` for invalid inputs.
 - Source-position commands resolve one symbol at the requested file, line, and column. Commands built on the source-position input model also accept `--candidate-id` where documented; use exactly one input mode: `--candidate-id` or `--file --line --column`. Use exploratory commands such as `symbols-in`, not `definition` or `references`, for line/range-wide symbol discovery.
 - Property and event accessor method positions are normalized to their associated source property or event for navigation output.
 - Source-backed result locations keep the existing `path`, `line`, and `column` fields and include additive `endLine` and `endColumn` fields where Roslyn exposes a valid source span. `line` / `column` are 1-based inclusive start positions. `endLine` / `endColumn` are 1-based exclusive end positions.
@@ -69,7 +71,7 @@ Profiled workflow output uses `schemaVersion: "navlyn.workflow.v1"`. That schema
 
 The published envelope schemas live under [`docs/schemas`](schemas/). `navlyn-workflow-envelope.schema.json` covers the profiled workflow envelope only; command-specific domain facts remain documented in this file and validated by component, CLI-contract, and representative golden snapshot tests. Snapshot tests scrub nondeterministic fields such as `navlynVersion` and intentionally focus on envelope and important shape, not every semantic detail.
 
-Focused schemas also cover high-risk automation surfaces: `navlyn-resolve-target-result.schema.json` defines the standard target-selection entrypoint, `navlyn-file-outline-result.schema.json` and `navlyn-symbol-source-result.schema.json` define the file-first source-reading path, `navlyn-workspace-status-result.schema.json` defines workspace status/refresh freshness and cache fields, and `navlyn-symbol-search-metadata.schema.json` defines scoped reverse-edge `search` metadata. Candidate IDs and workspace fingerprints remain opaque strings; clients may compare them for equality within the documented freshness boundary, but must not parse their internals. Partial reverse-edge results are successful JSON results with `search.partial: true`, `truncationReason`, and `rerunHints`, not failures.
+Focused schemas also cover high-risk automation surfaces: `navlyn-resolve-target-result.schema.json` defines the standard target-selection entrypoint, `navlyn-file-outline-result.schema.json` and `navlyn-symbol-source-result.schema.json` define the file-first source-reading path, `navlyn-workspace-status-result.schema.json` defines workspace status/refresh freshness and cache fields, `navlyn-edit-preflight-result.schema.json` and `navlyn-agent-guard-result.schema.json` define the agent preflight and wrong-symbol guardrails, and `navlyn-symbol-search-metadata.schema.json` defines scoped reverse-edge `search` metadata. Candidate IDs and workspace fingerprints remain opaque strings; clients may compare them for equality within the documented freshness boundary, but must not parse their internals. Partial reverse-edge results are successful JSON results with `search.partial: true`, `truncationReason`, and `rerunHints`, not failures.
 
 `nextActions` are conditional follow-up hints, not a required checklist. Consumers should pick at most the fact needed for the current question and may ignore the array entirely when the current result is sufficient. MCP results expose additive `recommendedNextAction` and `optionalFollowUps` wrapper fields when inner CLI JSON contains `nextActions`; those wrappers add `when`, `costClass`, and `runByDefault: false` without changing the inner CLI result.
 
@@ -105,6 +107,29 @@ The separate `navlyn.Mcp` project exposes a read-only stdio MCP server for agent
 
 See [`navlyn-mcp-server.md`](navlyn-mcp-server.md) for setup, tool names, result envelope, and boundaries.
 
+## Agent Evidence Commands
+
+`edit-preflight` is the edit-planning entrypoint. It accepts exactly one target mode: `--query`, `--candidate-id`, or `--file --line --column`. It returns `schemaVersion: "navlyn.edit-preflight.v1"` with:
+
+- `anchor`: selected target, candidate id when available, source location, confidence, and ambiguity.
+- `source`: bounded declaration source evidence.
+- `context`: a bounded `context-pack` result for the same target and `--goal`.
+- `tests`: static related test candidates for the target.
+- `risk`, `knownUnknowns`, `limitations`, `nextCommands`, `stopConditions`, and `commandsRun`.
+
+```powershell
+navlyn edit-preflight --workspace navlyn.slnx --query PaymentService --assume-kind NamedType --goal modify --change-kind behavior
+```
+
+`post-edit-guard` compares the current diff with an anchor from `--candidate-id` or a saved `--preflight` JSON file. `wrong-symbol-guard` performs the same style of comparison directly from an intended query/candidate/source position. Both commands return `schemaVersion: "navlyn.agent-guard.v1"`, `risk: low|medium|high`, per-symbol match scores, reason codes, `policy.passed`, a recommended action, and a proof boundary statement.
+
+```powershell
+navlyn post-edit-guard --workspace navlyn.slnx --candidate-id sym:v1:... --fail-on-risk high
+navlyn wrong-symbol-guard --workspace navlyn.slnx --query PaymentService --assume-kind NamedType --fail-on-risk medium
+```
+
+`change-intent-pack`, `agent-handoff-pack`, and `confidence-ledger` are compact projections of the same preflight evidence. They are intended for agent memory, handoff, and audit logs; they do not edit files and do not replace `post-edit-guard`.
+
 ## Rich Symbol Facts
 
 Symbol `facts` are additive and intended for agents that need to choose between overloads, generic members, source symbols, and metadata symbols without immediately opening source files. Fields vary by symbol kind and may include:
@@ -137,6 +162,21 @@ Multi-targeted projects are loaded as separate Roslyn projects when MSBuild expo
 Linked files are matched and emitted by physical repository-relative path. When one physical file is linked into multiple projects, use `--project` to choose the intended semantic context. Without `--project`, Navlyn chooses a deterministic first matching document; returned symbol facts identify the project that produced a symbol when one is available.
 
 ## Workspace Lifecycle Commands
+
+`doctor` is the first setup command. It returns JSON on stdout even when the workspace path is missing or invalid enough to diagnose; setup failures are represented as `ok: false`, `workspace.error`, `checks`, and `nextAction`.
+
+```powershell
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- doctor --workspace navlyn.slnx
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- doctor --workspace auto
+```
+
+Important fields:
+
+- `ok`: `true` only when the configured workspace loaded and required setup checks passed.
+- `dotnet.version` and `dotnet.sdks`: SDK/runtime facts from the local machine.
+- `workspace.loaded`, `workspace.projectCount`, `workspace.targetFrameworks`, `workspace.diagnostics`, and `workspace.error`.
+- `recommendedFirstCommands`: copyable next commands for `doctor`, `resolve-target`, `edit-preflight`, and MCP setup.
+- `nextAction`: the one highest-priority repair or first-use action.
 
 `workspace-status` reports the loaded workspace, snapshot fingerprint, document-index size, version fingerprints, and optional on-disk cache manifest status.
 
@@ -1383,11 +1423,13 @@ Input shape:
 Each request must include:
 
 - `id`: caller-provided correlation id. It must be unique enough for the caller's own workflow.
-- `command`: one of `overview`, `diagnostics`, `symbols`, `symbols-in`, `outline`, `symbol-at`, `symbol-info`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, `calls`, `find`, `resolve-target`, `where-used`, `about`, `related`, `impact`, `entrypoints`, `review-diff`, `review-pack`, `context-pack`, `repo-graph`, `public-api-diff`, `tests-for-symbol`, `tests-for-diff`, `framework-entrypoints`, `di-graph`, `where-registered`, `di-impact`, `route-map`, `route-impact`, `options-graph`, `config-impact`, `where-handled`, `message-flow`, `ef-model`, `entity-impact`, `package-usage`, or `package-impact`.
+- `command`: one of `overview`, `diagnostics`, `symbols`, `symbols-in`, `outline`, `symbol-at`, `symbol-info`, `symbol-source`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, `calls`, `find`, `resolve-target`, `where-used`, `about`, `related`, `impact`, `entrypoints`, `review-diff`, `review-pack`, `context-pack`, `repo-graph`, `public-api-diff`, `tests-for-symbol`, `tests-for-diff`, `framework-entrypoints`, `di-graph`, `where-registered`, `di-impact`, `route-map`, `route-impact`, `options-graph`, `config-impact`, `where-handled`, `message-flow`, `ef-model`, `entity-impact`, `package-usage`, or `package-impact`.
 
 Top-level `defaults.project` applies to requests that support project scoping. Requests may override it with `project`. `symbols` and `diagnostics` may also use `projects` for multiple project filters; do not specify both `project` and `projects` on the same request.
 Top-level `defaults.excludeGenerated` applies to requests that support generated-code filtering. Requests may override it with `excludeGenerated`.
 Requests for profiled workflow commands may include `profile: "compact"`, `profile: "evidence"`, or `profile: "full"`. Invalid request-level profile values are per-request failures with `ok: false`; the batch envelope itself remains a successful command result when the top-level JSON is valid.
+
+Dependent requests can use `candidateIdFrom` instead of `candidateId` when an earlier request returns a top-level or nested `candidateId`. The dependency must point to an earlier request `id`; the source request must have succeeded; and the consuming request must not also specify `candidateId`. Invalid dependencies are per-request `ok: false` failures with `NAVLYN1008`.
 
 Request options otherwise use the same names as the command JSON concepts:
 
@@ -1395,7 +1437,7 @@ Request options otherwise use the same names as the command JSON concepts:
 - `symbols`: required `query`; optional `match`, `caseSensitive`, `limit`, `kinds`, `namespaces`, `namespaceMatch`, `containers`, `containerMatch`, `accessibilities`, `project`, `projects`, `excludeGenerated`.
 - `symbols-in`: required `file`, `line`; optional `startColumn`, `endColumn`, `project`, `excludeGenerated`.
 - `outline`: required `file`; optional `project`, `excludeGenerated`.
-- `symbol-at`, `symbol-info`, `type-hierarchy`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`.
+- `symbol-at`, `symbol-info`, `symbol-source`, `type-hierarchy`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`. `symbol-source` also accepts `view`, `maxLines`, and `budgetTokens`.
 - `definition`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`, `includeMetadata`.
 - `references`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`, `resultProject`, `resultProjects`, `resultPath`, `resultPaths`, `resultKind`, `resultKinds`, `usageKind`, `usageKinds`, `groupBy`, `limit`, `scope`, `maxDocuments`.
 - `implementations`: required exactly one input mode: `candidateId` or `file` with `line` and `column`; optional `project`, `excludeGenerated`, `resultProject`, `resultProjects`, `resultPath`, `resultPaths`, `resultKind`, `resultKinds`, `limit`.
@@ -1429,16 +1471,16 @@ Request options otherwise use the same names as the command JSON concepts:
 - `entity-impact`: required exactly one input mode: `query`, `candidateId`, or `file` with `line` and `column`; optional `assumeKind`, `assumeKinds`, `match`, `caseSensitive`, `candidatePolicy`, `minConfidence`, `explainSelection`, `project`, `projects`, `excludeGenerated`, `candidateLimit`, `entityLimit`, `querySiteLimit`, `evidenceLimit`, `includeSnippets`, `snippetLines`, `profile`.
 - `package-usage` and `package-impact`: required `package`; optional `namespaces`, `project`, `projects`, `includeTests`, `excludeGenerated`, `usageLimit`, `referenceLimit`, `profile`.
 
-Only `review-diff` from the primitive diff workflow command set is supported in `batch`; `changed-symbols`, `impact-diff`, `diagnostics-diff`, `scope-at`, `symbol-source`, `signature`, `symbol-diagnostics`, and `diagnostic-pack` remain direct CLI commands. Use `review-diff`, `review-pack`, `context-pack` with `diff: true`, `public-api-diff`, or `tests-for-diff` in `batch` for agent review workflows.
+Only `review-diff` from the primitive diff workflow command set is supported in `batch`; `changed-symbols`, `impact-diff`, `diagnostics-diff`, `scope-at`, `signature`, `symbol-diagnostics`, and `diagnostic-pack` remain direct CLI commands. Use `review-diff`, `review-pack`, `context-pack` with `diff: true`, `public-api-diff`, or `tests-for-diff` in `batch` for agent review workflows.
 
 Example agent investigation batch:
 
 ```json
 {
   "requests": [
-    { "id": "summary", "command": "repo-graph", "profile": "compact", "relationshipLimit": 20 },
-    { "id": "tests", "command": "tests-for-symbol", "profile": "evidence", "query": "CheckCommand", "assumeKind": "NamedType", "testLimit": 10 },
-    { "id": "di", "command": "di-impact", "query": "WorkspaceLoader", "assumeKind": "NamedType", "registrationLimit": 10, "consumerLimit": 10 }
+    { "id": "target", "command": "resolve-target", "query": "CheckCommand", "assumeKind": "NamedType", "project": "Navlyn.CommandLine(net10.0)" },
+    { "id": "source", "command": "symbol-source", "candidateIdFrom": "target", "view": "declaration" },
+    { "id": "refs", "command": "references", "candidateIdFrom": "target", "groupBy": ["file"], "limit": 10 }
   ]
 }
 ```

@@ -41,6 +41,7 @@ Use the performance script from the repository root:
 ./scripts/measure-navlyn-performance.ps1 -Workspace navlyn.slnx -Scenario cache -Iterations 1 -Warmup 0 -NoBuild
 ./scripts/measure-navlyn-performance.ps1 -Workspace navlyn.slnx -Scenario parallel -Iterations 1 -Warmup 0 -NoBuild
 ./scripts/measure-navlyn-performance.ps1 -Workspace navlyn.slnx -Scenario multi-workspace -Iterations 1 -Warmup 0 -NoBuild
+./scripts/measure-navlyn-performance.ps1 -Workspace navlyn.slnx -Scenario quick -Iterations 1 -Warmup 0 -NoBuild -IncludeStageTimings
 ```
 
 Reports are structured JSON with:
@@ -55,9 +56,10 @@ Reports are structured JSON with:
 - truncation state;
 - warnings;
 - optional MCP metadata such as `executionPath`, `workspaceCacheStatus`, `workspaceCacheHit`, `workspaceFingerprint`, `snapshotId`, `freshnessStatus`, and document-index sizing;
+- optional CLI stage timings from `NAVLYN_PROFILE_TIMINGS=1`, including startup-adjacent command time, workspace discovery, MSBuild registration/load, project selection, document-index construction, resolver execution, and serialization;
 - timeout/skipped status.
 
-The `cache` scenario writes its manifest under ignored `artifacts/performance-cache`. The `daemon` scenario uses local stdio JSON-lines requests so it does not leave a background server running. The `parallel` scenario starts same-workspace CLI processes concurrently, and `multi-workspace` compares the primary workspace with a fixture workspace.
+`-IncludeStageTimings` sets `NAVLYN_PROFILE_TIMINGS=1` for CLI child processes and parses `NAVLYN_TIMING` lines from stderr into `stageTimings`, `stageBreakdown`, and `summary.topStageBottlenecks`. Those diagnostic lines are opt-in and are not part of normal command stdout. The `cache` scenario writes its manifest under ignored `artifacts/performance-cache`. The `daemon` scenario uses local stdio JSON-lines requests so it does not leave a background server running. The `parallel` scenario starts same-workspace CLI processes concurrently, and `multi-workspace` compares the primary workspace with a fixture workspace.
 
 Timings are environment-dependent. Treat local reports as release and investigation evidence, not a universal service-level objective.
 
@@ -99,6 +101,7 @@ For agent adoption decisions, inspect more than elapsed time:
 - result counts: candidate count, changed symbol count, related files, tests, routes, or diagnostics.
 - truncation flags and warnings: whether the chosen profile or limits hid useful evidence.
 - MCP metadata: whether a tool used the direct path, whether the workspace cache was hit, which session-local `snapshotId` / `workspaceFingerprint` produced the result, and how large the in-memory document index is.
+- stage timings: whether startup, workspace load, project selection, resolver execution, serialization, or MCP path overhead dominates the measured workflow.
 - fuzzy/index behavior: whether repeated fuzzy or candidate-id flows reuse semantic enrichment in the same workspace snapshot.
 - expected files: whether the files a maintainer expects are present in related/context outputs.
 
@@ -179,6 +182,7 @@ Before a public release, run at least one quick performance smoke:
 ```powershell
 dotnet build navlyn.slnx
 ./scripts/measure-navlyn-performance.ps1 -Workspace navlyn.slnx -Scenario quick -Iterations 1 -Warmup 0 -NoBuild
+./scripts/measure-navlyn-performance.ps1 -Workspace navlyn.slnx -Scenario quick -Iterations 1 -Warmup 0 -NoBuild -IncludeStageTimings
 ```
 
 For MCP release confidence, also run:

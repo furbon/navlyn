@@ -9,6 +9,7 @@ internal static class NavlynMcpToolProfilePolicy
         NavlynMcpTools.WorkspaceSummaryTool,
         NavlynMcpTools.WorkspaceStatusTool,
         NavlynMcpTools.WorkspaceRefreshTool,
+        NavlynMcpTools.DoctorTool,
         NavlynMcpTools.ResolveTargetTool,
         NavlynMcpTools.FindSymbolTool,
         NavlynMcpTools.FileOutlineTool,
@@ -25,6 +26,7 @@ internal static class NavlynMcpToolProfilePolicy
         NavlynMcpTools.WorkspaceSummaryTool,
         NavlynMcpTools.WorkspaceStatusTool,
         NavlynMcpTools.WorkspaceRefreshTool,
+        NavlynMcpTools.DoctorTool,
         NavlynMcpTools.ResolveTargetTool,
         NavlynMcpTools.FindSymbolTool,
         NavlynMcpTools.FileOutlineTool,
@@ -39,6 +41,8 @@ internal static class NavlynMcpToolProfilePolicy
         NavlynMcpTools.TestsForDiffTool,
         NavlynMcpTools.PublicApiDiffTool,
         NavlynMcpTools.ReviewDiffTool,
+        NavlynMcpTools.PostEditGuardTool,
+        NavlynMcpTools.WrongSymbolGuardTool,
         NavlynMcpTools.ContextPackTool
     ];
 
@@ -47,6 +51,7 @@ internal static class NavlynMcpToolProfilePolicy
         NavlynMcpTools.WorkspaceSummaryTool,
         NavlynMcpTools.WorkspaceStatusTool,
         NavlynMcpTools.WorkspaceRefreshTool,
+        NavlynMcpTools.DoctorTool,
         NavlynMcpTools.ResolveTargetTool,
         NavlynMcpTools.FindSymbolTool,
         NavlynMcpTools.FileOutlineTool,
@@ -60,6 +65,12 @@ internal static class NavlynMcpToolProfilePolicy
         NavlynMcpTools.ExactNavigationTool,
         NavlynMcpTools.TestsForSymbolTool,
         NavlynMcpTools.DiImpactTool,
+        NavlynMcpTools.EditPreflightTool,
+        NavlynMcpTools.PostEditGuardTool,
+        NavlynMcpTools.WrongSymbolGuardTool,
+        NavlynMcpTools.ChangeIntentPackTool,
+        NavlynMcpTools.AgentHandoffPackTool,
+        NavlynMcpTools.ConfidenceLedgerTool,
         NavlynMcpTools.ContextPackTool
     ];
 
@@ -68,6 +79,7 @@ internal static class NavlynMcpToolProfilePolicy
         NavlynMcpTools.WorkspaceSummaryTool,
         NavlynMcpTools.WorkspaceStatusTool,
         NavlynMcpTools.WorkspaceRefreshTool,
+        NavlynMcpTools.DoctorTool,
         NavlynMcpTools.ResolveTargetTool,
         NavlynMcpTools.FindSymbolTool,
         NavlynMcpTools.FileOutlineTool,
@@ -84,6 +96,12 @@ internal static class NavlynMcpToolProfilePolicy
         NavlynMcpTools.DiImpactTool,
         NavlynMcpTools.PublicApiDiffTool,
         NavlynMcpTools.ReviewDiffTool,
+        NavlynMcpTools.EditPreflightTool,
+        NavlynMcpTools.PostEditGuardTool,
+        NavlynMcpTools.WrongSymbolGuardTool,
+        NavlynMcpTools.ChangeIntentPackTool,
+        NavlynMcpTools.AgentHandoffPackTool,
+        NavlynMcpTools.ConfidenceLedgerTool,
         NavlynMcpTools.ContextPackTool,
         NavlynMcpTools.BatchTool
     ];

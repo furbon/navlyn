@@ -32,6 +32,8 @@ Stop once the returned facts answer the question. Escalate only when the next fa
 | Approximate symbol name | `resolve-target` | `find` if candidates are ambiguous or the user needs alternatives |
 | Known symbol identity | `definition`, `references`, or `symbol-source` via CLI; `navlyn_symbol_source` or `navlyn_symbol_edges` via MCP | `impact` for edit risk, `context-pack` for a reading queue |
 | Single-file review | `outline` via CLI or `navlyn_file_outline` / `navlyn_inspect_file` via MCP when semantic structure matters | `context-pack` only if the file does not contain enough context |
+| Agent edit preflight | `edit-preflight` via CLI or `navlyn_edit_preflight` in MCP `edit` profile | `change-intent-pack`, `agent-handoff-pack`, or `confidence-ledger` when the work is handed off or audited |
+| Post-edit wrong-symbol check | `post-edit-guard` with the pre-edit `candidateId` or saved preflight | `wrong-symbol-guard` when the intended target should be re-resolved from query/source position |
 | Real Git diff review | `review-diff` | `tests-for-diff`, `public-api-diff`, `review-pack`, or `context-pack --diff` only when relevant |
 | Multiple known facts from one workspace | Individual tools first | CLI `batch` or MCP `navlyn_batch` in `--tool-profile full` after the needed facts are known |
 
@@ -107,19 +109,19 @@ Use Navlyn as an evidence loop around the edit, not as the editor.
 Before editing:
 
 ```powershell
-navlyn resolve-target --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --limit 10
-navlyn symbol-source --workspace navlyn.slnx --candidate-id sym:v1:... --view declaration
-navlyn references --workspace navlyn.slnx --candidate-id sym:v1:... --group-by file --limit 50
+navlyn edit-preflight --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --goal modify --change-kind behavior
+navlyn change-intent-pack --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --goal modify --change-kind behavior
 ```
 
 After editing:
 
 ```powershell
-navlyn changed-symbols --workspace navlyn.slnx --profile compact
+navlyn post-edit-guard --workspace navlyn.slnx --candidate-id sym:v1:... --fail-on-risk high
+navlyn wrong-symbol-guard --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --fail-on-risk medium
 navlyn review-diff --workspace navlyn.slnx --profile evidence --symbol-limit 20 --impact-limit 40 --diagnostic-limit 40 --related-test-limit 20
 ```
 
-Compare the post-edit changed symbols with the pre-edit anchor by name, kind, container, project, path, and source span. A mismatch is a warning to pause and inspect; it is not a proof that the edit is wrong.
+`post-edit-guard` compares the diff with a saved anchor or `candidateId`; `wrong-symbol-guard` re-resolves the intended target from query, candidate, or source position and then compares changed symbols. Both commands write JSON even when policy fails. A mismatch is a warning to pause and inspect; it is not a proof that the edit is wrong.
 
 ## PR Review Facts
 
@@ -213,6 +215,7 @@ Entrypoint detection is evidence-backed and bounded. It is not a runtime route t
 Minimal MCP flow for a symbol investigation:
 
 ```text
+navlyn_doctor()
 navlyn_resolve_target(query: "CheckCommand", assumeKind: "NamedType")
 navlyn_exact_navigation(operation: "references", candidateId: "sym:v1:...", usageKinds: ["invoke", "construct"], groupBy: ["file", "usage-kind"], limit: 50)
 navlyn_about_symbol(candidateId: "sym:v1:...")
@@ -224,6 +227,15 @@ Escalate from that flow only when needed:
 navlyn_workspace_summary(profile: "compact") // project/package/test context is needed
 navlyn_related_files(candidateId: "sym:v1:...", limit: 30) // file map is needed
 navlyn_context_pack(candidateId: "sym:v1:...", goal: "modify", changeKind: "signature", profile: "compact") // bounded reading queue is needed
+```
+
+MCP flow for a non-trivial edit:
+
+```text
+Start navlyn-mcp with --tool-profile edit.
+navlyn_edit_preflight(query: "CheckCommand", assumeKind: "NamedType", goal: "modify", changeKind: "behavior")
+// edit outside Navlyn
+navlyn_post_edit_guard(candidateId: "sym:v1:...", failOnRisk: "high")
 ```
 
 MCP flow for a real diff review:

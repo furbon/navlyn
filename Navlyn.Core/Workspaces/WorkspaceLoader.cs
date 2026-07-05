@@ -28,6 +28,7 @@ internal sealed class WorkspaceLoader
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+            using IDisposable? timing = options.Timing?.Measure("workspace.discovery");
             resolution = ResolveWorkspacePath(workspace, options);
         }
         catch (OperationCanceledException)
@@ -56,6 +57,7 @@ internal sealed class WorkspaceLoader
 
         try
         {
+            using IDisposable? timing = options.Timing?.Measure("workspace.msbuild-registration");
             RegisterMSBuild();
         }
         catch (Exception ex)
@@ -81,14 +83,29 @@ internal sealed class WorkspaceLoader
             });
 
             Solution solution;
-            if (workspaceKind == "solution")
+            using (options.Timing?.Measure("workspace.msbuild-load"))
             {
-                solution = await msbuildWorkspace.OpenSolutionAsync(workspacePath, cancellationToken: cancellationToken);
+                if (workspaceKind == "solution")
+                {
+                    solution = await msbuildWorkspace.OpenSolutionAsync(workspacePath, cancellationToken: cancellationToken);
+                }
+                else
+                {
+                    Project project = await msbuildWorkspace.OpenProjectAsync(workspacePath, cancellationToken: cancellationToken);
+                    solution = project.Solution;
+                }
             }
-            else
+
+            IReadOnlyList<LoadedProject> projects;
+            using (options.Timing?.Measure("workspace.project-selection"))
             {
-                Project project = await msbuildWorkspace.OpenProjectAsync(workspacePath, cancellationToken: cancellationToken);
-                solution = project.Solution;
+                projects = GetProjects(solution);
+            }
+
+            DocumentIndex documentIndex;
+            using (options.Timing?.Measure("workspace.document-index"))
+            {
+                documentIndex = DocumentIndexProvider.GetOrCreate(solution);
             }
 
             diagnostics = [.. diagnostics.OrderBy(d => d.Kind, StringComparer.Ordinal).ThenBy(d => d.Message, StringComparer.Ordinal)];
@@ -108,8 +125,8 @@ internal sealed class WorkspaceLoader
                 Kind: workspaceKind,
                 Workspace: msbuildWorkspace,
                 Solution: solution,
-                Projects: GetProjects(solution),
-                DocumentIndex: DocumentIndexProvider.GetOrCreate(solution));
+                Projects: projects,
+                DocumentIndex: documentIndex);
 
             return WorkspaceLoadResult.Succeeded(loadedWorkspace, diagnostics);
         }

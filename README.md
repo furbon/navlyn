@@ -35,10 +35,10 @@ dotnet tool restore
 First useful calls in your repository:
 
 ```powershell
-navlyn check --workspace path/to/YourRepo.slnx
+navlyn doctor --workspace path/to/YourRepo.slnx
 navlyn resolve-target --workspace path/to/YourRepo.slnx --query PaymentService --assume-kind NamedType
-navlyn references --workspace path/to/YourRepo.slnx --candidate-id sym:v1:... --group-by file --limit 50
-navlyn context-pack --workspace path/to/YourRepo.slnx --candidate-id sym:v1:... --goal modify --profile compact
+navlyn edit-preflight --workspace path/to/YourRepo.slnx --candidate-id sym:v1:... --goal modify --change-kind behavior
+navlyn post-edit-guard --workspace path/to/YourRepo.slnx --candidate-id sym:v1:... --fail-on-risk high
 ```
 
 For MCP clients, start with the narrow reader profile:
@@ -57,8 +57,8 @@ For a guided first run, follow [`docs/navlyn-first-10-minutes.md`](docs/navlyn-f
 ## Three Agent Workflows
 
 1. **Find the right symbol before editing.** Use `resolve-target`, then reuse the returned `candidateId` with `symbol-source`, `references`, or `about`.
-2. **Build only the reading queue you need.** Use `impact`, `related`, or `context-pack --goal modify` after smaller facts show that broader context is needed.
-3. **Check what changed after editing.** Use `changed-symbols` or `review-diff --profile evidence` and compare the changed symbols with the pre-edit anchor.
+2. **Package pre-edit evidence.** Use `edit-preflight` for an edit-ready envelope with anchor, bounded source, context, tests, confidence, and next guard command.
+3. **Check what changed after editing.** Use `post-edit-guard` or `wrong-symbol-guard`, then escalate to `review-diff --profile evidence` only when broader diff evidence is needed.
 
 ## The Problem It Solves
 
@@ -117,7 +117,8 @@ Use normal file reads and `rg` first when text is enough. Reach for Navlyn when 
 | Inspect relationships for a selected symbol | `references --candidate-id sym:v1:... --group-by file --limit 50` | The returned relationship facts answer the question. |
 | Plan a non-trivial edit | `impact --candidate-id sym:v1:... --profile light` | You know the risky callers/files; use `context-pack` only if a reading queue is needed. |
 | Review an actual Git diff | `review-diff --profile evidence` | You have changed-symbol, diagnostic, impact, and bounded warning facts. |
-| Verify a post-edit diff | `changed-symbols --profile compact` | Changed symbols match the intended pre-edit anchor, or the mismatch is understood. |
+| Prepare an agent edit | `edit-preflight --candidate-id sym:v1:... --goal modify` | The agent has an anchor, bounded evidence, known unknowns, and a post-edit guard command. |
+| Verify a post-edit diff | `post-edit-guard --candidate-id sym:v1:... --fail-on-risk high` | The guard passes, or the mismatch is understood before more edits. |
 
 Do not run every Navlyn command as a checklist. Navlyn is strongest when each call answers one semantic question.
 
@@ -129,6 +130,7 @@ Do not run every Navlyn command as a checklist. Navlyn is strongest when each ca
 - **Source relationships**: definitions, references, callers, calls, implementations, type hierarchy, related files, entrypoints, and static impact.
 - **.NET application evidence**: ASP.NET Core routes/auth, DI registrations and consumers, options/configuration, MediatR handlers, EF Core model facts, package usage, and framework entrypoints.
 - **Review evidence**: changed symbols, diagnostics, static impact, public API facts, related tests, and bounded review-pack signals.
+- **Agent guardrails**: `edit-preflight`, `post-edit-guard`, `wrong-symbol-guard`, change intent, handoff, and confidence ledgers for wrong-symbol avoidance.
 - **Automation discipline**: deterministic JSON on stdout, diagnostics on stderr, 1-based positions, repository-relative `/` paths where possible, and documented schemas/golden snapshots for high-value outputs.
 
 ## MCP For Agents
@@ -140,11 +142,12 @@ Do not run every Navlyn command as a checklist. Navlyn is strongest when each ca
 - `navlyn_symbol_source`
 - `navlyn_symbol_edges`
 - `navlyn_about_symbol`
+- `navlyn_doctor`
 - `navlyn_workspace_summary`
 - `navlyn_workspace_status`
 - `navlyn_workspace_refresh`
 
-Use `--tool-profile review` for real PR/diff review, `edit` for edit planning, and `full` only when a client needs the complete compatibility surface including `navlyn_batch`.
+Use `--tool-profile review` for real PR/diff review and post-edit guards, `edit` for `navlyn_edit_preflight` plus intent/handoff/confidence packs, and `full` only when a client needs the complete compatibility surface including `navlyn_batch`.
 
 The MCP server keeps the boundary simple and auditable: read-only, local-only, no arbitrary file server, no edit tools, no shell execution. See [`docs/navlyn-mcp-server.md`](docs/navlyn-mcp-server.md).
 
@@ -165,11 +168,11 @@ From this repository after `dotnet restore navlyn.slnx`:
 
 ```powershell
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- resolve-target --workspace navlyn.slnx --project "Navlyn.CommandLine(net10.0)" --query CheckCommand --assume-kind NamedType --limit 5
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-source --workspace navlyn.slnx --project "Navlyn.CommandLine(net10.0)" --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23 --view declaration
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- edit-preflight --workspace navlyn.slnx --project "Navlyn.CommandLine(net10.0)" --query CheckCommand --assume-kind NamedType --goal modify --change-kind behavior
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review-diff --workspace navlyn.slnx --base HEAD --head HEAD --profile compact --symbol-limit 3 --impact-limit 3 --diagnostic-limit 3 --related-test-limit 3
 ```
 
-The first command anchors a fuzzy name to a C# symbol. The second opens bounded source for that exact symbol. The third shows the review envelope on an explicit Git range; replace the refs with PR refs or omit them on a dirty branch.
+The first command anchors a fuzzy name to a C# symbol. The second creates the edit preflight envelope for that intended target. The third shows the review envelope on an explicit Git range; replace the refs with PR refs or omit them on a dirty branch.
 
 More walkthroughs: [`docs/navlyn-demo-walkthroughs.md`](docs/navlyn-demo-walkthroughs.md).
 

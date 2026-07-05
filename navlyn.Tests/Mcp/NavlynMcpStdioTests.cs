@@ -51,6 +51,7 @@ public sealed class NavlynMcpStdioTests
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.WorkspaceSummaryTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.WorkspaceStatusTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.WorkspaceRefreshTool);
+        Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.DoctorTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.ResolveTargetTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.FindSymbolTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.FileOutlineTool);
@@ -276,6 +277,7 @@ public sealed class NavlynMcpStdioTests
         NavlynMcpTools.WorkspaceSummaryTool,
         NavlynMcpTools.WorkspaceStatusTool,
         NavlynMcpTools.WorkspaceRefreshTool,
+        NavlynMcpTools.DoctorTool,
         NavlynMcpTools.ResolveTargetTool,
         NavlynMcpTools.FindSymbolTool,
         NavlynMcpTools.FileOutlineTool,
@@ -292,6 +294,7 @@ public sealed class NavlynMcpStdioTests
         NavlynMcpTools.WorkspaceSummaryTool,
         NavlynMcpTools.WorkspaceStatusTool,
         NavlynMcpTools.WorkspaceRefreshTool,
+        NavlynMcpTools.DoctorTool,
         NavlynMcpTools.ResolveTargetTool,
         NavlynMcpTools.FindSymbolTool,
         NavlynMcpTools.FileOutlineTool,
@@ -306,6 +309,8 @@ public sealed class NavlynMcpStdioTests
         NavlynMcpTools.TestsForDiffTool,
         NavlynMcpTools.PublicApiDiffTool,
         NavlynMcpTools.ReviewDiffTool,
+        NavlynMcpTools.PostEditGuardTool,
+        NavlynMcpTools.WrongSymbolGuardTool,
         NavlynMcpTools.ContextPackTool
     ];
 
@@ -314,6 +319,7 @@ public sealed class NavlynMcpStdioTests
         NavlynMcpTools.WorkspaceSummaryTool,
         NavlynMcpTools.WorkspaceStatusTool,
         NavlynMcpTools.WorkspaceRefreshTool,
+        NavlynMcpTools.DoctorTool,
         NavlynMcpTools.ResolveTargetTool,
         NavlynMcpTools.FindSymbolTool,
         NavlynMcpTools.FileOutlineTool,
@@ -327,6 +333,12 @@ public sealed class NavlynMcpStdioTests
         NavlynMcpTools.ExactNavigationTool,
         NavlynMcpTools.TestsForSymbolTool,
         NavlynMcpTools.DiImpactTool,
+        NavlynMcpTools.EditPreflightTool,
+        NavlynMcpTools.PostEditGuardTool,
+        NavlynMcpTools.WrongSymbolGuardTool,
+        NavlynMcpTools.ChangeIntentPackTool,
+        NavlynMcpTools.AgentHandoffPackTool,
+        NavlynMcpTools.ConfidenceLedgerTool,
         NavlynMcpTools.ContextPackTool
     ];
 
@@ -335,6 +347,7 @@ public sealed class NavlynMcpStdioTests
         NavlynMcpTools.WorkspaceSummaryTool,
         NavlynMcpTools.WorkspaceStatusTool,
         NavlynMcpTools.WorkspaceRefreshTool,
+        NavlynMcpTools.DoctorTool,
         NavlynMcpTools.ResolveTargetTool,
         NavlynMcpTools.FindSymbolTool,
         NavlynMcpTools.FileOutlineTool,
@@ -351,6 +364,12 @@ public sealed class NavlynMcpStdioTests
         NavlynMcpTools.DiImpactTool,
         NavlynMcpTools.PublicApiDiffTool,
         NavlynMcpTools.ReviewDiffTool,
+        NavlynMcpTools.EditPreflightTool,
+        NavlynMcpTools.PostEditGuardTool,
+        NavlynMcpTools.WrongSymbolGuardTool,
+        NavlynMcpTools.ChangeIntentPackTool,
+        NavlynMcpTools.AgentHandoffPackTool,
+        NavlynMcpTools.ConfidenceLedgerTool,
         NavlynMcpTools.ContextPackTool,
         NavlynMcpTools.BatchTool
     ];

@@ -12,6 +12,7 @@ internal static class NavlynMcpTools
     public const string WorkspaceSummaryTool = "navlyn_workspace_summary";
     public const string WorkspaceStatusTool = "navlyn_workspace_status";
     public const string WorkspaceRefreshTool = "navlyn_workspace_refresh";
+    public const string DoctorTool = "navlyn_doctor";
     public const string FindSymbolTool = "navlyn_find_symbol";
     public const string ResolveTargetTool = "navlyn_resolve_target";
     public const string FileOutlineTool = "navlyn_file_outline";
@@ -29,6 +30,12 @@ internal static class NavlynMcpTools
     public const string PublicApiDiffTool = "navlyn_public_api_diff";
     public const string ReviewDiffTool = "navlyn_review_diff";
     public const string ContextPackTool = "navlyn_context_pack";
+    public const string EditPreflightTool = "navlyn_edit_preflight";
+    public const string PostEditGuardTool = "navlyn_post_edit_guard";
+    public const string WrongSymbolGuardTool = "navlyn_wrong_symbol_guard";
+    public const string ChangeIntentPackTool = "navlyn_change_intent_pack";
+    public const string AgentHandoffPackTool = "navlyn_agent_handoff_pack";
+    public const string ConfidenceLedgerTool = "navlyn_confidence_ledger";
     public const string BatchTool = "navlyn_batch";
 
     private const string WorkspaceSummaryDescription =
@@ -39,6 +46,9 @@ internal static class NavlynMcpTools
 
     private const string WorkspaceRefreshDescription =
         "Use only when the workspace snapshot or on-disk cache should be explicitly refreshed. It forces a fresh workspace load in the server process and can clear or write the lightweight .navlyn/cache manifest when requested.";
+
+    private const string DoctorDescription =
+        "Use at setup time or after workspace failures to verify the configured Navlyn workspace, .NET SDK availability, supported target frameworks, load diagnostics, and the first safe commands to try. It returns CLI doctor JSON and performs read-only checks only.";
 
     private const string FindSymbolDescription =
         "Use when you have an approximate C# symbol name and need deterministic candidates or candidate ids. Do not use for comments, strings, markdown, generated artifacts, or non-C# content. Ambiguous results are returned as candidates; do not merge them. Follow with navlyn_about_symbol, navlyn_related_files, or navlyn_impact using candidateId.";
@@ -90,6 +100,18 @@ internal static class NavlynMcpTools
 
     private const string ContextPackDescription =
         "Use as an escalation tool when normal file reads or smaller Navlyn facts are not enough and the agent needs a bounded reading queue before review, modification, or explanation. Supports query, candidateId, or diff mode, plus changeKind ranking hints. Do not use just to list candidates or as a default first step; use navlyn_find_symbol, navlyn_resolve_target, or exact navigation first.";
+
+    private const string EditPreflightDescription =
+        "Use immediately before editing one intended C# target. It anchors fuzzy intent, returns bounded source/context/test evidence, risk, known unknowns, and the post-edit guard command. Do not use for broad repository review or after the edit.";
+
+    private const string PostEditGuardDescription =
+        "Use after an edit to compare a saved preflight anchor or candidateId with the current diff. It returns wrong-target risk, changed symbols, score reasons, and a policy pass/fail result.";
+
+    private const string WrongSymbolGuardDescription =
+        "Use when no full preflight file exists and the agent needs to compare intended C# symbol intent with changed symbols. It is a focused wrong-symbol risk check for CI or agent policy.";
+
+    private const string AgentPackDescription =
+        "Use when an edit handoff needs a compact intent, evidence, confidence, or reading-queue record derived from the same semantic preflight evidence.";
 
     private const string BatchDescription =
         "Use only after deciding that several batch-supported Navlyn facts are needed from the same fixed workspace. It is an optimization and orchestration tool, not a default discovery step. Accepts the CLI batch defaults/requests shape only, including request-level profile for workflow commands.";
@@ -144,6 +166,19 @@ internal static class NavlynMcpTools
             services,
             WorkspaceRefreshTool,
             NavlynToolCommandBuilder.WorkspaceRefresh(cache, cacheDirectory, clearCache, writeCache),
+            cancellationToken);
+    }
+
+    [McpServerTool(Name = DoctorTool, Title = "Navlyn Doctor", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(DoctorDescription)]
+    public static Task<CallToolResult> Doctor(
+        IServiceProvider services,
+        CancellationToken cancellationToken = default)
+    {
+        return RunAsync(
+            services,
+            DoctorTool,
+            NavlynToolCommandBuilder.Doctor(),
             cancellationToken);
     }
 
@@ -645,6 +680,121 @@ internal static class NavlynMcpTools
             ContextPackTool,
             NavlynToolCommandBuilder.ContextPack(query, candidateId, diff, @base, head, staged, includeUnstaged, goal, changeKind, budgetTokens, itemLimit, snippetPolicy, snippetLines, candidateLimit, memberLimit, referenceLimit, relationLimit, fileLimit, diagnosticLimit, symbolLimit, impactLimit, relatedTestLimit, depth, candidatePolicy, minConfidence, explainSelection, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, profile),
             cancellationToken);
+    }
+
+    [McpServerTool(Name = EditPreflightTool, Title = "Navlyn Edit Preflight", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(EditPreflightDescription)]
+    public static Task<CallToolResult> EditPreflight(
+        IServiceProvider services,
+        string? query = null,
+        string? candidateId = null,
+        string? file = null,
+        int? line = null,
+        int? column = null,
+        string? assumeKind = null,
+        string[]? assumeKinds = null,
+        string? match = null,
+        bool? caseSensitive = null,
+        string? project = null,
+        string[]? projects = null,
+        bool? excludeGenerated = null,
+        string? goal = null,
+        string? changeKind = null,
+        int? budgetTokens = null,
+        int? itemLimit = null,
+        int? referenceLimit = null,
+        int? testLimit = null,
+        int? candidateLimit = null,
+        string? candidatePolicy = null,
+        string? minConfidence = null,
+        bool? explainSelection = null,
+        CancellationToken cancellationToken = default)
+    {
+        return RunAsync(
+            services,
+            EditPreflightTool,
+            NavlynToolCommandBuilder.AgentTargetPack("edit-preflight", query, candidateId, file, line, column, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, goal, changeKind, budgetTokens, itemLimit, referenceLimit, testLimit, candidateLimit, candidatePolicy, minConfidence, explainSelection),
+            cancellationToken);
+    }
+
+    [McpServerTool(Name = PostEditGuardTool, Title = "Navlyn Post Edit Guard", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(PostEditGuardDescription)]
+    public static Task<CallToolResult> PostEditGuard(
+        IServiceProvider services,
+        string? candidateId = null,
+        string? preflight = null,
+        string? @base = null,
+        string? head = null,
+        bool? staged = null,
+        bool? includeUnstaged = null,
+        string? project = null,
+        string[]? projects = null,
+        bool? excludeGenerated = null,
+        int? symbolLimit = null,
+        string? failOnRisk = null,
+        CancellationToken cancellationToken = default)
+    {
+        return RunAsync(
+            services,
+            PostEditGuardTool,
+            NavlynToolCommandBuilder.PostEditGuard(candidateId, preflight, @base, head, staged, includeUnstaged, project, projects, excludeGenerated, symbolLimit, failOnRisk),
+            cancellationToken);
+    }
+
+    [McpServerTool(Name = WrongSymbolGuardTool, Title = "Navlyn Wrong Symbol Guard", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(WrongSymbolGuardDescription)]
+    public static Task<CallToolResult> WrongSymbolGuard(
+        IServiceProvider services,
+        string? query = null,
+        string? candidateId = null,
+        string? file = null,
+        int? line = null,
+        int? column = null,
+        string? assumeKind = null,
+        string[]? assumeKinds = null,
+        string? match = null,
+        bool? caseSensitive = null,
+        string? project = null,
+        string[]? projects = null,
+        bool? excludeGenerated = null,
+        string? @base = null,
+        string? head = null,
+        bool? staged = null,
+        bool? includeUnstaged = null,
+        int? symbolLimit = null,
+        string? failOnRisk = null,
+        int? candidateLimit = null,
+        string? candidatePolicy = null,
+        string? minConfidence = null,
+        bool? explainSelection = null,
+        CancellationToken cancellationToken = default)
+    {
+        return RunAsync(
+            services,
+            WrongSymbolGuardTool,
+            NavlynToolCommandBuilder.WrongSymbolGuard(query, candidateId, file, line, column, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, @base, head, staged, includeUnstaged, symbolLimit, failOnRisk, candidateLimit, candidatePolicy, minConfidence, explainSelection),
+            cancellationToken);
+    }
+
+    [McpServerTool(Name = ChangeIntentPackTool, Title = "Navlyn Change Intent Pack", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(AgentPackDescription)]
+    public static Task<CallToolResult> ChangeIntentPack(IServiceProvider services, string? query = null, string? candidateId = null, string? file = null, int? line = null, int? column = null, string? assumeKind = null, string[]? assumeKinds = null, string? match = null, bool? caseSensitive = null, string? project = null, string[]? projects = null, bool? excludeGenerated = null, string? goal = null, string? changeKind = null, int? candidateLimit = null, string? candidatePolicy = null, string? minConfidence = null, bool? explainSelection = null, CancellationToken cancellationToken = default)
+    {
+        return RunAsync(services, ChangeIntentPackTool, NavlynToolCommandBuilder.AgentTargetPack("change-intent-pack", query, candidateId, file, line, column, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, goal, changeKind, budgetTokens: null, itemLimit: null, referenceLimit: null, testLimit: null, candidateLimit, candidatePolicy, minConfidence, explainSelection), cancellationToken);
+    }
+
+    [McpServerTool(Name = AgentHandoffPackTool, Title = "Navlyn Agent Handoff Pack", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(AgentPackDescription)]
+    public static Task<CallToolResult> AgentHandoffPack(IServiceProvider services, string? query = null, string? candidateId = null, string? file = null, int? line = null, int? column = null, string? assumeKind = null, string[]? assumeKinds = null, string? match = null, bool? caseSensitive = null, string? project = null, string[]? projects = null, bool? excludeGenerated = null, string? goal = null, string? changeKind = null, int? candidateLimit = null, string? candidatePolicy = null, string? minConfidence = null, bool? explainSelection = null, CancellationToken cancellationToken = default)
+    {
+        return RunAsync(services, AgentHandoffPackTool, NavlynToolCommandBuilder.AgentTargetPack("agent-handoff-pack", query, candidateId, file, line, column, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, goal, changeKind, budgetTokens: null, itemLimit: null, referenceLimit: null, testLimit: null, candidateLimit, candidatePolicy, minConfidence, explainSelection), cancellationToken);
+    }
+
+    [McpServerTool(Name = ConfidenceLedgerTool, Title = "Navlyn Confidence Ledger", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(AgentPackDescription)]
+    public static Task<CallToolResult> ConfidenceLedger(IServiceProvider services, string? query = null, string? candidateId = null, string? file = null, int? line = null, int? column = null, string? assumeKind = null, string[]? assumeKinds = null, string? match = null, bool? caseSensitive = null, string? project = null, string[]? projects = null, bool? excludeGenerated = null, string? goal = null, string? changeKind = null, int? candidateLimit = null, string? candidatePolicy = null, string? minConfidence = null, bool? explainSelection = null, CancellationToken cancellationToken = default)
+    {
+        return RunAsync(services, ConfidenceLedgerTool, NavlynToolCommandBuilder.AgentTargetPack("confidence-ledger", query, candidateId, file, line, column, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, goal, changeKind, budgetTokens: null, itemLimit: null, referenceLimit: null, testLimit: null, candidateLimit, candidatePolicy, minConfidence, explainSelection), cancellationToken);
     }
 
     [McpServerTool(Name = BatchTool, Title = "Navlyn Batch", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]

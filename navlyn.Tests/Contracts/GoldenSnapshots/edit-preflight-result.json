@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "navlyn.edit-preflight.v1",
+  "workspace": "navlyn.slnx",
+  "kind": "solution",
+  "command": "edit-preflight",
+  "intent": {
+    "goal": "modify",
+    "changeKind": "behavior"
+  },
+  "anchor": {
+    "candidateId": "sym:v1:0123456789abcdef",
+    "name": "CheckCommand",
+    "kind": "NamedType",
+    "container": "Navlyn.Cli.Commands",
+    "project": "Navlyn.CommandLine(net10.0)",
+    "path": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs",
+    "line": 6,
+    "column": 23,
+    "endLine": 31,
+    "endColumn": 2,
+    "selectedTarget": null,
+    "confidence": "high",
+    "ambiguityReason": null
+  },
+  "confidence": {
+    "overall": "high",
+    "evidence": [
+      {
+        "kind": "target-selected",
+        "effect": "raises",
+        "confidence": "high",
+        "reasonCodes": [
+          "selected-target-present"
+        ]
+      }
+    ]
+  },
+  "source": {
+    "status": "ok"
+  },
+  "context": null,
+  "tests": null,
+  "risk": {
+    "level": "low",
+    "reasonCodes": [
+      "runtime-behavior-not-proven"
+    ]
+  },
+  "knownUnknowns": [
+    "runtime-behavior-not-proven"
+  ],
+  "limitations": [
+    "Navlyn reports static source evidence only; it does not prove runtime behavior."
+  ],
+  "nextCommands": [
+    {
+      "command": "post-edit-guard",
+      "arguments": [
+        "--candidate-id",
+        "sym:v1:0123456789abcdef"
+      ],
+      "reason": "Run after editing to confirm the dirty diff still matches the anchor."
+    }
+  ],
+  "stopConditions": [
+    "After editing, run post-edit-guard against this preflight anchor before widening scope."
+  ],
+  "commandsRun": [
+    {
+      "command": "resolve-target",
+      "arguments": [
+        "--query",
+        "CheckCommand"
+      ]
+    }
+  ]
+}

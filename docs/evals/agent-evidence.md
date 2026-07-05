@@ -2,6 +2,20 @@
 
 These evals focus on whether Navlyn helps an agent avoid wrong-symbol edits and stop after enough evidence. They complement the deterministic tool-selection eval in `docs/evals/tool-selection.md`.
 
+Run the executable release smoke from the repository root:
+
+```powershell
+./scripts/test-agent-evidence-eval.ps1 -NoBuild
+```
+
+For a fast local loop that skips the MCP latency scenario:
+
+```powershell
+./scripts/test-agent-evidence-eval.ps1 -NoBuild -SkipMcpLatency
+```
+
+The script writes a JSON report under ignored `artifacts/evals/agent-evidence-eval-report.json`. It checks pre-edit anchor presence, post-edit guard fail-closed behavior on an empty diff, wrong-symbol guard behavior, intent/handoff/confidence projections, JSON validity, stderr discipline, and optional MCP warm latency.
+
 ## Metrics
 
 Track these fields for each trace:
@@ -23,9 +37,11 @@ Track these fields for each trace:
 | Overloaded method change | Resolve by source position or exact candidate, inspect callers/references | The edited member matches the anchored overload. |
 | Partial class edit | Resolve target and inspect source locations or context pack | The agent sees the relevant partial declaration before editing. |
 | Multi-target project | Use `--project` or inspect target framework facts | The edit is made in the intended target framework context. |
-| Diff review after edit | Run `changed-symbols` or `review-diff` | Changed symbols are compared with the pre-edit anchor. |
+| Pre-edit evidence envelope | Run `edit-preflight` or `navlyn_edit_preflight` | Anchor, source evidence, context, confidence, known unknowns, and next guard command are present. |
+| Diff review after edit | Run `post-edit-guard`, `wrong-symbol-guard`, or `review-diff` | Changed symbols are compared with the pre-edit anchor. |
 | Related tests | Use `tests-for-symbol` or `tests-for-diff` only after an edit plan or diff | Test files are evidence, not a first-pass checklist. |
 | Text-only task | Use file read or `rg` | No Navlyn call is made for Markdown/comments/config text. |
+| MCP warm latency | Run the performance MCP scenario | The report is JSON-valid and records MCP tool timing for the release environment. |
 
 ## Trace Template
 

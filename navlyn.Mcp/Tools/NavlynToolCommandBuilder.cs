@@ -11,6 +11,7 @@ internal static class NavlynToolCommandBuilder
     private static readonly string[] MinConfidenceValues = ["high", "medium", "low"];
     private static readonly string[] GoalValues = ["review", "modify", "understand"];
     private static readonly string[] ChangeKindValues = ["behavior", "signature", "rename", "constructor", "nullability", "async", "public-api", "di-registration", "endpoint"];
+    private static readonly string[] RiskValues = ["low", "medium", "high"];
     private static readonly string[] SnippetPolicyValues = ["none", "signature", "line", "block"];
     private static readonly string[] EntrypointModeValues = ["symbol", "framework"];
     private static readonly string[] ProfileValues = ["compact", "evidence", "full"];
@@ -81,6 +82,11 @@ internal static class NavlynToolCommandBuilder
         AddOptionalFlag(args, "--clear-cache", clearCache);
         AddOptionalFlag(args, "--write-cache", writeCache);
         return CommandBuildResult.Valid("workspace-refresh", args);
+    }
+
+    public static CommandBuildResult Doctor()
+    {
+        return CommandBuildResult.Valid("doctor", []);
     }
 
     public static CommandBuildResult FindSymbol(
@@ -1026,6 +1032,189 @@ internal static class NavlynToolCommandBuilder
 
         input["requests"] = JsonNode.Parse(requests.Value.GetRawText());
         return CommandBuildResult.Valid("batch", [], input.ToJsonString(new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+    }
+
+    public static CommandBuildResult AgentTargetPack(
+        string command,
+        string? query,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        string? assumeKind,
+        string[]? assumeKinds,
+        string? match,
+        bool? caseSensitive,
+        string? project,
+        string[]? projects,
+        bool? excludeGenerated,
+        string? goal,
+        string? changeKind,
+        int? budgetTokens,
+        int? itemLimit,
+        int? referenceLimit,
+        int? testLimit,
+        int? candidateLimit,
+        string? candidatePolicy,
+        string? minConfidence,
+        bool? explainSelection)
+    {
+        if (!TryAddSymbolOrPositionInput([], query, candidateId, file, line, column, out List<string> args, out string? error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        bool sourcePositionMode = !string.IsNullOrWhiteSpace(file) || line is not null || column is not null;
+        if (sourcePositionMode)
+        {
+            if (!TryAddSourcePositionOptions(
+                args,
+                command,
+                assumeKind,
+                assumeKinds,
+                match,
+                caseSensitive,
+                project,
+                projects,
+                excludeGenerated,
+                candidateLimit,
+                candidatePolicy,
+                minConfidence,
+                explainSelection,
+                out error))
+            {
+                return CommandBuildResult.Invalid(error);
+            }
+        }
+        else if (!TryAddFuzzyOptions(
+            args,
+            assumeKind,
+            assumeKinds,
+            match,
+            caseSensitive,
+            project,
+            projects,
+            excludeGenerated,
+            candidateLimit,
+            candidatePolicy,
+            minConfidence,
+            explainSelection,
+            allowGroupPolicy: false,
+            out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        if (!TryAddAllowedValue(args, "--goal", goal, GoalValues, out error) ||
+            !TryAddAllowedValue(args, "--change-kind", changeKind, ChangeKindValues, out error) ||
+            !TryAddPositiveInt(args, "--budget-tokens", budgetTokens, out error) ||
+            !TryAddPositiveInt(args, "--item-limit", itemLimit, out error) ||
+            !TryAddPositiveInt(args, "--reference-limit", referenceLimit, out error) ||
+            !TryAddPositiveInt(args, "--test-limit", testLimit, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        return CommandBuildResult.Valid(command, args);
+    }
+
+    public static CommandBuildResult PostEditGuard(
+        string? candidateId,
+        string? preflight,
+        string? baseRef,
+        string? head,
+        bool? staged,
+        bool? includeUnstaged,
+        string? project,
+        string[]? projects,
+        bool? excludeGenerated,
+        int? symbolLimit,
+        string? failOnRisk)
+    {
+        bool hasCandidate = !string.IsNullOrWhiteSpace(candidateId);
+        bool hasPreflight = !string.IsNullOrWhiteSpace(preflight);
+        if (hasCandidate == hasPreflight)
+        {
+            return CommandBuildResult.Invalid("Specify exactly one anchor: candidateId or preflight.");
+        }
+
+        List<string> args = [];
+        AddOptionalValue(args, "--candidate-id", candidateId);
+        AddOptionalValue(args, "--preflight", preflight);
+        if (!TryAddDiffOptions(args, baseRef, head, staged, includeUnstaged, out string? error) ||
+            !TryAddProjects(args, project, projects, out error) ||
+            !TryAddPositiveInt(args, "--symbol-limit", symbolLimit, out error) ||
+            !TryAddAllowedValue(args, "--fail-on-risk", failOnRisk, RiskValues, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+        return CommandBuildResult.Valid("post-edit-guard", args);
+    }
+
+    public static CommandBuildResult WrongSymbolGuard(
+        string? query,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        string? assumeKind,
+        string[]? assumeKinds,
+        string? match,
+        bool? caseSensitive,
+        string? project,
+        string[]? projects,
+        bool? excludeGenerated,
+        string? baseRef,
+        string? head,
+        bool? staged,
+        bool? includeUnstaged,
+        int? symbolLimit,
+        string? failOnRisk,
+        int? candidateLimit,
+        string? candidatePolicy,
+        string? minConfidence,
+        bool? explainSelection)
+    {
+        CommandBuildResult target = AgentTargetPack(
+            "wrong-symbol-guard",
+            query,
+            candidateId,
+            file,
+            line,
+            column,
+            assumeKind,
+            assumeKinds,
+            match,
+            caseSensitive,
+            project,
+            projects,
+            excludeGenerated,
+            goal: null,
+            changeKind: null,
+            budgetTokens: null,
+            itemLimit: null,
+            referenceLimit: null,
+            testLimit: null,
+            candidateLimit,
+            candidatePolicy,
+            minConfidence,
+            explainSelection);
+        if (!target.IsValid)
+        {
+            return target;
+        }
+
+        List<string> args = [.. target.Arguments];
+        if (!TryAddDiffOptions(args, baseRef, head, staged, includeUnstaged, out string? error) ||
+            !TryAddPositiveInt(args, "--symbol-limit", symbolLimit, out error) ||
+            !TryAddAllowedValue(args, "--fail-on-risk", failOnRisk, RiskValues, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        return CommandBuildResult.Valid("wrong-symbol-guard", args);
     }
 
     private static bool TryAddSourcePositionOptions(

@@ -12,6 +12,12 @@ namespace Navlyn.Cli.Commands;
 
 internal static partial class BatchCommand
 {
+    private static readonly JsonSerializerOptions BatchJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = false
+    };
+
     public static Command Create()
     {
         Option<FileInfo?> inputOption = new("--input")
@@ -70,10 +76,22 @@ internal static partial class BatchCommand
                 return ExitCodes.UsageError;
             }
 
+            Dictionary<string, BatchRequestResult> resultsById = new(StringComparer.Ordinal);
             List<BatchRequestResult> results = [];
             foreach (BatchRequest request in batchInput.Requests)
             {
-                results.Add(await ExecuteRequestAsync(loadedWorkspace, batchInput.Defaults, request, cancellationToken));
+                BatchRequest executableRequest = request;
+                if (!TryApplyCandidateIdDependency(request, resultsById, out executableRequest, out BatchError? dependencyError))
+                {
+                    BatchRequestResult failed = request.Failed(dependencyError!);
+                    results.Add(failed);
+                    resultsById[request.Id] = failed;
+                    continue;
+                }
+
+                BatchRequestResult result = await ExecuteRequestAsync(loadedWorkspace, batchInput.Defaults, executableRequest, cancellationToken);
+                results.Add(result);
+                resultsById[request.Id] = result;
             }
 
             ConsoleJsonWriter.Write(new BatchResult(
@@ -86,6 +104,112 @@ internal static partial class BatchCommand
         }
 
         return ExitCodes.Success;
+    }
+
+    private static bool TryApplyCandidateIdDependency(
+        BatchRequest request,
+        IReadOnlyDictionary<string, BatchRequestResult> previousResults,
+        out BatchRequest executableRequest,
+        out BatchError? error)
+    {
+        executableRequest = request;
+        error = null;
+        if (!request.Payload.TryGetProperty("candidateIdFrom", out JsonElement fromElement))
+        {
+            return true;
+        }
+
+        if (request.Payload.TryGetProperty("candidateId", out _))
+        {
+            error = BatchError.FromDiagnostic(DiagnosticIds.InvalidBatchInput, "candidateIdFrom cannot be combined with candidateId.");
+            return false;
+        }
+
+        if (fromElement.ValueKind != JsonValueKind.String ||
+            string.IsNullOrWhiteSpace(fromElement.GetString()))
+        {
+            error = BatchError.FromDiagnostic(DiagnosticIds.InvalidBatchInput, "candidateIdFrom must be a non-empty request id string.");
+            return false;
+        }
+
+        string fromId = fromElement.GetString()!;
+        if (!previousResults.TryGetValue(fromId, out BatchRequestResult? sourceResult))
+        {
+            error = BatchError.FromDiagnostic(DiagnosticIds.InvalidBatchInput, $"candidateIdFrom references unknown or later request id '{fromId}'.");
+            return false;
+        }
+
+        if (!sourceResult.Ok || sourceResult.Result is null)
+        {
+            error = BatchError.FromDiagnostic(DiagnosticIds.InvalidBatchInput, $"candidateIdFrom references failed request id '{fromId}'.");
+            return false;
+        }
+
+        string? candidateId = TryFindCandidateId(sourceResult.Result);
+        if (candidateId is null)
+        {
+            error = BatchError.FromDiagnostic(DiagnosticIds.InvalidBatchInput, $"Request '{fromId}' did not produce a candidateId.");
+            return false;
+        }
+
+        Dictionary<string, object?> rewritten = new(StringComparer.Ordinal);
+        foreach (JsonProperty property in request.Payload.EnumerateObject())
+        {
+            if (property.NameEquals("candidateIdFrom"))
+            {
+                continue;
+            }
+
+            rewritten[property.Name] = property.Value.Clone();
+        }
+
+        rewritten["candidateId"] = candidateId;
+        executableRequest = request with
+        {
+            Payload = JsonSerializer.SerializeToElement(rewritten, BatchJsonOptions)
+        };
+        return true;
+    }
+
+    private static string? TryFindCandidateId(object result)
+    {
+        JsonElement element = JsonSerializer.SerializeToElement(result, BatchJsonOptions);
+        return TryFindCandidateId(element);
+    }
+
+    private static string? TryFindCandidateId(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            if (element.TryGetProperty("candidateId", out JsonElement candidateElement) &&
+                candidateElement.ValueKind == JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(candidateElement.GetString()))
+            {
+                return candidateElement.GetString();
+            }
+
+            foreach (JsonProperty property in element.EnumerateObject())
+            {
+                string? candidateId = TryFindCandidateId(property.Value);
+                if (candidateId is not null)
+                {
+                    return candidateId;
+                }
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (JsonElement item in element.EnumerateArray())
+            {
+                string? candidateId = TryFindCandidateId(item);
+                if (candidateId is not null)
+                {
+                    return candidateId;
+                }
+            }
+        }
+
+        return null;
     }
 
     private static async Task<BatchRequestResult> ExecuteReviewDiffAsync(
@@ -836,6 +960,78 @@ internal static partial class BatchCommand
                 Column: definition.Column,
                 EndLine: definition.EndLine,
                 EndColumn: definition.EndColumn)).ToArray()));
+    }
+
+    private static async Task<BatchRequestResult> ExecuteSymbolSourceAsync(
+        LoadedWorkspace loadedWorkspace,
+        BatchDefaults defaults,
+        BatchRequest request,
+        CancellationToken cancellationToken)
+    {
+        SourcePositionBatchResolution positionResult = await ResolveSourcePositionAsync(
+            loadedWorkspace,
+            defaults,
+            request,
+            cancellationToken);
+        if (positionResult.Error is not null)
+        {
+            return request.Failed(positionResult.Error);
+        }
+
+        SourcePositionBatchOptions options = positionResult.Options!;
+        if (!TryGetOptionalString(request.Payload, "view", out string? viewValue, out BatchError? error) ||
+            !TryGetOptionalInt(request.Payload, "maxLines", out int? maxLines, out error) ||
+            !TryGetOptionalInt(request.Payload, "budgetTokens", out int? budgetTokens, out error))
+        {
+            return request.Failed(error!);
+        }
+
+        string view = viewValue ?? "declaration";
+        if (view is not ("signature" or "declaration" or "body" or "members" or "xml-doc" or "attributes"))
+        {
+            return request.Failed(DiagnosticIds.ParseError, "view must be signature, declaration, body, members, xml-doc, or attributes.");
+        }
+
+        int effectiveMaxLines = maxLines ?? 80;
+        int effectiveBudgetTokens = budgetTokens ?? 4000;
+        BatchError? limitError =
+            GetPositiveBatchLimitError("maxLines", effectiveMaxLines) ??
+            GetPositiveBatchLimitError("budgetTokens", effectiveBudgetTokens);
+        if (limitError is not null)
+        {
+            return request.Failed(limitError);
+        }
+
+        SymbolSourceResolutionResult result = await new SymbolSourceResolver().ResolveAsync(
+            loadedWorkspace.Solution,
+            options.File,
+            options.Line,
+            options.Column,
+            options.Project,
+            options.ExcludeGenerated,
+            new SymbolSourceOptions(view, effectiveMaxLines, effectiveBudgetTokens),
+            cancellationToken);
+        if (result.Error is not null)
+        {
+            return request.Failed(result.Error.DiagnosticId, result.Error.Message);
+        }
+
+        SymbolSourceResolution resolution = result.Resolution!;
+        return request.Success(new
+        {
+            file = resolution.File,
+            line = resolution.Line,
+            column = resolution.Column,
+            project = options.ProjectFilter,
+            selectionInput = options.SelectionInput,
+            excludeGenerated = options.ExcludeGenerated,
+            view = resolution.View,
+            limits = resolution.Limits,
+            symbol = resolution.Symbol,
+            slices = resolution.Slices,
+            truncated = resolution.Truncated,
+            warnings = resolution.Warnings
+        });
     }
 
     private static async Task<BatchRequestResult> ExecuteReferencesAsync(

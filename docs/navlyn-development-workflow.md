@@ -39,7 +39,7 @@ The repository includes `.editorconfig` and `.gitattributes` for editor and Git 
 Navlyn uses separate validation layers so small changes can be checked quickly while release preparation still has a full quality gate.
 
 - Quick validation: `./scripts/test-quick.ps1`
-- CLI contract validation: `./scripts/test-cli-contract.ps1 -Suite core` for the regular loop, `./scripts/test-cli-contract.ps1 -Suite all` for release validation.
+- CLI contract validation: `./scripts/test-cli-contract.ps1 -Suite core` for the regular loop, focused suites for affected public surfaces, and `./scripts/test-cli-contract.ps1 -Suite all` for release validation.
 - xUnit component tests: `dotnet test navlyn.slnx`
 - Focused fixture validation:
   - `./scripts/test-symbol-navigation.ps1`
@@ -55,6 +55,16 @@ Keep these layers separate. Quick validation should prove that the solution buil
 PowerShell process tests own the public CLI boundary: real process invocation, stdout, stderr, exit codes, JSON contract, and MSBuild workspace behavior. xUnit owns fast internal logic and component behavior that does not need a process boundary. Resolver-level component coverage belongs in xUnit when it can protect a semantic case without duplicating CLI contract checks.
 
 The xUnit resolver component suite covers representative behavior for definition, references, source-position lookup, symbol info, implementation and hierarchy relationships, fuzzy candidate selection, fuzzy reference summaries, workspace diagnostics filtering, diff symbol resolution, repository graph facts, public API comparison, context pack budgeting, test impact, framework entrypoint detection, and dependency injection registration facts. These tests use controlled Roslyn fixture projects and source marker helpers, so they should be the first place to add coverage for resolver internals, binding edge cases, ranking choices, or diagnostic filtering that can be asserted without spawning the CLI.
+
+Validation timing can be recorded without changing public stdout/stderr contracts:
+
+```powershell
+./scripts/measure-validation.ps1 -Lane quick -NoBuild
+./scripts/measure-validation.ps1 -Lane contract-core -NoBuild
+./scripts/measure-validation.ps1 -Lane all -NoBuild
+```
+
+The wrapper writes structured reports under ignored `artifacts/test-timings/`. Use it before and after validation-script changes, release preparation, or performance-related refactors so slow lanes have concrete evidence instead of impressions.
 
 CI runs restore, build, xUnit, C# file format validation, quick validation without duplicate xUnit, and the CLI contract core suite on Windows, Ubuntu, and macOS through `pwsh`. Release validation keeps the full CLI contract suite and focused fixture scripts. Keep script examples compatible with PowerShell Core and prefer `./scripts/...` plus `/` path separators in command examples so they work across all CI operating systems. The xUnit project disables target-framework parallelism because resolver and MCP process tests can load the same MSBuild workspace while test infrastructure is writing per-framework output files; run explicit framework lanes when debugging runtime-specific failures.
 
@@ -125,11 +135,15 @@ dotnet test navlyn.slnx --framework net10.0 --no-build
 ./scripts/test-cli-contract.ps1
 ./scripts/test-cli-contract.ps1 -NoBuild
 ./scripts/test-cli-contract.ps1 -NoBuild -Suite core
+./scripts/test-cli-contract.ps1 -NoBuild -Suite navigation
+./scripts/test-cli-contract.ps1 -NoBuild -Suite workflow
+./scripts/test-cli-contract.ps1 -NoBuild -Suite domain
+./scripts/test-cli-contract.ps1 -NoBuild -Suite mcp-adjacent
 ./scripts/test-cli-contract.ps1 -NoBuild -Suite all
 ./scripts/test-cli-contract.ps1 -NoBuild -ShowOutput
 ```
 
-The CLI contract script defaults to `-Suite all` for backward compatibility. The `core` suite covers root help, required-option failures, workspace commands, top-level JSON shape, path normalization from subdirectories, diagnostics shape, and stable workspace errors. The `all` suite adds representative workflow, domain, fuzzy, source-position, batch, and invalid-input checks. Use a 600 second automation timeout for the `all` suite. It can exceed 300 seconds on slower local runs even when healthy.
+The CLI contract script defaults to `-Suite all` for backward compatibility. The `core` suite covers root help, required-option failures, workspace commands, top-level JSON shape, path normalization from subdirectories, diagnostics shape, and stable workspace errors. The `navigation` suite adds symbol search, source-position, fuzzy discovery, symbol source, references, callers, calls, and related navigation contracts. The `workflow` suite adds review diff, review pack, public API diff, tests-for-symbol/diff, and context-pack contracts. The `domain` suite covers framework entrypoints, dependency injection, routes, options, handlers, EF model, and package usage. The `mcp-adjacent` suite covers batch request contracts and tool-adjacent command envelopes that agent clients depend on. The `all` suite runs every contract lane. Use a 600 second automation timeout for the `all` suite. It can exceed 300 seconds on slower local runs even when healthy.
 
 ### Contract Schemas And Golden Snapshots
 

@@ -42,6 +42,17 @@ public sealed class NavlynToolCommandBuilderTests
     }
 
     [Fact]
+    public void Doctor_BuildsCliCommandWithoutArguments()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.Doctor();
+
+        Assert.True(result.IsValid);
+        Assert.Equal("doctor", result.Command);
+        Assert.Equal([], result.Arguments);
+        Assert.Null(result.StandardInput);
+    }
+
+    [Fact]
     public void FindSymbol_ProjectAndProjectsAreMutuallyExclusive()
     {
         CommandBuildResult result = NavlynToolCommandBuilder.FindSymbol(
@@ -372,6 +383,61 @@ public sealed class NavlynToolCommandBuilderTests
         using JsonDocument input = JsonDocument.Parse(result.StandardInput);
         Assert.Equal("navlyn", input.RootElement.GetProperty("defaults").GetProperty("project").GetString());
         Assert.Equal("find-loader", input.RootElement.GetProperty("requests")[0].GetProperty("id").GetString());
+    }
+
+    [Fact]
+    public void AgentTargetPack_BuildsEditPreflightCommand()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.AgentTargetPack(
+            "edit-preflight",
+            query: "DoctorCommand",
+            candidateId: null,
+            file: null,
+            line: null,
+            column: null,
+            assumeKind: "NamedType",
+            assumeKinds: null,
+            match: null,
+            caseSensitive: null,
+            project: "Navlyn.CommandLine(net10.0)",
+            projects: null,
+            excludeGenerated: true,
+            goal: "modify",
+            changeKind: "behavior",
+            budgetTokens: 3000,
+            itemLimit: 8,
+            referenceLimit: 20,
+            testLimit: 10,
+            candidateLimit: 5,
+            candidatePolicy: null,
+            minConfidence: null,
+            explainSelection: null);
+
+        Assert.True(result.IsValid);
+        Assert.Equal("edit-preflight", result.Command);
+        Assert.Equal(
+            ["--query", "DoctorCommand", "--assume-kind", "NamedType", "--project", "Navlyn.CommandLine(net10.0)", "--limit", "5", "--exclude-generated", "--goal", "modify", "--change-kind", "behavior", "--budget-tokens", "3000", "--item-limit", "8", "--reference-limit", "20", "--test-limit", "10"],
+            result.Arguments);
+    }
+
+    [Fact]
+    public void PostEditGuard_RequiresOneAnchor()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.PostEditGuard(
+            candidateId: null,
+            preflight: null,
+            baseRef: null,
+            head: null,
+            staged: null,
+            includeUnstaged: null,
+            project: null,
+            projects: null,
+            excludeGenerated: null,
+            symbolLimit: null,
+            failOnRisk: null);
+
+        Assert.False(result.IsValid);
+        Assert.Equal("Specify exactly one anchor: candidateId or preflight.", result.Error);
     }
 
     [Fact]
