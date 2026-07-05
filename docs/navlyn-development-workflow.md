@@ -6,6 +6,8 @@ This document captures durable local development checks, command implementation 
 
 - `docs/navlyn-cli-commands.md`: public CLI contract. Update this when implemented command behavior changes.
 - `docs/navlyn-mcp-server.md`: public MCP server setup, tool surface, result envelope, and boundaries.
+- `docs/navlyn-first-10-minutes.md`: short first-run onboarding path.
+- `docs/navlyn-positioning.md`: category positioning against search, LSP, analyzers, MCP servers, and review bots.
 - `docs/navlyn-distribution.md`: package validation and release workflow.
 - `docs/navlyn-performance.md`: local performance measurement, MCP cost model, and release-readiness performance smoke.
 - `docs/navlyn-agent-recipes.md`: batch recipes for agents and automation.
@@ -54,7 +56,7 @@ PowerShell process tests own the public CLI boundary: real process invocation, s
 
 The xUnit resolver component suite covers representative behavior for definition, references, source-position lookup, symbol info, implementation and hierarchy relationships, fuzzy candidate selection, fuzzy reference summaries, workspace diagnostics filtering, diff symbol resolution, repository graph facts, public API comparison, context pack budgeting, test impact, framework entrypoint detection, and dependency injection registration facts. These tests use controlled Roslyn fixture projects and source marker helpers, so they should be the first place to add coverage for resolver internals, binding edge cases, ranking choices, or diagnostic filtering that can be asserted without spawning the CLI.
 
-CI runs restore, build, xUnit, C# file format validation, quick validation without duplicate xUnit, and the CLI contract core suite on Windows, Ubuntu, and macOS through `pwsh`. Release validation keeps the full CLI contract suite and focused fixture scripts. Keep script examples compatible with PowerShell Core and prefer `./scripts/...` plus `/` path separators in command examples so they work across all CI operating systems.
+CI runs restore, build, xUnit, C# file format validation, quick validation without duplicate xUnit, and the CLI contract core suite on Windows, Ubuntu, and macOS through `pwsh`. Release validation keeps the full CLI contract suite and focused fixture scripts. Keep script examples compatible with PowerShell Core and prefer `./scripts/...` plus `/` path separators in command examples so they work across all CI operating systems. The xUnit project disables target-framework parallelism because resolver and MCP process tests can load the same MSBuild workspace while test infrastructure is writing per-framework output files; run explicit framework lanes when debugging runtime-specific failures.
 
 ## Standard Local Checks
 
@@ -145,7 +147,7 @@ Envelope schemas live in `docs/schemas`. Golden snapshots live under `navlyn.Tes
 ./scripts/measure-navlyn-performance.ps1 -Workspace navlyn.slnx -Scenario all -Profile evidence -Iterations 1 -Warmup 0 -NoBuild
 ```
 
-The performance script emits structured JSON with elapsed time, stdout/stderr size, exit code, JSON validity, key counts, truncation state, profile, and command arguments. Keep generated reports under ignored local paths such as `artifacts/performance-smoke/` unless a curated baseline is intentionally being published. The MCP scenario starts a local stdio MCP session and records representative tool-call latency/output-size measurements when the MCP server assembly is built; use `navlyn.Tests.Mcp` coverage for functional MCP validation.
+The performance script emits structured JSON with elapsed time, stdout/stderr size, exit code, JSON validity, key counts, truncation state, profile, and command arguments. Keep generated reports under ignored local paths such as `artifacts/performance-smoke/` unless a curated baseline is intentionally being published. The MCP scenario starts a local stdio MCP session and records representative tool-call latency/output-size measurements when the MCP server assembly is built; use `navlyn.Tests.Mcp` coverage for functional MCP validation. For 0.6.x release work, record at least quick, file-first, agent-loop, diff, and MCP smoke reports. Treat failures, non-JSON stdout, non-empty stderr on success, unexpected truncation, or missing expected files as performance acceptance failures even when elapsed time looks good.
 
 ### Package And PR Facts Scripts
 
@@ -209,6 +211,8 @@ Recommended command timeouts for automation:
 - `./scripts/test-diagnostics.ps1`: at least 180 seconds.
 - `./scripts/test-workspace-semantics.ps1`: at least 180 seconds.
 - `./scripts/test-release.ps1`: at least 900 seconds.
+
+Observed 0.6.0 local baseline on this Windows workstation after build: restore about 1-2 seconds, build about 4 seconds, `dotnet test navlyn.slnx --no-build` about 169 seconds with target frameworks serialized, quick validation without duplicate xUnit about 13 seconds, and CLI contract core about 34 seconds. Use these as a local sanity check, not a universal budget.
 
 When Navlyn has already been built in the same turn, prefer validation scripts with `-NoBuild` to avoid rebuilding and to reduce the chance of `bin`/`obj` file locks.
 

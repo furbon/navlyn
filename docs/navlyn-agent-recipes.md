@@ -10,6 +10,8 @@ The core habit is simple:
 4. stop when the returned facts answer the question;
 5. escalate to impact, tests, context, or batch only when the smaller fact shows it is needed.
 
+For a first install-to-success path, see [`navlyn-first-10-minutes.md`](navlyn-first-10-minutes.md). For category positioning, see [`navlyn-positioning.md`](navlyn-positioning.md).
+
 Use `compact` for first scans, `evidence` for review and CI facts, and `full` when downstream tooling expects the richest command result.
 
 ## Use And Stop Rules
@@ -97,6 +99,27 @@ navlyn context-pack --workspace navlyn.slnx --candidate-id sym:v1:... --goal und
 ```
 
 `context-pack` returns ranked items, budget fields, truncation state, warnings, and next actions. It does not dump raw source files or generate prose summaries.
+
+## Pre-Edit And Post-Edit Guardrail
+
+Use Navlyn as an evidence loop around the edit, not as the editor.
+
+Before editing:
+
+```powershell
+navlyn resolve-target --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --limit 10
+navlyn symbol-source --workspace navlyn.slnx --candidate-id sym:v1:... --view declaration
+navlyn references --workspace navlyn.slnx --candidate-id sym:v1:... --group-by file --limit 50
+```
+
+After editing:
+
+```powershell
+navlyn changed-symbols --workspace navlyn.slnx --profile compact
+navlyn review-diff --workspace navlyn.slnx --profile evidence --symbol-limit 20 --impact-limit 40 --diagnostic-limit 40 --related-test-limit 20
+```
+
+Compare the post-edit changed symbols with the pre-edit anchor by name, kind, container, project, path, and source span. A mismatch is a warning to pause and inspect; it is not a proof that the edit is wrong.
 
 ## PR Review Facts
 
@@ -241,3 +264,7 @@ Use the performance script as a local measurement source:
 ```
 
 Track tool call count, stdout size, latency, truncation, and whether expected files appear in related/context outputs. Keep local reports under ignored paths such as `artifacts/`.
+
+## Agent Evidence Evals
+
+Use [`evals/agent-evidence.md`](evals/agent-evidence.md) to evaluate wrong-symbol avoidance, pre-edit anchor presence, post-edit changed-symbol checks, tool-call count, JSON validity, stderr cleanliness, latency, output size, and expected-file presence.

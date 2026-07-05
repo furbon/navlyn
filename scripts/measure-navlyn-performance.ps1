@@ -549,7 +549,7 @@ function Invoke-McpToolScenario {
                 capabilities = @{}
                 clientInfo = @{
                     name = 'navlyn-performance'
-                    version = '0.5.0'
+                    version = '0.6.0'
                 }
             }
         }

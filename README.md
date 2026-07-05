@@ -2,7 +2,7 @@
 
 Japanese: [`README_ja.md`](README_ja.md)
 
-**Navlyn helps C#/.NET coding agents avoid editing the wrong symbol.**
+**Navlyn gives C#/.NET coding agents Roslyn-backed semantic evidence before they edit.**
 
 When an agent sees `PaymentService`, text search can show files that contain that string. It cannot safely decide which overload, target framework, partial declaration, dependency-injection registration, route handler, public API surface, or related tests actually matter. Navlyn gives the agent local Roslyn/MSBuild evidence before it edits.
 
@@ -12,7 +12,7 @@ Navlyn is:
 - a standalone `navlyn-mcp` stdio MCP server for MCP-capable coding agents and editors;
 - read-only, local, and facts-only: no edits, no arbitrary shell, no network access, no hosted index.
 
-Use it as a **C# agent preflight**: resolve the exact symbol, inspect bounded source and relationships, then decide whether broader impact, tests, or context are needed.
+Use it as a **C# agent preflight**: resolve the exact symbol, inspect bounded source and relationships, edit outside Navlyn, then verify the dirty diff before continuing.
 
 ## Install And Try
 
@@ -27,8 +27,8 @@ Repository-local tools for a team or agent workspace:
 
 ```powershell
 dotnet new tool-manifest
-dotnet tool install navlyn --version 0.5.0
-dotnet tool install navlyn-mcp --version 0.5.0
+dotnet tool install navlyn --version 0.6.0
+dotnet tool install navlyn-mcp --version 0.6.0
 dotnet tool restore
 ```
 
@@ -51,6 +51,14 @@ For MCP clients, start with the narrow reader profile:
 ```
 
 See [`docs/navlyn-client-setup.md`](docs/navlyn-client-setup.md) for copyable setup shapes.
+
+For a guided first run, follow [`docs/navlyn-first-10-minutes.md`](docs/navlyn-first-10-minutes.md).
+
+## Three Agent Workflows
+
+1. **Find the right symbol before editing.** Use `resolve-target`, then reuse the returned `candidateId` with `symbol-source`, `references`, or `about`.
+2. **Build only the reading queue you need.** Use `impact`, `related`, or `context-pack --goal modify` after smaller facts show that broader context is needed.
+3. **Check what changed after editing.** Use `changed-symbols` or `review-diff --profile evidence` and compare the changed symbols with the pre-edit anchor.
 
 ## The Problem It Solves
 
@@ -109,6 +117,7 @@ Use normal file reads and `rg` first when text is enough. Reach for Navlyn when 
 | Inspect relationships for a selected symbol | `references --candidate-id sym:v1:... --group-by file --limit 50` | The returned relationship facts answer the question. |
 | Plan a non-trivial edit | `impact --candidate-id sym:v1:... --profile light` | You know the risky callers/files; use `context-pack` only if a reading queue is needed. |
 | Review an actual Git diff | `review-diff --profile evidence` | You have changed-symbol, diagnostic, impact, and bounded warning facts. |
+| Verify a post-edit diff | `changed-symbols --profile compact` | Changed symbols match the intended pre-edit anchor, or the mismatch is understood. |
 
 Do not run every Navlyn command as a checklist. Navlyn is strongest when each call answers one semantic question.
 
@@ -175,7 +184,9 @@ Known limits are documented in [`docs/navlyn-limitations.md`](docs/navlyn-limita
 ## Documentation Map
 
 - [`docs/navlyn-client-setup.md`](docs/navlyn-client-setup.md): install and client configuration.
+- [`docs/navlyn-first-10-minutes.md`](docs/navlyn-first-10-minutes.md): shortest path to a successful first CLI/MCP run.
 - [`docs/navlyn-agent-recipes.md`](docs/navlyn-agent-recipes.md): task-oriented CLI/MCP recipes.
+- [`docs/navlyn-positioning.md`](docs/navlyn-positioning.md): how Navlyn fits next to search, LSP, analyzers, MCP servers, and review bots.
 - [`docs/navlyn-mcp-server.md`](docs/navlyn-mcp-server.md): MCP profiles, tools, resources, freshness, and boundaries.
 - [`docs/navlyn-cli-commands.md`](docs/navlyn-cli-commands.md): full CLI contract and JSON behavior.
 - [`docs/navlyn-distribution.md`](docs/navlyn-distribution.md): release packaging and publish runbook.

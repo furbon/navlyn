@@ -8,7 +8,7 @@
     <PackAsTool>true</PackAsTool>
     <PackageId>navlyn</PackageId>
     <ToolCommandName>navlyn</ToolCommandName>
-    <Version>0.5.0</Version>
+    <Version>0.6.0</Version>
     <Authors>furbon.tech</Authors>
     <Description>Read-only C#/.NET semantic evidence CLI that helps coding agents avoid wrong-symbol edits.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -18,7 +18,7 @@
     <RepositoryUrl>https://github.com/furbon/navlyn</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/furbon/navlyn</PackageProjectUrl>
-    <PackageReleaseNotes>0.5.0 adds MCP tool profiles, file-first navigation, workspace status/refresh, opt-in serve/cache support, indexed candidate reuse, bounded search metadata, .NET 8 and .NET 10 validation, focused schemas/goldens, evals, benchmarks, and refreshed OSS onboarding docs.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.6.0 strengthens the C# agent preflight loop with first-10-minutes onboarding, wrong-symbol edit guidance, expanded eval and performance documentation, stabilized multi-target test execution, synchronized contract docs, and refreshed package/release identity.</PackageReleaseNotes>
     <Copyright>Copyright (c) 2026 furbon.tech</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>

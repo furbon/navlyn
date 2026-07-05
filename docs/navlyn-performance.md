@@ -63,21 +63,30 @@ Timings are environment-dependent. Treat local reports as release and investigat
 
 ## Current Local Case Study
 
-The following smoke evidence was recorded on 2026-07-04 from commit `b17f3b5` plus release-readiness changes, on Windows 10.0.26200 with .NET SDK 10.0.301 and runtime 10.0.9. The report was produced with `navlyn.workspace.json`, `-Scenario all`, `-Profile compact`, `-Iterations 1`, `-Warmup 0`, and `-NoBuild`; all measured commands returned JSON-valid stdout, exit code 0, and stderr size 0. The aggregate report has `anyTruncated=true` because the compact diff scenario intentionally exercises bounded outputs; non-diff scenarios were not truncated.
+The following smoke evidence was recorded on 2026-07-05 from the 0.6.0 release branch, on Windows 10.0.26200 with .NET SDK 10.0.301. The report was produced with `navlyn.slnx`, `-Scenario all`, `-Profile compact`, `-Iterations 1`, `-Warmup 0`, and `-NoBuild`; all measured commands returned JSON-valid stdout, exit code 0, and stderr size 0.
 
 | Scenario | Profile | Commands | Median ms | P95 ms | Max stdout chars | Warnings | Comparison baseline |
 | --- | --- | ---: | ---: | ---: | ---: | --- | --- |
-| quick | compact | 4 | 4308 | 5799 | 4498 | none | Stateless CLI check/repo-graph/find/context-pack. |
-| file-first | compact | 3 | 4321 | 4358 | 8361 | none | Stateless CLI outline/source/calls for a known file position. |
-| agent-loop | compact | 8 | 5795 | 6056 | 8968 | `no-selected-symbol` on tests-for-symbol only | Stateless CLI agent loop plus batch comparison. |
-| diff | compact | 7 | 13871 | 16692 | 109126 | documented bounded diff warnings and truncation flags | Changed-symbol, impact, diagnostics, review, context, test, and public API diff workflow. |
-| mcp | compact | 4 | 1938 | 2809 | 19908 | none | MCP stdio warm-loop; direct tools report warm workspace/index metadata. |
-| daemon | compact | 2 | 2821 | 2864 | 2679 | none | `navlyn serve` stdio status/refresh one-shot requests. |
-| cache | compact | 3 | 5193 | 5213 | 4177 | none | On-disk cache cold refresh, warm status, warm refresh. |
-| parallel | compact | 3 | 5979 | 5979 | 8361 | none | Same-workspace CLI repo-graph/find/outline processes started concurrently. |
-| multi-workspace | compact | 3 | 2776 | 2893 | 115481 | none | Primary workspace check plus fixture workspace check/outline. |
+| quick | compact | 4 | 3203 | 6191 | 4498 | none | Stateless CLI check/repo-graph/find/context-pack. |
+| file-first | compact | 3 | 4572 | 4634 | 8361 | none | Stateless CLI outline/source/calls for a known file position. |
+| agent-loop | compact | 8 | 6131 | 6542 | 8968 | none | Stateless CLI agent loop plus batch comparison. |
+| diff | compact | 7 | 8860 | 10089 | 3110 | none | Changed-symbol, impact, diagnostics, review, context, test, and public API diff workflow. |
+| mcp | compact | 4 | 1623 | 4320 | 19868 | none | MCP stdio warm-loop; direct tools report warm workspace/index metadata. |
+| daemon | compact | 2 | 3028 | 3033 | 2664 | none | `navlyn serve` stdio status/refresh one-shot requests. |
+| cache | compact | 3 | 5462 | 5574 | 4162 | none | On-disk cache cold refresh, warm status, warm refresh. |
+| parallel | compact | 3 | 6433 | 6434 | 8361 | none | Same-workspace CLI repo-graph/find/outline processes started concurrently. |
+| multi-workspace | compact | 3 | 2944 | 3060 | 115481 | none | Primary workspace check plus fixture workspace check/outline. |
 
-These numbers are a reproducibility snapshot for release review, not a claim that other repositories or machines will match them.
+These numbers are a reproducibility snapshot for release review, not a claim that other repositories or machines will match them. For 0.6.x work, consider a performance smoke healthy only when commands succeed, stdout is valid JSON, successful stderr is empty, truncation is expected and documented, and expected files are present in related/context/review outputs.
+
+## 0.6.x Targets
+
+Targets are local guardrails, not hosted-service SLOs:
+
+- MCP reader warm-loop should stay the fastest path for repeated selected-symbol facts.
+- Direct CLI first-pass commands should remain suitable for occasional human calls; agents should use MCP or batch when collecting several facts from the same workspace.
+- Diff review should keep evidence output bounded and JSON-valid before chasing lower latency.
+- Performance regressions should be explained by workspace size, command scope, output size, warnings/truncation, or an intentional semantic coverage change.
 
 ## Reading A Report
 

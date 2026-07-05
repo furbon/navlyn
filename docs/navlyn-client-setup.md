@@ -2,6 +2,8 @@
 
 This page is for the moment after someone decides: "I want my C# agent to have semantic facts before it edits." Pick one install shape, point it at a workspace, and keep the first MCP surface narrow.
 
+If you want a guided path instead of setup shapes, start with [`navlyn-first-10-minutes.md`](navlyn-first-10-minutes.md).
+
 Use:
 
 - `navlyn` for shell, CI, scripts, and local experiments;
@@ -23,7 +25,7 @@ Repository-local install for teams and agent workspaces:
 
 ```powershell
 dotnet new tool-manifest
-dotnet tool install navlyn --version 0.5.0
+dotnet tool install navlyn --version 0.6.0
 dotnet tool restore
 dotnet tool run navlyn -- check --workspace path/to/YourRepo.slnx
 ```
@@ -131,6 +133,7 @@ Reuse returned candidateId values for follow-up source, edge, about, impact, or 
 Start navlyn-mcp with --tool-profile review for actual Git diff review, edit for edit planning, or full for compatibility with every tool.
 Use navlyn_context_pack and navlyn_batch only when the active profile exposes them and smaller facts show they are needed.
 Treat nextActions as conditional follow-up hints, not a checklist.
+After an edit, run changed-symbols or review-diff and compare the changed symbols with the pre-edit candidateId/source facts before continuing.
 ```
 
 Client-specific instruction examples live in `examples/agents`.

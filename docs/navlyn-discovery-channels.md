@@ -40,7 +40,7 @@ csharp, dotnet, roslyn, mcp, mcp-server, ai-agents, code-navigation, semantic-se
 Suggested release note opening:
 
 ```text
-Navlyn 0.5.0 helps C#/.NET coding agents avoid wrong-symbol edits. It resolves fuzzy intent into stable Roslyn-backed targets, opens bounded source and relationship facts, builds compact context packs, and collects review evidence without editing files. The `navlyn` CLI and standalone `navlyn-mcp` server share the same Navlyn engine.
+Navlyn 0.6.0 helps C#/.NET coding agents avoid wrong-symbol edits. It resolves fuzzy intent into stable Roslyn-backed targets, opens bounded source and relationship facts, builds compact context packs, and collects review evidence without editing files. The `navlyn` CLI and standalone `navlyn-mcp` server share the same Navlyn engine.
 ```
 
 ## VS Code MCP
@@ -86,7 +86,7 @@ Maintainer-owned external work:
 
 ## Lightweight VS Code Extension Boundary
 
-Navlyn 0.5.0 does not need a full editor extension. If a VS Code extension is justified by user demand, keep it to installer/configurator duties:
+Navlyn 0.6.0 does not need a full editor extension. If a VS Code extension is justified by user demand, keep it to installer/configurator duties:
 
 - detect whether `navlyn` and `navlyn-mcp` are installed;
 - locate likely `.slnx`, `.sln`, or `.csproj` workspace files;
