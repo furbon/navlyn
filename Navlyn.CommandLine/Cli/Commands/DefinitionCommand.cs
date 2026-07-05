@@ -14,7 +14,7 @@ internal static class DefinitionCommand
 
         return SourcePositionCommand.Create(
             "definition",
-            "Resolve source definitions for the C# symbol at a source position.",
+            "Resolve source definitions for the C# or Visual Basic symbol at a source position.",
             [includeMetadataOption],
             (workspace, options, parseResult, cancellationToken) => ExecuteAsync(
                 workspace,

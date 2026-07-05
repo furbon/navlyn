@@ -5,7 +5,7 @@ These recipes teach agents how to use Navlyn without turning it into a broad che
 The core habit is simple:
 
 1. use `rg` or normal file reads when text is enough;
-2. use one Navlyn call when C# semantic identity matters;
+2. use one Navlyn call when C# or Visual Basic semantic identity matters;
 3. reuse `candidateId`;
 4. stop when the returned facts answer the question;
 5. escalate to impact, tests, context, or batch only when the smaller fact shows it is needed.
@@ -16,14 +16,14 @@ Use `compact` for first scans, `evidence` for review and CI facts, and `full` wh
 
 ## Use And Stop Rules
 
-Use normal file reads and `rg` first when text is enough. Use Navlyn when a C# semantic fact would change the answer:
+Use normal file reads and `rg` first when text is enough. Use Navlyn when a C# or Visual Basic semantic fact would change the answer:
 
 - The user points at a type, method, property, overload, partial declaration, or source position.
 - Project, target framework, generated-code, or linked-file context matters.
 - The task is a real Git diff review or edit-risk investigation.
 - Static source-level DI, route, public API, package, framework entrypoint, or related-test facts are useful evidence.
 
-Do not use Navlyn for comments, strings, docs, Markdown, non-C# files, generated artifacts, or final review prose. Navlyn does not run tests, edit files, prove runtime behavior, or replace a human reviewer.
+Do not use Navlyn for comments, strings, docs, Markdown, non-Roslyn-source files, generated artifacts, or final review prose. Navlyn does not run tests, edit files, prove runtime behavior, or replace a human reviewer.
 
 Stop once the returned facts answer the question. Escalate only when the next fact is needed:
 

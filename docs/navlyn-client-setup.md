@@ -1,6 +1,6 @@
 # Navlyn Client Setup
 
-This page is for the moment after someone decides: "I want my C# agent to have semantic facts before it edits." Pick one install shape, point it at a workspace, and keep the first MCP surface narrow.
+This page is for the moment after someone decides: "I want my C#-first .NET agent to have semantic facts before it edits." Pick one install shape, point it at a workspace, and keep the first MCP surface narrow. Visual Basic source is supported through Roslyn/MSBuild.
 
 If you want a guided path instead of setup shapes, start with [`navlyn-first-10-minutes.md`](navlyn-first-10-minutes.md).
 
@@ -65,7 +65,7 @@ Prefer an explicit workspace path:
 --workspace path/to/YourRepo.code-workspace
 ```
 
-Use `--workspace auto` only when the repository has one clear top-level workspace candidate. If `auto` is ambiguous, pass `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, or `.csproj` explicitly.
+Use `--workspace auto` only when the repository has one clear top-level workspace candidate. If `auto` is ambiguous, pass `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `.vbproj` explicitly.
 
 `navlyn.workspace.json` is the best shared MCP anchor for repositories that need:
 
@@ -133,7 +133,7 @@ Use the same stdio command shape across clients, then choose the profile by task
 | Generic MCP client | Use stdio, no network listener, pass `--workspace` and `--tool-profile`, and keep logs/stderr separate from MCP stdout. | `reader` unless a concrete review/edit task needs more. |
 | CI | Prefer CLI commands and JSON artifacts over MCP. Run `navlyn doctor`, focused evidence commands, and PR fact scripts after `dotnet restore`. | Not applicable; use `navlyn` CLI and fail jobs only on explicit policy gates. |
 
-Client instruction snippets for Copilot, Claude, Cursor, and OpenAI coding agent clients live in `examples/agents`. The portable rule is the same everywhere: use Navlyn for C# semantic evidence, not as a replacement for normal file reads, tests, or editing tools.
+Client instruction snippets for Copilot, Claude, Cursor, and OpenAI coding agent clients live in `examples/agents`. The portable rule is the same everywhere: use Navlyn for C# or Visual Basic semantic evidence, not as a replacement for normal file reads, tests, or editing tools.
 
 ## MCP Tool Profiles
 
@@ -152,12 +152,12 @@ Client instruction snippets for Copilot, Claude, Cursor, and OpenAI coding agent
 
 ```text
 Use normal file reads and rg first when text is enough.
-Use Navlyn only when C# semantic identity, project context, source relationships, diff facts, or bounded evidence would change the answer.
-In MCP reader profile, start with navlyn_file_outline for one known C# file or navlyn_resolve_target for fuzzy symbol intent.
+Use Navlyn only when C# or Visual Basic semantic identity, project context, source relationships, diff facts, or bounded evidence would change the answer.
+In MCP reader profile, start with navlyn_file_outline for one known C# or Visual Basic file or navlyn_resolve_target for fuzzy symbol intent.
 Reuse returned candidateId values for follow-up source, edge, about, impact, or context calls.
 Use navlyn_doctor when setup, SDK, workspace loading, or first-command guidance is uncertain.
 Start navlyn-mcp with --tool-profile review for actual Git diff review, edit for edit planning, or full for compatibility with every tool.
-In edit profile, run navlyn_edit_preflight before a non-trivial C# edit; after editing, run navlyn_post_edit_guard or navlyn_wrong_symbol_guard before widening scope.
+In edit profile, run navlyn_edit_preflight before a non-trivial C# or Visual Basic edit; after editing, run navlyn_post_edit_guard or navlyn_wrong_symbol_guard before widening scope.
 Use navlyn_context_pack and navlyn_batch only when the active profile exposes them and smaller facts show they are needed.
 Treat nextActions as conditional follow-up hints, not a checklist.
 After an edit, guard commands or review-diff should compare changed symbols with the pre-edit candidateId/source facts before continuing.

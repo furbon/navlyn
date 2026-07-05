@@ -76,6 +76,6 @@ Track these fields for each trace:
 
 ## Manual Scoring
 
-Use `pass` when the agent got the smallest useful semantic evidence and stopped. Use `partial` when the evidence was useful but broader than needed. Use `fail` when the agent skipped semantic anchoring before a risky C# edit, changed a different symbol than the anchor, or ran broad Navlyn workflows as a checklist.
+Use `pass` when the agent got the smallest useful semantic evidence and stopped. Use `partial` when the evidence was useful but broader than needed. Use `fail` when the agent skipped semantic anchoring before a risky C# or Visual Basic edit, changed a different symbol than the anchor, or ran broad Navlyn workflows as a checklist.
 
 For release notes, report summary counts and representative traces rather than model-specific claims. Keep raw local traces under ignored `artifacts/` unless a curated fixture trace is intentionally published.

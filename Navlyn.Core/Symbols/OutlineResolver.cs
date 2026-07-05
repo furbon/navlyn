@@ -1,6 +1,6 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using Navlyn.Languages;
 using Navlyn.Paths;
 using Navlyn.Workspaces;
 
@@ -35,7 +35,7 @@ internal sealed class OutlineResolver
 
         IReadOnlyList<OutlineEntry> entries = [.. root
             .DescendantNodes()
-            .Where(IsOutlineNode)
+            .Where(SourceLanguageFacts.IsOutlineNode)
             .Select(node => CreateEntry(sourceDocument, semanticModel, node, cancellationToken))
             .OfType<OutlineEntry>()
             .OrderBy(entry => entry.Line)
@@ -87,29 +87,6 @@ internal sealed class OutlineResolver
             Column: lineSpan.StartLinePosition.Character + 1,
             EndLine: lineSpan.EndLinePosition.Line + 1,
             EndColumn: lineSpan.EndLinePosition.Character + 1);
-    }
-
-    private static bool IsOutlineNode(SyntaxNode node)
-    {
-        return node switch
-        {
-            BaseTypeDeclarationSyntax
-                or BaseNamespaceDeclarationSyntax
-                or DelegateDeclarationSyntax
-                or EnumMemberDeclarationSyntax
-                or BaseMethodDeclarationSyntax
-                or LocalFunctionStatementSyntax
-                or PropertyDeclarationSyntax
-                or IndexerDeclarationSyntax
-                or EventDeclarationSyntax => true,
-            VariableDeclaratorSyntax => IsFieldVariable(node),
-            _ => false
-        };
-    }
-
-    private static bool IsFieldVariable(SyntaxNode node)
-    {
-        return node.Parent?.Parent is BaseFieldDeclarationSyntax;
     }
 
     private static OutlineCandidateTarget CreateCandidateTarget(

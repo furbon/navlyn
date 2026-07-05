@@ -39,7 +39,7 @@ internal static class NavlynMcpTools
     public const string BatchTool = "navlyn_batch";
 
     private const string WorkspaceSummaryDescription =
-        "Use only when project structure, target frameworks, package references, test relationships, or MSBuild file facts would change the answer. Do not run as a default first step for single-file review, specific symbol lookup, comments, strings, docs, or non-C# files. Returns repo-graph JSON; use profile compact when a small workspace map is enough.";
+        "Use only when project structure, target frameworks, package references, test relationships, or MSBuild file facts would change the answer. Do not run as a default first step for single-file review, specific symbol lookup, comments, strings, docs, or non-Roslyn-source files. Returns repo-graph JSON; use profile compact when a small workspace map is enough.";
 
     private const string WorkspaceStatusDescription =
         "Use to inspect the current workspace snapshot, freshness metadata, direct cache status, and optional on-disk cache manifest state. This is a lifecycle/status tool, not a repository overview; use navlyn_workspace_summary for project graph facts.";
@@ -51,43 +51,43 @@ internal static class NavlynMcpTools
         "Use at setup time or after workspace failures to verify the configured Navlyn workspace, .NET SDK availability, supported target frameworks, load diagnostics, and the first safe commands to try. It returns CLI doctor JSON and performs read-only checks only.";
 
     private const string FindSymbolDescription =
-        "Use when you have an approximate C# symbol name and need deterministic candidates or candidate ids. Do not use for comments, strings, markdown, generated artifacts, or non-C# content. Ambiguous results are returned as candidates; do not merge them. Follow with navlyn_about_symbol, navlyn_related_files, or navlyn_impact using candidateId.";
+        "Use when you have an approximate C# or Visual Basic symbol name and need deterministic candidates or candidate ids. Do not use for comments, strings, markdown, generated artifacts, or non-Roslyn-source content. Ambiguous results are returned as candidates; do not merge them. Follow with navlyn_about_symbol, navlyn_related_files, or navlyn_impact using candidateId.";
 
     private const string ResolveTargetDescription =
-        "Use as the standard first symbol entry when an agent has an approximate C# name, a candidateId, or an exact source position and needs one small target envelope with recommended next actions. Prefer navlyn_find_symbol when the user explicitly wants a candidate list. Do not use for comments, strings, docs, non-C# files, or arbitrary command execution.";
+        "Use as the standard first symbol entry when an agent has an approximate C# or Visual Basic name, a candidateId, or an exact source position and needs one small target envelope with recommended next actions. Prefer navlyn_find_symbol when the user explicitly wants a candidate list. Do not use for comments, strings, docs, non-Roslyn-source files, or arbitrary command execution.";
 
     private const string FileOutlineDescription =
-        "Use for a semantic outline of one known C# source file when a file map is useful before deeper symbol inspection. Returns outline entries with reusable candidateId values. Do not use for tests, impact analysis, repository overview, comments, strings, docs, non-C# files, or arbitrary command execution.";
+        "Use for a semantic outline of one known C# or Visual Basic source file when a file map is useful before deeper symbol inspection. Returns outline entries with reusable candidateId values. Do not use for tests, impact analysis, repository overview, comments, strings, docs, non-Roslyn-source files, or arbitrary command execution.";
 
     private const string SymbolSourceDescription =
-        "Use when one selected C# symbol needs bounded source text by candidateId or exact file/line/column. Prefer this over navlyn_context_pack for a single declaration, body, members, XML doc, or attributes view. Do not use for broad file reading, impact analysis, tests, or diff review.";
+        "Use when one selected C# or Visual Basic symbol needs bounded source text by candidateId or exact file/line/column. Prefer this over navlyn_context_pack for a single declaration, body, members, XML doc, or attributes view. Do not use for broad file reading, impact analysis, tests, or diff review.";
 
     private const string SymbolEdgesDescription =
-        "Use when one selected C# symbol needs direct relationship edges: references, callers, calls, or implementations. Prefer candidateId from navlyn_file_outline, navlyn_find_symbol, or navlyn_resolve_target. References and callers are scoped expensive searches; set scope/maxDocuments for broad questions and prefer calls for cheap local outgoing edges. Use filters and limits for noisy symbols. Do not use for definition lookup, source text, test discovery, or static risk analysis.";
+        "Use when one selected C# or Visual Basic symbol needs direct relationship edges: references, callers, calls, or implementations. Prefer candidateId from navlyn_file_outline, navlyn_find_symbol, or navlyn_resolve_target. References and callers are scoped expensive searches; set scope/maxDocuments for broad questions and prefer calls for cheap local outgoing edges. Use filters and limits for noisy symbols. Do not use for definition lookup, source text, test discovery, or static risk analysis.";
 
     private const string InspectFileDescription =
-        "Use for a compact semantic inspection of one known C# source file. It returns the same bounded outline facts as navlyn_file_outline and does not include tests, impact, diagnostics, context packs, or raw file text.";
+        "Use for a compact semantic inspection of one known C# or Visual Basic source file. It returns the same bounded outline facts as navlyn_file_outline and does not include tests, impact, diagnostics, context packs, or raw file text.";
 
     private const string AboutSymbolDescription =
-        "Use when one selected C# symbol needs a compact summary. Use profile light for first-pass definition/member facts; use full only when reference summary and shallow relations are needed. Prefer candidateId from navlyn_find_symbol or navlyn_resolve_target. Do not use for diff review or as a repository overview; ambiguous queries return candidate information without synthesized combined facts.";
+        "Use when one selected C# or Visual Basic symbol needs a compact summary. Use profile light for first-pass definition/member facts; use full only when reference summary and shallow relations are needed. Prefer candidateId from navlyn_find_symbol or navlyn_resolve_target. Do not use for diff review or as a repository overview; ambiguous queries return candidate information without synthesized combined facts.";
 
     private const string RelatedFilesDescription =
-        "Use when you need a file-first map of files related to a selected C# symbol. Do not use for change-risk analysis; use navlyn_impact. Results are bounded by CLI limits and preserve truncation fields. Follow with navlyn_about_symbol or navlyn_impact.";
+        "Use when you need a file-first map of files related to a selected C# or Visual Basic symbol. Do not use for change-risk analysis; use navlyn_impact. Results are bounded by CLI limits and preserve truncation fields. Follow with navlyn_about_symbol or navlyn_impact.";
 
     private const string ImpactDescription =
-        "Use before editing a selected C# symbol or when static source impact/risk is explicitly needed. Use profile light for declarations plus cheap local calls; use full or explicit include values for bounded references, callers, implementations, hierarchy, and affected files. Set scope/maxDocuments for broad questions. Do not claim runtime, reflection, DI, or config certainty from this static analysis. Escalate to navlyn_context_pack only when the agent needs a reading queue.";
+        "Use before editing a selected C# or Visual Basic symbol or when static source impact/risk is explicitly needed. Use profile light for declarations plus cheap local calls; use full or explicit include values for bounded references, callers, implementations, hierarchy, and affected files. Set scope/maxDocuments for broad questions. Do not claim runtime, reflection, DI, or config certainty from this static analysis. Escalate to navlyn_context_pack only when the agent needs a reading queue.";
 
     private const string EntrypointsDescription =
         "Use to understand how a symbol can be reached from static callers or to inspect framework-discovered entrypoints. Symbol mode calls entrypoints; framework mode calls framework-entrypoints. Do not use for full impact; use navlyn_impact. Results are heuristic and bounded.";
 
     private const string ExactNavigationDescription =
-        "Use after navlyn_find_symbol or when you already have an exact C# source position and need precise lower-level Roslyn navigation. Supports allowlist operations: definition, references, callers, calls, implementations, type_hierarchy, and symbol_info. References and callers are scoped expensive searches; calls is local to the containing member. Prefer navlyn_symbol_edges for references/callers/calls/implementations and navlyn_symbol_source for bounded source text. Do not use for broad repository search, diff review, or arbitrary CLI execution.";
+        "Use after navlyn_find_symbol or when you already have an exact C# or Visual Basic source position and need precise lower-level Roslyn navigation. Supports allowlist operations: definition, references, callers, calls, implementations, type_hierarchy, and symbol_info. References and callers are scoped expensive searches; calls is local to the containing member. Prefer navlyn_symbol_edges for references/callers/calls/implementations and navlyn_symbol_source for bounded source text. Do not use for broad repository search, diff review, or arbitrary CLI execution.";
 
     private const string TestsForSymbolDescription =
-        "Use only when planning or reviewing an edit and related test candidates are needed for a selected C# symbol. Prefer candidateId from navlyn_find_symbol or an exact file/line/column. Do not use for first-pass comprehension, and do not treat this as a test runner; Navlyn reports static facts only.";
+        "Use only when planning or reviewing an edit and related test candidates are needed for a selected C# or Visual Basic symbol. Prefer candidateId from navlyn_find_symbol or an exact file/line/column. Do not use for first-pass comprehension, and do not treat this as a test runner; Navlyn reports static facts only.";
 
     private const string TestsForDiffDescription =
-        "Use only for PR or working-tree investigation when related tests for changed C# symbols are explicitly useful. Do not use for first-pass code reading, as a test runner, or when there is no diff. Use profile compact or evidence when output budgets are tight.";
+        "Use only for PR or working-tree investigation when related tests for changed C# or Visual Basic symbols are explicitly useful. Do not use for first-pass code reading, as a test runner, or when there is no diff. Use profile compact or evidence when output budgets are tight.";
 
     private const string DiImpactDescription =
         "Use before changing a DI service or implementation type when you need source-level Microsoft.Extensions.DependencyInjection registrations, consumers, constructor dependencies, and risk facts. Do not treat this as runtime container proof; reflection, configuration, and custom containers can be incomplete.";
@@ -102,13 +102,13 @@ internal static class NavlynMcpTools
         "Use as an escalation tool when normal file reads or smaller Navlyn facts are not enough and the agent needs a bounded reading queue before review, modification, or explanation. Supports query, candidateId, or diff mode, plus changeKind ranking hints. Do not use just to list candidates or as a default first step; use navlyn_find_symbol, navlyn_resolve_target, or exact navigation first.";
 
     private const string EditPreflightDescription =
-        "Use immediately before editing one intended C# target. It anchors fuzzy intent, returns bounded source/context/test evidence, risk, known unknowns, and the post-edit guard command. Do not use for broad repository review or after the edit.";
+        "Use immediately before editing one intended C# or Visual Basic target. It anchors fuzzy intent, returns bounded source/context/test evidence, risk, known unknowns, and the post-edit guard command. Do not use for broad repository review or after the edit.";
 
     private const string PostEditGuardDescription =
         "Use after an edit to compare a saved preflight anchor or candidateId with the current diff. It returns wrong-target risk, changed symbols, score reasons, and a policy pass/fail result.";
 
     private const string WrongSymbolGuardDescription =
-        "Use when no full preflight file exists and the agent needs to compare intended C# symbol intent with changed symbols. It is a focused wrong-symbol risk check for CI or agent policy.";
+        "Use when no full preflight file exists and the agent needs to compare intended C# or Visual Basic symbol intent with changed symbols. It is a focused wrong-symbol risk check for CI or agent policy.";
 
     private const string AgentPackDescription =
         "Use when an edit handoff needs a compact intent, evidence, confidence, or reading-queue record derived from the same semantic preflight evidence.";
@@ -120,8 +120,8 @@ internal static class NavlynMcpTools
     [Description(WorkspaceSummaryDescription)]
     public static Task<CallToolResult> WorkspaceSummary(
         IServiceProvider services,
-        [Description("Single project filter by name or repository-relative .csproj path. Mutually exclusive with projects.")] string? project = null,
-        [Description("Project filters by name or repository-relative .csproj path. Mutually exclusive with project.")] string[]? projects = null,
+        [Description("Single project filter by name or repository-relative .csproj/.vbproj path. Mutually exclusive with projects.")] string? project = null,
+        [Description("Project filters by name or repository-relative .csproj/.vbproj path. Mutually exclusive with project.")] string[]? projects = null,
         [Description("Whether to include package references. Omit to use CLI default.")] bool? includePackages = null,
         [Description("Whether to include repository MSBuild files. Omit to use CLI default.")] bool? includeMsbuildFiles = null,
         [Description("Whether to include preprocessor symbols. Omit to use CLI default.")] bool? includePreprocessorSymbols = null,
@@ -213,7 +213,7 @@ internal static class NavlynMcpTools
         IServiceProvider services,
         [Description("Approximate symbol name query. Mutually exclusive with candidateId and file/line/column.")] string? query = null,
         [Description("Candidate id returned by a previous fuzzy command. Mutually exclusive with query and file/line/column.")] string? candidateId = null,
-        [Description("C# source file target. Must be provided with line and column when query and candidateId are omitted.")] string? file = null,
+        [Description("C# or Visual Basic source file target. Must be provided with line and column when query and candidateId are omitted.")] string? file = null,
         [Description("1-based source line. Must be provided with file and column when source position mode is used.")] int? line = null,
         [Description("1-based source column. Must be provided with file and line when source position mode is used.")] int? column = null,
         [Description("Single Roslyn SymbolKind hint for query mode. Mutually exclusive with assumeKinds.")] string? assumeKind = null,
@@ -240,8 +240,8 @@ internal static class NavlynMcpTools
     [Description(FileOutlineDescription)]
     public static Task<CallToolResult> FileOutline(
         IServiceProvider services,
-        [Description("C# source file to outline. Required.")] string file,
-        [Description("Input project context by project name or repository-relative .csproj path.")] string? project = null,
+        [Description("C# or Visual Basic source file to outline. Required.")] string file,
+        [Description("Input project context by project name or repository-relative .csproj/.vbproj path.")] string? project = null,
         [Description("Exclude generated source files.")] bool? excludeGenerated = null,
         CancellationToken cancellationToken = default)
     {
@@ -257,10 +257,10 @@ internal static class NavlynMcpTools
     public static Task<CallToolResult> SymbolSource(
         IServiceProvider services,
         [Description("Candidate id returned by navlyn_file_outline, navlyn_find_symbol, or navlyn_resolve_target. Mutually exclusive with file/line/column.")] string? candidateId = null,
-        [Description("C# source file target. Must be provided with line and column when candidateId is omitted.")] string? file = null,
+        [Description("C# or Visual Basic source file target. Must be provided with line and column when candidateId is omitted.")] string? file = null,
         [Description("1-based source line. Must be provided with file and column when candidateId is omitted.")] int? line = null,
         [Description("1-based source column. Must be provided with file and line when candidateId is omitted.")] int? column = null,
-        [Description("Input project context by project name or repository-relative .csproj path.")] string? project = null,
+        [Description("Input project context by project name or repository-relative .csproj/.vbproj path.")] string? project = null,
         [Description("Exclude generated source files.")] bool? excludeGenerated = null,
         [Description("Source view: signature, declaration, body, members, xml-doc, or attributes.")] string? view = null,
         [Description("Maximum source lines per slice. Must be 1 or greater.")] int? maxLines = null,
@@ -280,10 +280,10 @@ internal static class NavlynMcpTools
         IServiceProvider services,
         [Description("Relationship operation: references, callers, calls, or implementations.")] string operation,
         [Description("Candidate id returned by navlyn_file_outline, navlyn_find_symbol, or navlyn_resolve_target. Mutually exclusive with file/line/column.")] string? candidateId = null,
-        [Description("C# source file target. Must be provided with line and column when candidateId is omitted.")] string? file = null,
+        [Description("C# or Visual Basic source file target. Must be provided with line and column when candidateId is omitted.")] string? file = null,
         [Description("1-based source line. Must be provided with file and column when candidateId is omitted.")] int? line = null,
         [Description("1-based source column. Must be provided with file and line when candidateId is omitted.")] int? column = null,
-        [Description("Input project context by project name or repository-relative .csproj path.")] string? project = null,
+        [Description("Input project context by project name or repository-relative .csproj/.vbproj path.")] string? project = null,
         [Description("Exclude generated source files and generated result locations where the CLI operation supports it.")] bool? excludeGenerated = null,
         [Description("Single result project filter. Mutually exclusive with resultProjects.")] string? resultProject = null,
         [Description("Result project filters. Mutually exclusive with resultProject.")] string[]? resultProjects = null,
@@ -311,8 +311,8 @@ internal static class NavlynMcpTools
     [Description(InspectFileDescription)]
     public static Task<CallToolResult> InspectFile(
         IServiceProvider services,
-        [Description("C# source file to inspect. Required.")] string file,
-        [Description("Input project context by project name or repository-relative .csproj path.")] string? project = null,
+        [Description("C# or Visual Basic source file to inspect. Required.")] string file,
+        [Description("Input project context by project name or repository-relative .csproj/.vbproj path.")] string? project = null,
         [Description("Exclude generated source files.")] bool? excludeGenerated = null,
         CancellationToken cancellationToken = default)
     {
@@ -456,10 +456,10 @@ internal static class NavlynMcpTools
         IServiceProvider services,
         [Description("Operation: definition, references, callers, calls, implementations, type_hierarchy, or symbol_info.")] string operation,
         [Description("Candidate id returned by navlyn_find_symbol or another fuzzy command. Mutually exclusive with file/line/column.")] string? candidateId = null,
-        [Description("C# source file target. Must be provided with line and column when candidateId is omitted.")] string? file = null,
+        [Description("C# or Visual Basic source file target. Must be provided with line and column when candidateId is omitted.")] string? file = null,
         [Description("1-based source line. Must be provided with file and column when candidateId is omitted.")] int? line = null,
         [Description("1-based source column. Must be provided with file and line when candidateId is omitted.")] int? column = null,
-        [Description("Input project context by project name or repository-relative .csproj path.")] string? project = null,
+        [Description("Input project context by project name or repository-relative .csproj/.vbproj path.")] string? project = null,
         [Description("Exclude generated source files and generated result locations where the CLI operation supports it.")] bool? excludeGenerated = null,
         [Description("Single result project filter. Supported for references, callers, calls, and implementations. Mutually exclusive with resultProjects.")] string? resultProject = null,
         [Description("Result project filters. Supported for references, callers, calls, and implementations. Mutually exclusive with resultProject.")] string[]? resultProjects = null,

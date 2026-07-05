@@ -1,6 +1,6 @@
 # Navlyn MCP Server
 
-`navlyn-mcp` gives MCP clients a read-only C#/.NET semantic evidence surface. It is designed for agents that should inspect code with Roslyn/MSBuild facts before they edit, review, or explain it.
+`navlyn-mcp` gives MCP clients a read-only C#-first .NET semantic evidence surface with Roslyn-backed Visual Basic support. It is designed for agents that should inspect code with Roslyn/MSBuild facts before they edit, review, or explain it.
 
 The server is intentionally facts-only:
 
@@ -17,13 +17,13 @@ For normal use, install only `navlyn-mcp` for MCP clients. A separate `navlyn` C
 
 ## When To Use It
 
-Use `navlyn-mcp` when an agent needs a semantic C# fact that text search cannot safely provide:
+Use `navlyn-mcp` when an agent needs a semantic C# or Visual Basic fact that text search cannot safely provide:
 
 | Need | Start With |
 | --- | --- |
 | "Is this repo ready for Navlyn?" | `navlyn_doctor` |
 | "Which symbol did the user mean?" | `navlyn_resolve_target` |
-| "What is in this C# file?" | `navlyn_file_outline` |
+| "What is in this C# or Visual Basic file?" | `navlyn_file_outline` |
 | "Show the exact source for this symbol." | `navlyn_symbol_source` |
 | "Who references or calls this selected symbol?" | `navlyn_symbol_edges` |
 | "What workspace/project context matters?" | `navlyn_workspace_summary` |
@@ -32,7 +32,7 @@ Use `navlyn-mcp` when an agent needs a semantic C# fact that text search cannot 
 | "What does this actual Git diff affect?" | `navlyn_review_diff` in `review` profile |
 | "What should the agent read before editing?" | `navlyn_context_pack` only after smaller facts show it is needed |
 
-Use `rg`, normal file reads, or editor tools for comments, prose docs, strings, generated artifacts, and non-C# content. Navlyn's MCP server is a semantic C#/.NET facts provider, not a general repository search server.
+Use `rg`, normal file reads, or editor tools for comments, prose docs, strings, generated artifacts, and non-Roslyn-source content. Navlyn's MCP server is a semantic C#-first .NET facts provider, not a general repository search server.
 
 The default `reader` profile is deliberately narrow so agents do not treat Navlyn as a checklist. Broader review, edit, and full profiles are opt-in.
 
@@ -66,7 +66,7 @@ VS Code workspace configuration shape:
 
 Use workspace `.vscode/mcp.json` when the server should be shared by a repository, and user-level MCP configuration when Navlyn is a personal tool across multiple repositories. The copyable example in this repository is [`../examples/install/vscode-mcp.json`](../examples/install/vscode-mcp.json).
 
-For local repositories with exactly one top-level workspace candidate, `auto` can discover the workspace. Discovery prefers `navlyn.workspace.json`, then `.code-workspace`, then `.slnx`, then `.sln`, then `.csproj`:
+For local repositories with exactly one top-level workspace candidate, `auto` can discover the workspace. Discovery prefers `navlyn.workspace.json`, then `.code-workspace`, then `.slnx`, then `.sln`, then `.csproj` or `.vbproj`:
 
 ```json
 {
@@ -105,7 +105,7 @@ Local package smoke testing uses the standard .NET tool flow:
 
 ## Server Options
 
-- `--workspace <path|auto>`: required `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, or `.csproj` path, or `auto` to discover one top-level candidate from the working directory/repository root. Tool calls are locked to the resolved workspace.
+- `--workspace <path|auto>`: required `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `.vbproj` path, or `auto` to discover one top-level candidate from the working directory/repository root. Tool calls are locked to the resolved workspace.
 - `--workspace-root-policy <repo-relative|allow-listed|all>`: workspace folder policy for `navlyn.workspace.json` and `.code-workspace` expansion. Defaults to `repo-relative` for MCP.
 - `--navlyn-executable <command>`: legacy external Navlyn CLI command or executable. Omit for standalone in-process execution. Use only for compatibility, debugging, or development investigations.
 - `--navlyn-arg <arg>`: prefix argument passed before the CLI command on the legacy external path. Repeat for local development with `dotnet navlyn.dll`.
@@ -117,9 +117,9 @@ Local package smoke testing uses the standard .NET tool flow:
 
 The server writes MCP protocol messages to stdout. Logs and diagnostics go to stderr.
 
-`--workspace auto` considers top-level `navlyn.workspace.json`, then `.code-workspace`, then `.slnx`, then `.sln`, then `.csproj` files. It chooses a single candidate at the best available priority and fails safely if none exist or if multiple best-priority candidates exist. In multi-solution repositories, pass `--workspace` explicitly.
+`--workspace auto` considers top-level `navlyn.workspace.json`, then `.code-workspace`, then `.slnx`, then `.sln`, then `.csproj` or `.vbproj` files. It chooses a single candidate at the best available priority and fails safely if none exist or if multiple best-priority candidates exist. In multi-solution repositories, pass `--workspace` explicitly.
 
-When `navlyn.workspace.json` is passed explicitly or selected by `auto`, Navlyn applies its `primaryWorkspace`, `workspaceCandidates`, exclusion, test inclusion, root policy, allow-list, and cache-hint fields before loading the selected MSBuild workspace. When a `.code-workspace` file is passed explicitly or selected by `auto`, Navlyn reads its `folders` array and looks for `.slnx`, `.sln`, or `.csproj` candidates in each folder. It loads the single best candidate and returns `NAVLYN1106` if the VS Code workspace contains multiple best-priority candidates. Under MCP's default `repo-relative` root policy, outside-root folders return `NAVLYN1110`; use `allow-listed` or `all` only when that broader scope is intentional.
+When `navlyn.workspace.json` is passed explicitly or selected by `auto`, Navlyn applies its `primaryWorkspace`, `workspaceCandidates`, exclusion, test inclusion, root policy, allow-list, and cache-hint fields before loading the selected MSBuild workspace. When a `.code-workspace` file is passed explicitly or selected by `auto`, Navlyn reads its `folders` array and looks for `.slnx`, `.sln`, `.csproj`, or `.vbproj` candidates in each folder. It loads the single best candidate and returns `NAVLYN1106` if the VS Code workspace contains multiple best-priority candidates. Under MCP's default `repo-relative` root policy, outside-root folders return `NAVLYN1110`; use `allow-listed` or `all` only when that broader scope is intentional.
 
 ## Tool Profiles
 
@@ -146,10 +146,10 @@ The MCP surface is profile-gated and deliberately need-triggered. Prefer the spe
 | `navlyn_workspace_refresh` | Explicitly refresh the warm workspace snapshot and optionally clear/write the lightweight cache manifest | `workspace-refresh` |
 | `navlyn_resolve_target` | Standard first symbol entry from query, `candidateId`, or source position; returns one target envelope and next actions | `resolve-target` |
 | `navlyn_find_symbol` | Broader approximate symbol candidate lists and manual disambiguation | `find` |
-| `navlyn_file_outline` | Semantic outline of one known C# file, including reusable `candidateId` values | `outline` |
+| `navlyn_file_outline` | Semantic outline of one known C# or Visual Basic file, including reusable `candidateId` values | `outline` |
 | `navlyn_symbol_source` | Bounded source slices for one selected symbol by `candidateId` or exact source position | `symbol-source` |
 | `navlyn_symbol_edges` | Direct relationship edges for one selected symbol: references, callers, calls, or implementations | `references`, `callers`, `calls`, `implementations` |
-| `navlyn_inspect_file` | Compact semantic inspection of one known C# file without tests, impact, diagnostics, or raw file text | `outline` |
+| `navlyn_inspect_file` | Compact semantic inspection of one known C# or Visual Basic file without tests, impact, diagnostics, or raw file text | `outline` |
 | `navlyn_about_symbol` | Selected-symbol definition, member outline, reference summary, shallow relations | `about` |
 | `navlyn_related_files` | File-first investigation map around a selected symbol | `related` |
 | `navlyn_impact` | Static source impact before editing or reviewing a symbol | `impact` |
@@ -179,7 +179,7 @@ Decision rules for agents:
 
 1. Use `navlyn_doctor` first when setup, SDK, workspace loading, or first-command guidance is uncertain.
 2. Use `navlyn_workspace_summary(profile: "compact")` only when project, package, target framework, or test relationship context matters.
-3. For a known C# file, use `navlyn_file_outline` or `navlyn_inspect_file` and reuse entry `candidateId` values.
+3. For a known C# or Visual Basic file, use `navlyn_file_outline` or `navlyn_inspect_file` and reuse entry `candidateId` values.
 4. Resolve symbol intent with `navlyn_resolve_target(query: "...", assumeKind: "...")` and reuse `candidateId`.
 5. Use `navlyn_symbol_source` or `navlyn_symbol_edges` for one precise source or relationship fact before asking for broader context. `calls` is a cheap local outgoing-edge operation; `references` and `callers` are scoped expensive operations and should use `scope`/`maxDocuments` when broad.
 6. Before a concrete edit in `edit` profile, prefer `navlyn_edit_preflight`; after editing, run `navlyn_post_edit_guard` or `navlyn_wrong_symbol_guard` before widening scope.

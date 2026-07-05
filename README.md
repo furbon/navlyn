@@ -2,13 +2,13 @@
 
 日本語: [`README_ja.md`](README_ja.md)
 
-**Read-only C#/.NET semantic evidence for coding agents before they edit the wrong symbol.**
+**Read-only C#-first .NET semantic evidence for coding agents before they edit the wrong symbol, with Roslyn-backed Visual Basic support.**
 
-Coding agents are already good at changing code. The hard part in a C# repository is making sure the agent is changing the *right* code: the right overload, partial declaration, target framework, dependency-injection path, route handler, public API surface, and related tests.
+Coding agents are already good at changing code. The hard part in a C# repository, and in Roslyn-backed .NET source such as Visual Basic, is making sure the agent is changing the *right* code: the right overload, partial declaration, target framework, dependency-injection path, route handler, public API surface, and related tests.
 
 Text search can find `PaymentService`. Navlyn asks Roslyn and MSBuild what `PaymentService` actually is in this workspace, returns deterministic JSON, and gives the agent a stable target to keep using while it investigates.
 
-Think of Navlyn as a **C# edit preflight**:
+Think of Navlyn as a **C#-first edit preflight**:
 
 1. resolve the exact symbol the user meant;
 2. read only the bounded source and relationships that matter;
@@ -21,6 +21,8 @@ Navlyn ships as:
 - `navlyn-mcp`: a standalone stdio MCP server for MCP-capable coding agents and editors.
 
 Both are local, read-only, and facts-only. Navlyn does not edit files, run arbitrary shell commands, call the network, upload source, or maintain a hosted index.
+
+Navlyn's examples and positioning stay C#-first, but the same Roslyn/MSBuild command families also support Visual Basic projects and source files (`.vbproj` / `.vb`).
 
 ## Why It Exists
 
@@ -52,7 +54,7 @@ dotnet tool install navlyn-mcp --version 0.6.0
 dotnet tool restore
 ```
 
-First useful commands in your own C# repository:
+First useful commands in your own C# repository or Visual Basic project:
 
 ```powershell
 navlyn doctor --workspace path/to/YourRepo.slnx
@@ -78,7 +80,7 @@ Copyable setup shapes live in [`docs/navlyn-client-setup.md`](docs/navlyn-client
 
 **1. Anchor the target.**
 
-`resolve-target` turns fuzzy intent into one selected C# target when it can, plus alternatives and reason codes when it cannot. Follow-up commands can reuse the returned `candidateId`, so the investigation stays attached to the same Roslyn symbol instead of a later text match.
+`resolve-target` turns fuzzy intent into one selected source target when it can, plus alternatives and reason codes when it cannot. Follow-up commands can reuse the returned `candidateId`, so the investigation stays attached to the same Roslyn symbol instead of a later text match.
 
 **2. Gather just enough evidence.**
 
@@ -124,12 +126,12 @@ That is not runtime proof. It is a stable source-level anchor the agent can reus
 
 ## When To Use Navlyn
 
-Use normal file reads and `rg` first when text is enough. Reach for Navlyn when C# semantics, project context, or diff evidence would change the answer.
+Use normal file reads and `rg` first when text is enough. Reach for Navlyn when C# or Visual Basic semantics, project context, or diff evidence would change the answer.
 
 | Task | First Navlyn Call | Stop When |
 | --- | --- | --- |
 | Identify a symbol from an approximate name | `resolve-target --query PaymentService --assume-kind NamedType` | You have one high-confidence `candidateId`, or the candidates show the user must clarify. |
-| Inspect one known C# file | `outline --file src/Billing/PaymentService.cs` or MCP `navlyn_file_outline` | The outline or returned `candidateId` answers the question. |
+| Inspect one known C# or Visual Basic file | `outline --file src/Billing/PaymentService.cs` or MCP `navlyn_file_outline` | The outline or returned `candidateId` answers the question. |
 | Inspect relationships for a selected symbol | `references --candidate-id sym:v1:... --group-by file --limit 50` | The returned relationship facts answer the question. |
 | Plan a non-trivial edit | `edit-preflight --candidate-id sym:v1:... --goal modify` | The agent has an anchor, bounded evidence, known unknowns, and a post-edit guard command. |
 | Review an actual Git diff | `review-diff --profile evidence` | Changed symbols, diagnostics, impact, related tests, and warnings are available. |
@@ -138,7 +140,7 @@ Use normal file reads and `rg` first when text is enough. Reach for Navlyn when 
 ## What You Get
 
 - **Exact anchors for fuzzy intent**: `resolve-target` and `find` return confidence, alternatives, reason codes, and reusable `candidateId` values.
-- **File-first semantic reading**: outline one C# file, inspect a selected source slice, then ask for edges only when needed.
+- **File-first semantic reading**: outline one C# or Visual Basic file, inspect a selected source slice, then ask for edges only when needed.
 - **Workspace facts**: projects, target frameworks, packages, diagnostics, test relationships, generated-code policy, and repository structure.
 - **Source relationships**: definitions, references, usage kinds, callers, calls, implementations, type hierarchy, related files, entrypoints, and static impact.
 - **.NET application evidence**: ASP.NET Core routes/auth, DI registrations and consumers, options/configuration, MediatR handlers, EF Core model facts, package usage, and framework entrypoints.
@@ -148,7 +150,7 @@ Use normal file reads and `rg` first when text is enough. Reach for Navlyn when 
 
 ## MCP For Agents
 
-`navlyn-mcp` gives an agent C# semantic tools without giving Navlyn an edit surface or asking the agent to compose shell commands. Start narrow and widen only when the task needs it.
+`navlyn-mcp` gives an agent C#-first .NET semantic tools, including Visual Basic source support, without giving Navlyn an edit surface or asking the agent to compose shell commands. Start narrow and widen only when the task needs it.
 
 | Profile | Use It For |
 | --- | --- |
@@ -163,10 +165,10 @@ The boundary stays deliberately simple: stdio only, read-only, local-only, no ar
 
 | Tool | Use It For | Navlyn's Job |
 | --- | --- | --- |
-| `rg` and file reads | Comments, strings, Markdown, config, quick text probes | C# symbol identity, project context, and source-level relationships when text is ambiguous. |
+| `rg` and file reads | Comments, strings, Markdown, config, quick text probes | C# or Visual Basic symbol identity, project context, and source-level relationships when text is ambiguous. |
 | LSP / IDE | Interactive editing, rename, go-to-definition, editor diagnostics | Stable JSON facts for agents, CI, scripts, and MCP clients. |
 | Roslyn APIs / analyzers | Building custom compiler tooling | Ready-to-run read-only workflows without writing an analyzer. |
-| Generic code-search MCP | Cross-language or text-level repository search | C# MSBuild/Roslyn facts: target frameworks, symbols, references, DI, routes, tests, and review evidence. |
+| Generic code-search MCP | Cross-language or text-level repository search | C# and Visual Basic MSBuild/Roslyn facts: target frameworks, symbols, references, DI, routes, tests, and review evidence. |
 | Editing-oriented MCP servers | Inspecting and modifying code from one client | Client-neutral evidence with no edit surface. |
 | CI review bots | Publishing comments or pass/fail checks | Local review facts a human or agent can inspect before deciding what to say. |
 | Hosted code search | Cross-repository hosted indexing | Repository-local analysis without sending source to a hosted service. |
@@ -181,7 +183,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- edit-pref
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review-diff --workspace navlyn.slnx --base HEAD --head HEAD --profile compact --symbol-limit 3 --impact-limit 3 --diagnostic-limit 3 --related-test-limit 3
 ```
 
-The first command anchors a fuzzy name to a C# symbol. The second builds edit-preflight evidence for that target. The third shows the review envelope for an explicit Git range; replace the refs with PR refs, or omit them on a dirty branch.
+The first command anchors a fuzzy name to a C# symbol in this repo. The second builds edit-preflight evidence for that target. The third shows the review envelope for an explicit Git range; replace the refs with PR refs, or omit them on a dirty branch.
 
 More walkthroughs: [`docs/navlyn-demo-walkthroughs.md`](docs/navlyn-demo-walkthroughs.md).
 
@@ -189,7 +191,7 @@ More walkthroughs: [`docs/navlyn-demo-walkthroughs.md`](docs/navlyn-demo-walkthr
 
 Navlyn reports bounded source-level evidence. It does not prove runtime behavior, execute tests, scan secrets, decide SemVer, publish review comments, or replace human judgment.
 
-It also does not replace ordinary reading. If the question is about a comment, string, Markdown section, generated artifact, or non-C# file, use `rg` or read the file directly.
+It also does not replace ordinary reading. If the question is about a comment, string, Markdown section, generated artifact, or non-Roslyn-source file, use `rg` or read the file directly.
 
 Known limits are documented in [`docs/navlyn-limitations.md`](docs/navlyn-limitations.md). Performance and warm-cache behavior are documented in [`docs/navlyn-performance.md`](docs/navlyn-performance.md).
 

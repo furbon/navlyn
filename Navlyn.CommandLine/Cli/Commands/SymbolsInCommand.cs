@@ -26,7 +26,7 @@ internal static class SymbolsInCommand
 
         return WorkspaceCommand.Create(
             "symbols-in",
-            "List C# identifier symbols in a source line or column span.",
+            "List C# or Visual Basic identifier symbols in a source line or column span.",
             [fileOption, lineOption, startColumnOption, endColumnOption, projectOption, excludeGeneratedOption],
             (workspace, parseResult, cancellationToken) => ExecuteAsync(
                 workspace,

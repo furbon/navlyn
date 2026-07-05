@@ -91,7 +91,7 @@ The guard commands return deterministic JSON even when policy fails. Exit code `
 Check these first:
 
 - `dotnet restore` succeeds for the target repository.
-- The `--workspace` path points at the intended `.slnx`, `.sln`, `.csproj`, `.code-workspace`, or `navlyn.workspace.json`.
+- The `--workspace` path points at the intended `.slnx`, `.sln`, `.csproj`, `.vbproj`, `.code-workspace`, or `navlyn.workspace.json`.
 - `--workspace auto` is not ambiguous.
 - The selected project or target framework is the one the agent should reason about.
 - Generated or outside-root files are intentional and allowed by workspace policy.

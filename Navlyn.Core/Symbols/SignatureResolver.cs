@@ -1,6 +1,6 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Navlyn.Diagnostics;
+using Navlyn.Languages;
 
 namespace Navlyn.Symbols;
 
@@ -36,7 +36,7 @@ internal sealed class SignatureResolver
             .Select(location =>
             {
                 SyntaxNode root = location.SourceTree!.GetRoot(cancellationToken);
-                return FindDeclarationNode(root, source.Symbol, location);
+                return SourceLanguageFacts.FindDeclarationNode(root, source.Symbol, location);
             })
             .OfType<SyntaxNode>()];
 
@@ -59,7 +59,7 @@ internal sealed class SignatureResolver
                 : source.Symbol.DeclaredAccessibility.ToString(),
             Modifiers: GetModifiers(declarationNodes),
             TypeParameters: GetTypeParameters(source.Symbol),
-            GenericConstraints: GetGenericConstraints(declarationNodes),
+            GenericConstraints: GetGenericConstraints(source.Symbol),
             Parameters: source.Symbol is IMethodSymbol method
                 ? [.. method.Parameters.Select(CreateParameter)]
                 : source.Symbol is IPropertySymbol { IsIndexer: true } indexer
@@ -85,7 +85,7 @@ internal sealed class SignatureResolver
                     .OrderBy(item => item, StringComparer.Ordinal)]
                 : null,
             DeclarationCount: declarations.Count,
-            IsPartial: declarationNodes.Any(IsPartialDeclaration) || declarations.Count > 1,
+            IsPartial: declarationNodes.Any(SourceLanguageFacts.IsPartialDeclaration) || declarations.Count > 1,
             Declarations: declarations);
 
         return SignatureResolutionResult.Succeeded(new SignatureResolution(
@@ -96,50 +96,12 @@ internal sealed class SignatureResolver
             apiShape));
     }
 
-    private static SyntaxNode? FindDeclarationNode(SyntaxNode root, ISymbol symbol, Location location)
-    {
-        SyntaxNode node = root.FindNode(location.SourceSpan, getInnermostNodeForTie: true);
-        IEnumerable<SyntaxNode> candidates = node.AncestorsAndSelf();
-        return symbol switch
-        {
-            INamedTypeSymbol { TypeKind: TypeKind.Delegate } => candidates.OfType<DelegateDeclarationSyntax>().FirstOrDefault(),
-            INamedTypeSymbol { TypeKind: TypeKind.Enum } => candidates.OfType<EnumDeclarationSyntax>().FirstOrDefault(),
-            INamedTypeSymbol => candidates.OfType<TypeDeclarationSyntax>().FirstOrDefault(),
-            IMethodSymbol { MethodKind: MethodKind.Constructor or MethodKind.StaticConstructor } => candidates.OfType<ConstructorDeclarationSyntax>().FirstOrDefault(),
-            IMethodSymbol { MethodKind: MethodKind.LocalFunction } => candidates.OfType<LocalFunctionStatementSyntax>().FirstOrDefault(),
-            IMethodSymbol => candidates.OfType<MethodDeclarationSyntax>().FirstOrDefault<SyntaxNode>() ?? candidates.OfType<OperatorDeclarationSyntax>().FirstOrDefault<SyntaxNode>(),
-            IPropertySymbol { IsIndexer: true } => candidates.OfType<IndexerDeclarationSyntax>().FirstOrDefault(),
-            IPropertySymbol => candidates.OfType<PropertyDeclarationSyntax>().FirstOrDefault(),
-            IEventSymbol => candidates.OfType<EventDeclarationSyntax>().FirstOrDefault<SyntaxNode>() ?? candidates.OfType<EventFieldDeclarationSyntax>().FirstOrDefault<SyntaxNode>(),
-            IFieldSymbol => candidates.OfType<FieldDeclarationSyntax>().FirstOrDefault(),
-            _ => null
-        };
-    }
-
     private static IReadOnlyList<string> GetModifiers(IReadOnlyList<SyntaxNode> declarations)
     {
         return [.. declarations
-            .SelectMany(node => GetModifierTokens(node).Select(token => token))
-            .Select(token => token.ValueText)
+            .SelectMany(SourceLanguageFacts.GetModifierTexts)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)];
-    }
-
-    private static SyntaxTokenList GetModifierTokens(SyntaxNode node)
-    {
-        return node switch
-        {
-            TypeDeclarationSyntax declaration => declaration.Modifiers,
-            DelegateDeclarationSyntax declaration => declaration.Modifiers,
-            EnumDeclarationSyntax declaration => declaration.Modifiers,
-            BaseMethodDeclarationSyntax declaration => declaration.Modifiers,
-            PropertyDeclarationSyntax declaration => declaration.Modifiers,
-            IndexerDeclarationSyntax declaration => declaration.Modifiers,
-            EventDeclarationSyntax declaration => declaration.Modifiers,
-            EventFieldDeclarationSyntax declaration => declaration.Modifiers,
-            FieldDeclarationSyntax declaration => declaration.Modifiers,
-            _ => default
-        };
     }
 
     private static IReadOnlyList<string>? GetTypeParameters(ISymbol symbol)
@@ -155,20 +117,48 @@ internal sealed class SignatureResolver
         return names.Length == 0 ? null : names;
     }
 
-    private static IReadOnlyList<string>? GetGenericConstraints(IReadOnlyList<SyntaxNode> declarations)
+    private static IReadOnlyList<string>? GetGenericConstraints(ISymbol symbol)
     {
-        string[] constraints = [.. declarations
-            .SelectMany(node => node switch
-            {
-                TypeDeclarationSyntax type => type.ConstraintClauses.Select(clause => clause.ToString()),
-                MethodDeclarationSyntax method => method.ConstraintClauses.Select(clause => clause.ToString()),
-                LocalFunctionStatementSyntax local => local.ConstraintClauses.Select(clause => clause.ToString()),
-                _ => []
-            })
+        IEnumerable<ITypeParameterSymbol> parameters = symbol switch
+        {
+            INamedTypeSymbol type => type.TypeParameters,
+            IMethodSymbol method => method.TypeParameters,
+            _ => []
+        };
+
+        string[] constraints = [.. parameters
+            .Select(CreateConstraintText)
+            .Where(value => value is not null)
+            .OfType<string>()
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)];
 
         return constraints.Length == 0 ? null : constraints;
+    }
+
+    private static string? CreateConstraintText(ITypeParameterSymbol parameter)
+    {
+        List<string> constraints = [];
+        if (parameter.HasReferenceTypeConstraint)
+        {
+            constraints.Add("class");
+        }
+
+        if (parameter.HasValueTypeConstraint)
+        {
+            constraints.Add("struct");
+        }
+
+        constraints.AddRange(parameter.ConstraintTypes
+            .Select(type => type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat))
+            .OrderBy(value => value, StringComparer.Ordinal));
+
+        if (parameter.HasConstructorConstraint)
+        {
+            constraints.Add("new()");
+        }
+
+        return constraints.Count == 0 ? null : $"{parameter.Name}: {string.Join(", ", constraints)}";
     }
 
     private static SignatureParameterShape CreateParameter(IParameterSymbol parameter)
@@ -215,10 +205,6 @@ internal sealed class SignatureResolver
         return values.Length == 0 ? null : values;
     }
 
-    private static bool IsPartialDeclaration(SyntaxNode node)
-    {
-        return GetModifierTokens(node).Any(token => token.ValueText == "partial");
-    }
 }
 
 internal sealed record SignatureResolutionResult(SignatureResolution? Resolution, SymbolNavigationError? Error)

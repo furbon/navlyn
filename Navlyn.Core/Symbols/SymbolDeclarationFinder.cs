@@ -1,6 +1,6 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Navlyn.GeneratedCode;
+using Navlyn.Languages;
 using Navlyn.Paths;
 
 namespace Navlyn.Symbols;
@@ -52,7 +52,7 @@ internal sealed class SymbolDeclarationFinder
                 continue;
             }
 
-            foreach (SyntaxNode node in root.DescendantNodes().Where(IsDeclarationNode))
+            foreach (SyntaxNode node in root.DescendantNodes().Where(SourceLanguageFacts.IsDeclarationNode))
             {
                 AddDeclaration(document.Project, semanticModel, node, isNameMatch, declarations, cancellationToken);
             }
@@ -76,7 +76,7 @@ internal sealed class SymbolDeclarationFinder
     {
         return projects
             .SelectMany(project => project.Documents
-                .Where(document => document.SupportsSyntaxTree)
+                .Where(SourceLanguageFacts.IsSupportedDocument)
                 .Where(document => !excludeGenerated || !GeneratedCodeFacts.IsGeneratedPath(document.FilePath))
                 .OrderBy(document => document.FilePath, StringComparer.Ordinal)
                 .ThenBy(document => document.Name, StringComparer.Ordinal));
@@ -127,24 +127,6 @@ internal sealed class SymbolDeclarationFinder
             EndColumn: lineSpan.EndLinePosition.Character + 1));
     }
 
-    private static bool IsDeclarationNode(SyntaxNode node)
-    {
-        return node is BaseTypeDeclarationSyntax
-            or BaseNamespaceDeclarationSyntax
-            or DelegateDeclarationSyntax
-            or EnumMemberDeclarationSyntax
-            or BaseMethodDeclarationSyntax
-            or LocalFunctionStatementSyntax
-            or PropertyDeclarationSyntax
-            or IndexerDeclarationSyntax
-            or EventDeclarationSyntax
-            or UsingDirectiveSyntax
-            or VariableDeclaratorSyntax
-            or ForEachStatementSyntax
-            or ParameterSyntax
-            or TypeParameterSyntax
-            or SingleVariableDesignationSyntax;
-    }
 }
 
 internal sealed record SymbolDeclaration(

@@ -179,7 +179,7 @@ When publishing through GitHub Actions, use the guarded manual workflow with the
 
 ### Focused Fixture Validation
 
-Use focused fixture scripts for behavior that depends on controlled C# source layouts or MSBuild workspace context:
+Use focused fixture scripts for behavior that depends on controlled C# or Visual Basic source layouts or MSBuild workspace context:
 
 ```powershell
 ./scripts/test-symbol-navigation.ps1 -NoBuild
@@ -266,7 +266,7 @@ If unexpected files change while work is in progress, preserve them. If they aff
 
 ## Practical Agent Workflow Review
 
-Navlyn exists to be used by agents and automation on real C#/.NET repositories. Before closing a command change, review whether the current command set lets an agent avoid broad text search for semantic questions.
+Navlyn exists to be used by agents and automation on real C#-first .NET repositories, with Visual Basic support through Roslyn/MSBuild. Before closing a command change, review whether the current command set lets an agent avoid broad text search for semantic questions.
 
 Use this review when scoping follow-up work:
 
@@ -277,7 +277,7 @@ Use this review when scoping follow-up work:
 - Do symbol results include enough facts for an agent to choose between overloads, generic methods, constructors, extension methods, operators, indexers, nested types, and partial declarations?
 - Does the behavior remain clear for multi-targeting, conditional compilation, linked files, generated code, and metadata-only symbols?
 - Can the same workflow run efficiently through `batch`, including any new command or option?
-- Is the command still complementing text search rather than trying to answer comments, string literals, docs, or non-C# source questions?
+- Is the command still complementing text search rather than trying to answer comments, string literals, docs, or non-Roslyn-source questions?
 
 ## Command Implementation Checklist
 

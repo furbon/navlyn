@@ -1,8 +1,7 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using Navlyn.Diagnostics;
+using Navlyn.Languages;
 using Navlyn.Paths;
 using Navlyn.Workspaces;
 
@@ -42,7 +41,7 @@ internal sealed class ScopeAtResolver
         {
             return ScopeAtResolutionResult.Failed(
                 DiagnosticIds.SymbolNotFoundAtPosition,
-                $"No C# syntax found at {sourceDocument.DisplayPath}:{line}:{column}.",
+                $"No supported source syntax found at {sourceDocument.DisplayPath}:{line}:{column}.",
                 ExitCodes.UsageError);
         }
 
@@ -52,7 +51,7 @@ internal sealed class ScopeAtResolver
         {
             return ScopeAtResolutionResult.Failed(
                 DiagnosticIds.SymbolNotFoundAtPosition,
-                $"No C# syntax found at {sourceDocument.DisplayPath}:{line}:{column}.",
+                $"No supported source syntax found at {sourceDocument.DisplayPath}:{line}:{column}.",
                 ExitCodes.UsageError);
         }
 
@@ -95,24 +94,7 @@ internal sealed class ScopeAtResolver
         string projectName,
         CancellationToken cancellationToken)
     {
-        string kind = node switch
-        {
-            FileScopedNamespaceDeclarationSyntax => "Namespace",
-            NamespaceDeclarationSyntax => "Namespace",
-            TypeDeclarationSyntax => "Type",
-            DelegateDeclarationSyntax => "Delegate",
-            EnumDeclarationSyntax => "Enum",
-            BaseMethodDeclarationSyntax => "Member",
-            PropertyDeclarationSyntax => "Member",
-            IndexerDeclarationSyntax => "Member",
-            EventDeclarationSyntax => "Member",
-            EventFieldDeclarationSyntax => "Member",
-            FieldDeclarationSyntax => "Field",
-            LocalFunctionStatementSyntax => "LocalFunction",
-            AnonymousFunctionExpressionSyntax => "Lambda",
-            GlobalStatementSyntax => "TopLevelStatement",
-            _ => string.Empty
-        };
+        string kind = SourceLanguageFacts.GetScopeFrameKind(node) ?? "";
 
         if (kind.Length == 0)
         {
@@ -134,7 +116,7 @@ internal sealed class ScopeAtResolver
 
         return new ScopeFrame(
             Kind: kind,
-            SyntaxKind: node.Kind().ToString(),
+            SyntaxKind: SourceLanguageFacts.GetSyntaxKindName(node),
             Path: PathDisplay.FromCurrentDirectory(lineSpan.Path),
             Line: lineSpan.StartLinePosition.Line + 1,
             Column: lineSpan.StartLinePosition.Character + 1,

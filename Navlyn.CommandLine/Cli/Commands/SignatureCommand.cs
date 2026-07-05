@@ -12,7 +12,7 @@ internal static class SignatureCommand
     {
         return SourcePositionCommand.Create(
             "signature",
-            "Return API shape facts for the C# symbol at a source position.",
+            "Return API shape facts for the C# or Visual Basic symbol at a source position.",
             ExecuteAsync);
     }
 

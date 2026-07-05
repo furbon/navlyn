@@ -38,7 +38,7 @@ internal static class SymbolsCommand
 
         return WorkspaceCommand.Create(
             "symbols",
-            "Find C# symbol declarations by name.",
+            "Find C# or Visual Basic symbol declarations by name.",
             [
                 queryOption,
                 matchOption,

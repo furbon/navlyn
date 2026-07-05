@@ -12,7 +12,7 @@ internal static class ScopeAtCommand
     {
         return SourcePositionCommand.Create(
             "scope-at",
-            "Return enclosing C# scope facts at a source position.",
+            "Return enclosing C# or Visual Basic scope facts at a source position.",
             ExecuteAsync);
     }
 

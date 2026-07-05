@@ -25,7 +25,7 @@ internal static class SymbolSourceCommand
 
         return SourcePositionCommand.Create(
             "symbol-source",
-            "Return bounded source slices for the C# symbol at a source position.",
+            "Return bounded source slices for the C# or Visual Basic symbol at a source position.",
             [viewOption, maxLinesOption, budgetTokensOption],
             (workspace, options, parseResult, cancellationToken) => ExecuteAsync(
                 workspace,

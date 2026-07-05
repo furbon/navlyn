@@ -2,13 +2,13 @@
 
 English: [`README.md`](README.md)
 
-**Navlyn は、C#/.NET リポジトリを触るコーディングエージェントのための、読み取り専用の意味情報レイヤーです。**
+**Navlyn は、C# を主役にした .NET リポジトリを触るコーディングエージェントのための、読み取り専用の意味情報レイヤーです。Roslyn 経由で Visual Basic にも対応します。**
 
-エージェントはもう、コードを書くこと自体はかなり得意です。難しいのは、その編集対象が本当に正しいかを見極めることです。C# のリポジトリでは、オーバーロード、部分クラス、対象フレームワーク、DI 登録、ルートハンドラー、公開 API、関連テストなどが絡み、文字列検索だけでは判断しきれない場面がよくあります。
+エージェントはもう、コードを書くこと自体はかなり得意です。難しいのは、その編集対象が本当に正しいかを見極めることです。C# のリポジトリや Roslyn が読み込める Visual Basic ソースでは、オーバーロード、部分クラス、対象フレームワーク、DI 登録、ルートハンドラー、公開 API、関連テストなどが絡み、文字列検索だけでは判断しきれない場面がよくあります。
 
 `PaymentService` という文字列は `rg` で見つかります。Navlyn は、その `PaymentService` がこのワークスペースではどの Roslyn シンボルなのかを確認し、後続の調査で使い回せる安定した JSON として返します。
 
-イメージとしては、C# の編集前に入れる **事前確認** です。
+イメージとしては、C# を主役にした編集前の **事前確認** です。
 
 1. ユーザーが意図したシンボルを特定する。
 2. 必要なソースと関係だけを、上限付きで読む。
@@ -21,6 +21,8 @@ Navlyn には 2 つの入口があります。
 - `navlyn-mcp`: MCP 対応のエージェントやエディタから使う、スタンドアロンの stdio MCP サーバー。
 
 どちらもローカルで動く読み取り専用ツールです。ファイル編集、任意の shell 実行、ネットワークアクセス、ソースのアップロード、ホスト型インデックスは持ちません。
+
+説明や例は引き続き C# を中心にしていますが、同じ Roslyn/MSBuild ベースのコマンド群で Visual Basic のプロジェクトとソースファイル（`.vbproj` / `.vb`）も扱えます。
 
 ## なぜ必要か
 
@@ -52,7 +54,7 @@ dotnet tool install navlyn-mcp --version 0.6.0
 dotnet tool restore
 ```
 
-自分の C# リポジトリで最初に打つなら、このあたりからです。
+自分の C# リポジトリや Visual Basic プロジェクトで最初に打つなら、このあたりからです。
 
 ```powershell
 navlyn doctor --workspace path/to/YourRepo.slnx
@@ -78,7 +80,7 @@ MCP クライアントでは、まず狭い `reader` プロファイルから始
 
 **1. 対象を固定する。**
 
-`resolve-target` は、曖昧な名前から C# の対象を 1 つ選べる場合は選び、曖昧な場合は候補と理由を返します。返ってきた `candidateId` を後続コマンドで使えば、調査対象が「次にたまたま見つかった文字列」へずれるのを避けられます。
+`resolve-target` は、曖昧な名前からソース上の対象を 1 つ選べる場合は選び、曖昧な場合は候補と理由を返します。返ってきた `candidateId` を後続コマンドで使えば、調査対象が「次にたまたま見つかった文字列」へずれるのを避けられます。
 
 **2. 必要な証拠だけ集める。**
 
@@ -124,12 +126,12 @@ Navlyn では、最初に対象を固定します。
 
 ## いつ使うか
 
-コメント、文字列、Markdown、設定ファイルを見るだけなら、普通にファイルを読むか `rg` を使う方が速いです。C# の意味情報、プロジェクト文脈、diff の根拠が答えを変えるときに Navlyn を使ってください。
+コメント、文字列、Markdown、設定ファイルを見るだけなら、普通にファイルを読むか `rg` を使う方が速いです。C# または Visual Basic の意味情報、プロジェクト文脈、diff の根拠が答えを変えるときに Navlyn を使ってください。
 
 | やりたいこと | 最初の Navlyn 呼び出し | 止めどき |
 | --- | --- | --- |
 | 曖昧な名前からシンボルを特定する | `resolve-target --query PaymentService --assume-kind NamedType` | 高信頼の `candidateId` が 1 つ得られた、または候補からユーザー確認が必要だと分かったとき。 |
-| 既知の C# ファイルを見る | `outline --file src/Billing/PaymentService.cs` または MCP `navlyn_file_outline` | outline や返された `candidateId` で質問に答えられるとき。 |
+| 既知の C# または Visual Basic ファイルを見る | `outline --file src/Billing/PaymentService.cs` または MCP `navlyn_file_outline` | outline や返された `candidateId` で質問に答えられるとき。 |
 | 選択済みシンボルの関係を見る | `references --candidate-id sym:v1:... --group-by file --limit 50` | 返された関係情報で質問に答えられるとき。 |
 | 非自明な編集を計画する | `edit-preflight --candidate-id sym:v1:... --goal modify` | 対象、上限付き証拠、分かっていないこと、編集後の確認コマンドが揃ったとき。 |
 | 実際の Git diff をレビューする | `review-diff --profile evidence` | 変更シンボル、診断、影響、関連テスト、警告が見えたとき。 |
@@ -138,7 +140,7 @@ Navlyn では、最初に対象を固定します。
 ## 得られるもの
 
 - **曖昧な意図から正確な対象へ**: `resolve-target` と `find` は、信頼度、代替候補、理由コード、再利用できる `candidateId` を返します。
-- **ファイル単位から始める意味情報の読解**: 1 つの C# ファイルを outline し、選んだソース範囲を確認し、必要なときだけ関係をたどれます。
+- **ファイル単位から始める意味情報の読解**: 1 つの C# または Visual Basic ファイルを outline し、選んだソース範囲を確認し、必要なときだけ関係をたどれます。
 - **ワークスペース事実**: プロジェクト、対象フレームワーク、パッケージ、診断、テスト関係、生成コードポリシー、リポジトリ構造。
 - **ソース上の関係**: 定義、参照、利用種別、呼び出し元、呼び出し先、実装、型階層、関連ファイル、入口、静的な影響。
 - **.NET アプリケーションの証拠**: ASP.NET Core のルート/認可、DI 登録と利用側、options/configuration、MediatR handler、EF Core model、パッケージ利用、フレームワーク入口。
@@ -148,7 +150,7 @@ Navlyn では、最初に対象を固定します。
 
 ## MCP で使う
 
-`navlyn-mcp` は、エージェントに shell command を組み立てさせずに C# の意味情報を渡すための入口です。最初は狭く始め、必要になったときだけ広げます。
+`navlyn-mcp` は、エージェントに shell command を組み立てさせずに C# を主役にした .NET の意味情報を渡すための入口です。Visual Basic ソースも対象です。最初は狭く始め、必要になったときだけ広げます。
 
 | プロファイル | 使う場面 |
 | --- | --- |
@@ -163,10 +165,10 @@ Navlyn では、最初に対象を固定します。
 
 | ツール | 使う場面 | Navlyn の役割 |
 | --- | --- | --- |
-| `rg` と通常のファイル読み取り | コメント、文字列、Markdown、設定、素早いテキスト探索 | テキストだけでは曖昧なときの C# シンボル同一性、プロジェクト文脈、ソース上の関係。 |
+| `rg` と通常のファイル読み取り | コメント、文字列、Markdown、設定、素早いテキスト探索 | テキストだけでは曖昧なときの C# または Visual Basic シンボル同一性、プロジェクト文脈、ソース上の関係。 |
 | LSP / IDE | 対話的な編集、rename、定義ジャンプ、エディタ診断 | エージェント、CI、スクリプト、MCP クライアント向けの安定した JSON 事実。 |
 | Roslyn API / analyzer | 独自の compiler tooling やルール診断を作る | analyzer を書かずに使える読み取り専用ワークフロー。 |
-| 汎用 code-search MCP | 言語横断、またはテキストレベルのリポジトリ検索 | C# の MSBuild/Roslyn 由来の事実: 対象フレームワーク、シンボル、参照、DI、ルート、テスト、レビュー証拠。 |
+| 汎用 code-search MCP | 言語横断、またはテキストレベルのリポジトリ検索 | C# と Visual Basic の MSBuild/Roslyn 由来の事実: 対象フレームワーク、シンボル、参照、DI、ルート、テスト、レビュー証拠。 |
 | 編集機能を持つ MCP server | 1 つのクライアントで調査と編集を行う | 編集面を持たない、クライアント非依存の証拠。 |
 | CI review bot | コメント投稿や pass/fail check | 人間やエージェントが発言を決める前に見る、ローカルなレビュー事実。 |
 | ホスト型 code search | 複数リポジトリをまたぐ hosted index | ソースを外部サービスに送らない、リポジトリローカルの解析。 |
@@ -181,7 +183,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- edit-pref
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review-diff --workspace navlyn.slnx --base HEAD --head HEAD --profile compact --symbol-limit 3 --impact-limit 3 --diagnostic-limit 3 --related-test-limit 3
 ```
 
-1 つ目は曖昧な名前を C# シンボルへ固定します。2 つ目は、その対象を編集する前の証拠を作ります。3 つ目は、明示した Git 範囲のレビュー用 JSON を確認します。PR の ref に置き換えるか、dirty branch では ref 指定を省略できます。
+1 つ目は、このリポジトリ内の曖昧な名前を C# シンボルへ固定します。2 つ目は、その対象を編集する前の証拠を作ります。3 つ目は、明示した Git 範囲のレビュー用 JSON を確認します。PR の ref に置き換えるか、dirty branch では ref 指定を省略できます。
 
 詳しい walkthrough は [`docs/navlyn-demo-walkthroughs.md`](docs/navlyn-demo-walkthroughs.md) にあります。
 
@@ -189,7 +191,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review-di
 
 Navlyn は、上限付きのソースレベル証拠を返します。実行時挙動を証明せず、テストを実行せず、secret scan をせず、SemVer を決めず、レビューコメントを投稿せず、人間の判断を置き換えません。
 
-通常の読解も置き換えません。コメント、文字列、Markdown、生成物、C# 以外のファイルに関する質問なら、`rg` や通常のファイル読み取りを使ってください。
+通常の読解も置き換えません。コメント、文字列、Markdown、生成物、Roslyn ソースではないファイルに関する質問なら、`rg` や通常のファイル読み取りを使ってください。
 
 既知の制限は [`docs/navlyn-limitations.md`](docs/navlyn-limitations.md)、性能と warm cache の挙動は [`docs/navlyn-performance.md`](docs/navlyn-performance.md) にあります。
 

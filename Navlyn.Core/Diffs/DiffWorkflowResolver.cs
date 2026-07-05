@@ -4,6 +4,7 @@ using Navlyn.Symbols;
 using Navlyn.Testing;
 using Navlyn.Workspaces;
 using Microsoft.CodeAnalysis;
+using Navlyn.Languages;
 
 namespace Navlyn.Diffs;
 
@@ -642,7 +643,7 @@ internal sealed class DiffWorkflowResolver(IDiffProvider? diffProvider = null)
     private static DiagnosticsScopeSection CreateDiagnosticsScope(DiffSet diff, DiffImpactSection impact)
     {
         Dictionary<string, HashSet<string>> paths = new(StringComparer.Ordinal);
-        foreach (DiffFile file in diff.Files.Where(file => file.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)))
+        foreach (DiffFile file in diff.Files.Where(file => SourceLanguageFacts.IsSupportedSourceFile(file.Path)))
         {
             AddScope(paths, file.Path, "changed-file");
         }

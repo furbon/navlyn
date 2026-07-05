@@ -215,7 +215,7 @@ internal sealed record NavlynMcpServerOptions(
         builder.AppendLine("Usage: navlyn-mcp --workspace <path|auto> [options]");
         builder.AppendLine();
         builder.AppendLine("Options:");
-        builder.AppendLine("  --workspace <path|auto>        Required navlyn.workspace.json, .code-workspace, .slnx, .sln, or .csproj path, or auto to discover one.");
+        builder.AppendLine("  --workspace <path|auto>        Required navlyn.workspace.json, .code-workspace, .slnx, .sln, .csproj, or .vbproj path, or auto to discover one.");
         builder.AppendLine("  --navlyn-executable <command>  Legacy external Navlyn CLI command or executable. Omit for standalone in-process execution.");
         builder.AppendLine("  --navlyn-arg <arg>             Prefix argument for the legacy external CLI path, repeatable.");
         builder.AppendLine("  --working-directory <path>     Working directory for in-process execution or the legacy child process.");

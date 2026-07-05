@@ -30,6 +30,28 @@ public sealed class WorkspaceLoaderNavlynWorkspaceTests
     }
 
     [Fact]
+    public async Task LoadAsync_NavlynWorkspacePrimaryVisualBasicWorkspace_LoadsSelectedWorkspace()
+    {
+        string repoRoot = FindRepositoryRoot();
+        using TemporaryDirectory temp = TemporaryDirectory.CreateUnder(repoRoot);
+        string fixtureProject = Path.Combine(repoRoot, "tests", "fixtures", "VisualBasicFixture", "VisualBasicFixture.vbproj");
+        string navlynWorkspace = Path.Combine(temp.Path, "navlyn.workspace.json");
+        File.WriteAllText(navlynWorkspace, $$"""
+            {
+                "primaryWorkspace": "{{EscapeJson(fixtureProject)}}"
+            }
+            """);
+
+        WorkspaceLoadResult result = await new WorkspaceLoader().LoadAsync(new FileInfo(navlynWorkspace), CancellationToken.None);
+
+        Assert.Null(result.Error);
+        Assert.NotNull(result.Workspace);
+        using LoadedWorkspace workspace = result.Workspace;
+        Assert.Equal("project", workspace.Kind);
+        Assert.Equal("tests/fixtures/VisualBasicFixture/VisualBasicFixture.vbproj", workspace.DisplayPath);
+    }
+
+    [Fact]
     public async Task LoadAsync_NavlynWorkspaceInvalidSchema_ReturnsInvalidWorkspaceError()
     {
         using TemporaryDirectory temp = TemporaryDirectory.Create();

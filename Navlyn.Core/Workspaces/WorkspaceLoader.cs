@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.MSBuild;
 using Navlyn.Diagnostics;
+using Navlyn.Languages;
 using Navlyn.Paths;
 using System.IO.Enumeration;
 using System.Text.Json;
@@ -165,7 +166,7 @@ internal sealed class WorkspaceLoader
             includeNavlynWorkspace: true);
         if (candidates.Count == 0)
         {
-            error = $"--workspace auto could not find a navlyn.workspace.json, .code-workspace, .slnx, .sln, or .csproj in {fullSearchDirectory}.";
+            error = $"--workspace auto could not find a {SourceLanguageFacts.WorkspaceExtensionDisplay} in {fullSearchDirectory}.";
             return false;
         }
 
@@ -190,7 +191,7 @@ internal sealed class WorkspaceLoader
         return Path.GetExtension(workspacePath).ToLowerInvariant() switch
         {
             ".slnx" or ".sln" => "solution",
-            ".csproj" => "project",
+            ".csproj" or ".vbproj" => "project",
             _ => null
         };
     }
@@ -232,7 +233,7 @@ internal sealed class WorkspaceLoader
         {
             throw new CodeWorkspaceException(
                 DiagnosticIds.InvalidWorkspaceExtension,
-                "Workspace must be a navlyn.workspace.json, .code-workspace, .slnx, .sln, or .csproj file.");
+                $"Workspace must be a {SourceLanguageFacts.WorkspaceExtensionDisplay} file.");
         }
 
         return new WorkspacePathResolution(Path.GetFullPath(workspacePath), workspaceKind, []);
@@ -296,7 +297,7 @@ internal sealed class WorkspaceLoader
         {
             throw new CodeWorkspaceException(
                 DiagnosticIds.CodeWorkspaceNoCandidates,
-                $"VS Code workspace did not contain a .slnx, .sln, or .csproj candidate: {fullPath}");
+                $"VS Code workspace did not contain a {SourceLanguageFacts.SolutionProjectExtensionDisplay} candidate: {fullPath}");
         }
 
         int bestRank = candidates.Min(candidate => candidate.Rank);
@@ -317,7 +318,7 @@ internal sealed class WorkspaceLoader
         {
             throw new CodeWorkspaceException(
                 DiagnosticIds.InvalidWorkspaceExtension,
-                "Workspace must be a .slnx, .sln, or .csproj file.");
+                $"Workspace must be a {SourceLanguageFacts.SolutionProjectExtensionDisplay} file.");
         }
 
         return new WorkspacePathResolution(selectedWorkspace, workspaceKind, diagnostics);
@@ -402,7 +403,7 @@ internal sealed class WorkspaceLoader
         {
             throw new CodeWorkspaceException(
                 DiagnosticIds.NavlynWorkspaceNoCandidates,
-                $"Navlyn workspace did not contain a .code-workspace, .slnx, .sln, or .csproj candidate: {fullPath}");
+                $"Navlyn workspace did not contain a .code-workspace, {SourceLanguageFacts.SolutionProjectExtensionDisplay} candidate: {fullPath}");
         }
 
         int bestRank = candidates.Min(candidate => candidate.Rank);
@@ -444,7 +445,7 @@ internal sealed class WorkspaceLoader
         {
             throw new CodeWorkspaceException(
                 DiagnosticIds.InvalidWorkspaceExtension,
-                "Workspace must be a .code-workspace, .slnx, .sln, or .csproj file.");
+                $"Workspace must be a .code-workspace, {SourceLanguageFacts.SolutionProjectExtensionDisplay} file.");
         }
 
         return new WorkspacePathResolution(Path.GetFullPath(selectedWorkspace), workspaceKind, diagnostics);
@@ -580,7 +581,7 @@ internal sealed class WorkspaceLoader
             (includeCodeWorkspace && extension.Equals(".code-workspace", StringComparison.OrdinalIgnoreCase)) ||
             extension.Equals(".slnx", StringComparison.OrdinalIgnoreCase) ||
             extension.Equals(".sln", StringComparison.OrdinalIgnoreCase) ||
-            extension.Equals(".csproj", StringComparison.OrdinalIgnoreCase);
+            SourceLanguageFacts.IsSupportedProjectFile(path);
     }
 
     private static bool IsNavlynWorkspaceFile(string path)

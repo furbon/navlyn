@@ -2,7 +2,7 @@
 
 Navlyn is intentionally a local, read-only, source-level evidence tool. These limits are part of the product contract, not footnotes. They are listed here so agents, automation, and human reviewers know when to trust Navlyn and when to ask for another kind of proof.
 
-Short version: Navlyn is strong at C# source identity and bounded Roslyn/MSBuild facts. It is not a runtime, security, package-compatibility, or editing authority.
+Short version: Navlyn is strong at C# source identity, supports Visual Basic through Roslyn/MSBuild, and reports bounded source facts. It is not a runtime, security, package-compatibility, or editing authority.
 
 ## Current Limits
 
@@ -33,7 +33,7 @@ Include:
 
 - Navlyn version and install source;
 - OS and .NET SDK;
-- workspace kind: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `auto`;
+- workspace kind: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, `.vbproj`, or `auto`;
 - command or MCP tool name with arguments;
 - stdout JSON and stderr diagnostics;
 - whether the issue is semantic correctness, tool selection, performance, packaging, or documentation;

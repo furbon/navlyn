@@ -17,7 +17,7 @@ internal static class ResolveTargetCommand
         Option<string?> candidateIdOption = FuzzyCommandSupport.CreateCandidateIdOption();
         Option<FileInfo?> fileOption = new("--file")
         {
-            Description = "Path to a C# source file in the workspace."
+            Description = "Path to a C# or Visual Basic source file in the workspace."
         };
         Option<int?> lineOption = new("--line")
         {

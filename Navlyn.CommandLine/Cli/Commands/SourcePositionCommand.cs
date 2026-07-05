@@ -111,7 +111,7 @@ internal static class SourcePositionCommand
     {
         return new Option<FileInfo?>("--file")
         {
-            Description = "Path to a C# source file in the workspace."
+            Description = "Path to a C# or Visual Basic source file in the workspace."
         };
     }
 

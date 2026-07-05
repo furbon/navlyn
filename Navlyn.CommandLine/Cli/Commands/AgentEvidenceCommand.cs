@@ -32,7 +32,7 @@ internal static class AgentEvidenceCommand
 
         return WorkspaceCommand.Create(
             "edit-preflight",
-            "Create a semantic pre-edit evidence envelope for one intended C# target.",
+            "Create a semantic pre-edit evidence envelope for one intended C# or Visual Basic target.",
             [.. target.Options, goalOption, changeKindOption, budgetTokensOption, itemLimitOption, referenceLimitOption, testLimitOption],
             async (workspace, parseResult, cancellationToken) =>
             {
@@ -134,7 +134,7 @@ internal static class AgentEvidenceCommand
 
         return WorkspaceCommand.Create(
             "wrong-symbol-guard",
-            "Compare intended C# target intent with changed symbols and report wrong-symbol risk.",
+            "Compare intended C# or Visual Basic target intent with changed symbols and report wrong-symbol risk.",
             [.. target.Options, baseOption, headOption, stagedOption, includeUnstagedOption, symbolLimitOption, failOnRiskOption],
             async (workspace, parseResult, cancellationToken) =>
             {
@@ -861,7 +861,7 @@ internal static class AgentEvidenceCommand
         return new AgentTargetOptions(
             new Option<string?>("--query") { Description = "Approximate symbol query." },
             FuzzyCommandSupport.CreateCandidateIdOption(),
-            new Option<FileInfo?>("--file") { Description = "Path to a C# source file in the workspace." },
+            new Option<FileInfo?>("--file") { Description = "Path to a C# or Visual Basic source file in the workspace." },
             new Option<int?>("--line") { Description = "1-based source line." },
             new Option<int?>("--column") { Description = "1-based source column." },
             FuzzyCommandSupport.CreateAssumeKindOption(),

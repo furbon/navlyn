@@ -11,7 +11,7 @@
     "primaryWorkspace": {
       "type": "string",
       "minLength": 1,
-      "description": "Preferred .code-workspace, .slnx, .sln, or .csproj path. Relative paths resolve from navlyn.workspace.json."
+      "description": "Preferred .code-workspace, .slnx, .sln, .csproj, or .vbproj path. Relative paths resolve from navlyn.workspace.json."
     },
     "workspaceCandidates": {
       "type": "array",

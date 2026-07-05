@@ -17,7 +17,7 @@ internal static class ImplementationsCommand
 
         return SourcePositionCommand.Create(
             "implementations",
-            "Find source implementations for the C# symbol at a source position.",
+            "Find source implementations for the C# or Visual Basic symbol at a source position.",
             [resultProjectOption, resultPathOption, resultKindOption, limitOption],
             (workspace, options, parseResult, cancellationToken) => ExecuteAsync(
                 workspace,

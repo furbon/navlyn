@@ -71,7 +71,7 @@ internal sealed class SourceSymbolResolver
     {
         return SourceSymbolResolutionResult.Failed(
             DiagnosticIds.SymbolNotFoundAtPosition,
-            $"No C# symbol found at {displayPath}:{line}:{column}.",
+            $"No supported source symbol found at {displayPath}:{line}:{column}.",
             ExitCodes.UsageError);
     }
 

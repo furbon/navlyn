@@ -10,15 +10,15 @@
     <ToolCommandName>navlyn-mcp</ToolCommandName>
     <Version>0.6.0</Version>
     <Authors>furbon.tech</Authors>
-    <Description>Read-only MCP server that gives coding agents C#/.NET semantic evidence before they edit.</Description>
+    <Description>Read-only MCP server that gives coding agents C#-first .NET semantic evidence, with Visual Basic support, before they edit.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>navlyn-icon.png</PackageIcon>
-    <PackageTags>dotnet-tool;csharp;dotnet;roslyn;mcp;mcp-server;ai-agents;semantic-code-navigation;automation</PackageTags>
+    <PackageTags>dotnet-tool;csharp;visual-basic;dotnet;roslyn;mcp;mcp-server;ai-agents;semantic-code-navigation;automation</PackageTags>
     <RepositoryUrl>https://github.com/furbon/navlyn</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/furbon/navlyn</PackageProjectUrl>
-    <PackageReleaseNotes>0.6.0 sharpens MCP-first C# agent workflows with reader/review/edit guidance, wrong-symbol edit preflight and post-edit evidence recipes, expanded eval and performance docs, stabilized multi-target validation, and synchronized package/release identity.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.6.0 sharpens MCP-first C# agent workflows, adds Roslyn-backed Visual Basic source support, expands reader/review/edit guidance, wrong-symbol edit preflight and post-edit evidence recipes, eval and performance docs, multi-target validation, and package/release identity.</PackageReleaseNotes>
     <Copyright>Copyright (c) 2026 furbon.tech</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>

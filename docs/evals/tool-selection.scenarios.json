@@ -133,7 +133,7 @@
     },
     {
       "id": "known-file-inspection",
-      "prompt": "Inspect this known C# file before deciding if more facts are needed.",
+      "prompt": "Inspect this known C# or Visual Basic file before deciding if more facts are needed.",
       "profile": "reader",
       "expectedFirstSteps": [ "navlyn_file_outline", "navlyn_inspect_file", "outline" ],
       "avoidTools": [ "navlyn_batch", "navlyn_review_diff", "navlyn_tests_for_diff", "navlyn_public_api_diff", "navlyn_di_impact" ],

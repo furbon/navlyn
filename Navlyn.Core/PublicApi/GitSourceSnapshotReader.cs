@@ -2,6 +2,7 @@
 using System.Text;
 using Navlyn.Diagnostics;
 using Navlyn.GeneratedCode;
+using Navlyn.Languages;
 using Navlyn.Paths;
 
 namespace Navlyn.PublicApi;
@@ -25,7 +26,7 @@ internal sealed class GitSourceSnapshotReader
 
         List<GitSourceFile> files = [];
         foreach (string path in filesResult.Stdout.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
-            .Where(path => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            .Where(SourceLanguageFacts.IsSupportedSourceFile)
             .Where(path => !IsBuildOutputPath(path))
             .Where(path => !excludeGenerated || !GeneratedCodeFacts.IsGeneratedPath(path))
             .OrderBy(path => path, StringComparer.Ordinal))
@@ -54,7 +55,7 @@ internal sealed class GitSourceSnapshotReader
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Select(path => path!)
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Where(path => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            .Where(SourceLanguageFacts.IsSupportedSourceFile)
             .Where(path => File.Exists(path))
             .Where(path => !IsBuildOutputPath(PathDisplay.FromCurrentDirectory(path)))
             .Where(path => !excludeGenerated || !GeneratedCodeFacts.IsGeneratedPath(path))

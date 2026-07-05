@@ -12,7 +12,7 @@ internal static class NavigationResultOptions
     {
         return new Option<string[]>("--result-project")
         {
-            Description = "Restrict result locations to a project name or repository-relative .csproj path. Can be specified more than once.",
+            Description = "Restrict result locations to a project name or repository-relative .csproj/.vbproj path. Can be specified more than once.",
             AllowMultipleArgumentsPerToken = true
         };
     }

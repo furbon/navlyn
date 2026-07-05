@@ -18,7 +18,7 @@ internal static class CallsCommand
 
         return SourcePositionCommand.Create(
             "calls",
-            "Find source callees from the containing C# member at a source position.",
+            "Find source callees from the containing C# or Visual Basic member at a source position.",
             [resultProjectOption, resultPathOption, resultKindOption, limitOption, includeMetadataOption],
             (workspace, options, parseResult, cancellationToken) => ExecuteAsync(
                 workspace,

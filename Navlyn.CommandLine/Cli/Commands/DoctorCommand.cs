@@ -11,7 +11,7 @@ internal static class DoctorCommand
     {
         Option<FileInfo?> workspaceOption = new("--workspace")
         {
-            Description = "Path to a navlyn.workspace.json, .code-workspace, .slnx, .sln, or .csproj workspace, or auto. Defaults to auto."
+            Description = "Path to a navlyn.workspace.json, .code-workspace, .slnx, .sln, .csproj, or .vbproj workspace, or auto. Defaults to auto."
         };
         Option<string?> workspaceRootPolicyOption = SharedOptions.CreateWorkspaceRootPolicyOption();
         Option<string> formatOption = new("--format")
@@ -130,7 +130,7 @@ internal static class DoctorCommand
                 $"navlyn edit-preflight --workspace {QuoteWorkspace(loadedWorkspace?.DisplayPath ?? workspaceInputText)} --query <SymbolName> --goal \"describe the intended edit\" --change-kind behavior"
             ],
             NextAction: workspaceOk
-                ? "Resolve one intended C# symbol with navlyn resolve-target, then gather bounded evidence before editing."
+                ? "Resolve one intended C# or Visual Basic symbol with navlyn resolve-target, then gather bounded evidence before editing."
                 : GetWorkspaceRepairHint(loadResult.Error!.DiagnosticId, workspaceInputText));
 
         ConsoleJsonWriter.Write(result);
@@ -215,7 +215,7 @@ internal static class DoctorCommand
         return diagnosticId switch
         {
             DiagnosticIds.WorkspaceNotFound => $"Check the path '{workspaceInput}' or pass --workspace auto from the repository root.",
-            DiagnosticIds.InvalidWorkspaceExtension => "Pass a navlyn.workspace.json, .code-workspace, .slnx, .sln, .csproj, or auto workspace.",
+            DiagnosticIds.InvalidWorkspaceExtension => "Pass a navlyn.workspace.json, .code-workspace, .slnx, .sln, .csproj, .vbproj, or auto workspace.",
             DiagnosticIds.AmbiguousCodeWorkspace or DiagnosticIds.AmbiguousNavlynWorkspace or DiagnosticIds.InvalidWorkspacePath => "Pass --workspace explicitly or set primaryWorkspace in navlyn.workspace.json.",
             DiagnosticIds.MSBuildRegistrationFailed => "Install a compatible .NET SDK or repair MSBuild discovery.",
             DiagnosticIds.WorkspaceFailureDiagnostics or DiagnosticIds.WorkspaceLoadFailed => "Run dotnet restore/build and inspect MSBuild diagnostics for the workspace.",

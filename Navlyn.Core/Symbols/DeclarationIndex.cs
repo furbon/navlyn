@@ -1,8 +1,8 @@
 ﻿using System.Runtime.CompilerServices;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using Navlyn.GeneratedCode;
+using Navlyn.Languages;
 using Navlyn.Paths;
 using Navlyn.Workspaces;
 
@@ -48,7 +48,7 @@ internal sealed class DeclarationIndex
             .ThenBy(project => project.Name, StringComparer.Ordinal))
         {
             foreach (Document document in project.Documents
-                .Where(document => document.SupportsSyntaxTree)
+                .Where(SourceLanguageFacts.IsSupportedDocument)
                 .Where(document => document.FilePath is not null)
                 .OrderBy(document => document.FilePath, StringComparer.Ordinal)
                 .ThenBy(document => document.Name, StringComparer.Ordinal))
@@ -62,9 +62,9 @@ internal sealed class DeclarationIndex
 
                 string fullPath = Path.GetFullPath(document.FilePath!);
                 string displayPath = PathDisplay.FromCurrentDirectory(fullPath);
-                foreach (SyntaxNode node in root.DescendantNodes().Where(IsDeclarationNode))
+                foreach (SyntaxNode node in root.DescendantNodes().Where(SourceLanguageFacts.IsDeclarationNode))
                 {
-                    string? name = GetSyntaxName(node);
+                    string? name = SourceLanguageFacts.GetSyntaxName(node);
                     if (string.IsNullOrWhiteSpace(name))
                     {
                         continue;
@@ -292,52 +292,6 @@ internal sealed class DeclarationIndex
             Column: lineSpan.StartLinePosition.Character + 1,
             EndLine: lineSpan.EndLinePosition.Line + 1,
             EndColumn: lineSpan.EndLinePosition.Character + 1);
-    }
-
-    private static bool IsDeclarationNode(SyntaxNode node)
-    {
-        return node is BaseTypeDeclarationSyntax
-            or BaseNamespaceDeclarationSyntax
-            or DelegateDeclarationSyntax
-            or EnumMemberDeclarationSyntax
-            or BaseMethodDeclarationSyntax
-            or LocalFunctionStatementSyntax
-            or PropertyDeclarationSyntax
-            or IndexerDeclarationSyntax
-            or EventDeclarationSyntax
-            or UsingDirectiveSyntax
-            or VariableDeclaratorSyntax
-            or ForEachStatementSyntax
-            or ParameterSyntax
-            or TypeParameterSyntax
-            or SingleVariableDesignationSyntax;
-    }
-
-    private static string? GetSyntaxName(SyntaxNode node)
-    {
-        return node switch
-        {
-            BaseTypeDeclarationSyntax declaration => declaration.Identifier.ValueText,
-            BaseNamespaceDeclarationSyntax declaration => declaration.Name.ToString(),
-            DelegateDeclarationSyntax declaration => declaration.Identifier.ValueText,
-            EnumMemberDeclarationSyntax declaration => declaration.Identifier.ValueText,
-            ConstructorDeclarationSyntax declaration => declaration.Identifier.ValueText,
-            DestructorDeclarationSyntax declaration => declaration.Identifier.ValueText,
-            MethodDeclarationSyntax declaration => declaration.Identifier.ValueText,
-            OperatorDeclarationSyntax declaration => declaration.OperatorToken.ValueText,
-            ConversionOperatorDeclarationSyntax declaration => declaration.Type.ToString(),
-            LocalFunctionStatementSyntax declaration => declaration.Identifier.ValueText,
-            PropertyDeclarationSyntax declaration => declaration.Identifier.ValueText,
-            IndexerDeclarationSyntax => "this",
-            EventDeclarationSyntax declaration => declaration.Identifier.ValueText,
-            UsingDirectiveSyntax declaration => declaration.Alias?.Name.Identifier.ValueText ?? declaration.Name?.ToString(),
-            VariableDeclaratorSyntax declaration => declaration.Identifier.ValueText,
-            ForEachStatementSyntax declaration => declaration.Identifier.ValueText,
-            ParameterSyntax declaration => declaration.Identifier.ValueText,
-            TypeParameterSyntax declaration => declaration.Identifier.ValueText,
-            SingleVariableDesignationSyntax declaration => declaration.Identifier.ValueText,
-            _ => null
-        };
     }
 
     private static string CreateSolutionFingerprint(Solution solution)

@@ -1,8 +1,10 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
+using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.VisualBasic;
 using Navlyn.GeneratedCode;
 
 namespace Navlyn.PublicApi;
@@ -20,8 +22,13 @@ internal sealed class PublicApiSymbolExtractor
             return [];
         }
 
+        if (Path.GetExtension(path).Equals(".vb", StringComparison.OrdinalIgnoreCase))
+        {
+            return ExtractVisualBasic(sourceText, path, targetFramework);
+        }
+
         SyntaxTree tree = CSharpSyntaxTree.ParseText(sourceText, path: path);
-        CompilationUnitSyntax root = tree.GetCompilationUnitRoot();
+        CompilationUnitSyntax root = (CompilationUnitSyntax)tree.GetRoot();
         List<PublicApiSymbol> symbols = [];
 
         VisitMembers(root.Members, namespaceName: null, containingTypes: [], parentApiVisible: true, symbols);
@@ -230,7 +237,7 @@ internal sealed class PublicApiSymbolExtractor
     }
 
     private static PublicApiSymbol CreateSymbol(
-        CSharpSyntaxNode node,
+        SyntaxNode node,
         string name,
         string kind,
         string? container,
@@ -580,10 +587,10 @@ internal sealed class PublicApiSymbolExtractor
 
     private static string GetAccessibility(SyntaxTokenList modifiers, string defaultAccessibility)
     {
-        bool isPublic = modifiers.Any(SyntaxKind.PublicKeyword);
-        bool isProtected = modifiers.Any(SyntaxKind.ProtectedKeyword);
-        bool isInternal = modifiers.Any(SyntaxKind.InternalKeyword);
-        bool isPrivate = modifiers.Any(SyntaxKind.PrivateKeyword);
+        bool isPublic = modifiers.Any(Microsoft.CodeAnalysis.CSharp.SyntaxKind.PublicKeyword);
+        bool isProtected = modifiers.Any(Microsoft.CodeAnalysis.CSharp.SyntaxKind.ProtectedKeyword);
+        bool isInternal = modifiers.Any(Microsoft.CodeAnalysis.CSharp.SyntaxKind.InternalKeyword);
+        bool isPrivate = modifiers.Any(Microsoft.CodeAnalysis.CSharp.SyntaxKind.PrivateKeyword);
 
         if (isPublic)
         {
@@ -616,6 +623,523 @@ internal sealed class PublicApiSymbolExtractor
         }
 
         return defaultAccessibility;
+    }
+
+    private static IReadOnlyList<PublicApiSymbol> ExtractVisualBasic(
+        string sourceText,
+        string path,
+        string? targetFramework)
+    {
+        SyntaxTree tree = VisualBasicSyntaxTree.ParseText(sourceText, path: path);
+        Compilation compilation = VisualBasicCompilation.Create("NavlynPublicApi", [tree]);
+        SemanticModel semanticModel = compilation.GetSemanticModel(tree, ignoreAccessibility: true);
+        SyntaxNode root = tree.GetRoot();
+        List<PublicApiSymbol> symbols = [];
+
+        foreach (INamedTypeSymbol type in EnumerateDeclaredTypes(root, semanticModel))
+        {
+            if (!IsApiVisible(type) || !AreContainingTypesApiVisible(type))
+            {
+                continue;
+            }
+
+            AddVisualBasicType(type, symbols);
+            AddVisualBasicMembers(type, symbols);
+        }
+
+        return [.. symbols
+            .Select(symbol => symbol with { TargetFramework = targetFramework })
+            .OrderBy(symbol => symbol.DocumentationCommentId, StringComparer.Ordinal)
+            .ThenBy(symbol => symbol.Path, StringComparer.Ordinal)
+            .ThenBy(symbol => symbol.Line)
+            .ThenBy(symbol => symbol.Column)];
+    }
+
+    private static IReadOnlyList<INamedTypeSymbol> EnumerateDeclaredTypes(SyntaxNode root, SemanticModel semanticModel)
+    {
+        return [.. root.DescendantNodes()
+            .Select(node => semanticModel.GetDeclaredSymbol(node))
+            .OfType<INamedTypeSymbol>()
+            .Where(type => !type.IsImplicitlyDeclared)
+            .Where(type => type.Locations.Any(location => location.IsInSource))
+            .Where(type => type.TypeKind.ToString() is "Class" or "Interface" or "Struct" or "Structure" or "Module" or "Enum" or "Delegate")
+            .GroupBy(SymbolIdentity)
+            .Select(group => group.First())
+            .OrderBy(type => type.Locations.FirstOrDefault()?.SourceTree?.FilePath, StringComparer.Ordinal)
+            .ThenBy(type => type.Locations.FirstOrDefault()?.SourceSpan.Start ?? int.MaxValue)];
+    }
+
+    private static void AddVisualBasicType(INamedTypeSymbol type, List<PublicApiSymbol> symbols)
+    {
+        SyntaxNode? declaration = PrimarySyntax(type);
+        if (declaration is null)
+        {
+            return;
+        }
+
+        string? namespaceName = NamespaceName(type);
+        IReadOnlyList<string> containingTypes = ContainingTypeNames(type);
+        string name = TypeDisplayName(type);
+        IReadOnlyList<string> constraints = GenericConstraints(type.TypeParameters);
+        string signature = $"{string.Join(" ", SymbolModifiers(type))} {TypeKeyword(type)} {FullName(namespaceName, containingTypes, name)} {string.Join(" ", constraints)}".Trim();
+        symbols.Add(CreateSymbol(
+            declaration,
+            name,
+            "NamedType",
+            Container(namespaceName, containingTypes),
+            namespaceName,
+            AccessibilityName(type.DeclaredAccessibility),
+            signature,
+            SymbolModifiers(type),
+            [.. type.TypeParameters.Select(parameter => parameter.Name)],
+            parameters: [],
+            returnType: null,
+            propertyType: null,
+            fieldType: null,
+            eventType: null,
+            constraints,
+            NullableAnnotations(signature),
+            defaultValues: [],
+            Attributes(type.GetAttributes())));
+
+        if (type.TypeKind.ToString() == "Enum")
+        {
+            AddVisualBasicEnumMembers(type, namespaceName, containingTypes, symbols);
+        }
+    }
+
+    private static void AddVisualBasicEnumMembers(
+        INamedTypeSymbol enumType,
+        string? namespaceName,
+        IReadOnlyList<string> containingTypes,
+        List<PublicApiSymbol> symbols)
+    {
+        string container = FullName(namespaceName, containingTypes, enumType.Name);
+        foreach (IFieldSymbol member in enumType.GetMembers()
+            .OfType<IFieldSymbol>()
+            .Where(field => !field.IsImplicitlyDeclared && field.HasConstantValue)
+            .OrderBy(field => field.Locations.FirstOrDefault()?.SourceSpan.Start ?? int.MaxValue))
+        {
+            SyntaxNode? declaration = PrimarySyntax(member);
+            if (declaration is null)
+            {
+                continue;
+            }
+
+            string signature = member.HasConstantValue
+                ? $"{container}.{member.Name} = {Normalize(member.ConstantValue?.ToString() ?? string.Empty)}"
+                : $"{container}.{member.Name}";
+            symbols.Add(CreateSymbol(
+                declaration,
+                member.Name,
+                "EnumMember",
+                container,
+                namespaceName,
+                "Public",
+                signature,
+                modifiers: [],
+                typeParameters: [],
+                parameters: [],
+                returnType: null,
+                propertyType: null,
+                fieldType: null,
+                eventType: null,
+                genericConstraints: [],
+                NullableAnnotations(signature),
+                defaultValues: [],
+                Attributes(member.GetAttributes())));
+        }
+    }
+
+    private static void AddVisualBasicMembers(INamedTypeSymbol type, List<PublicApiSymbol> symbols)
+    {
+        if (type.TypeKind.ToString() == "Enum")
+        {
+            return;
+        }
+
+        string? namespaceName = NamespaceName(type);
+        string container = FullName(namespaceName, ContainingTypeNames(type), TypeDisplayName(type));
+        foreach (ISymbol member in type.GetMembers()
+            .Where(member => !member.IsImplicitlyDeclared)
+            .Where(member => member.Locations.Any(location => location.IsInSource))
+            .Where(member => IsApiVisible(member) || type.TypeKind.ToString() == "Interface")
+            .OrderBy(member => member.Locations.FirstOrDefault()?.SourceSpan.Start ?? int.MaxValue))
+        {
+            switch (member)
+            {
+                case IMethodSymbol { MethodKind: MethodKind.Ordinary, ExplicitInterfaceImplementations.Length: 0 } method:
+                    AddVisualBasicMethod(method, container, namespaceName, symbols);
+                    break;
+                case IMethodSymbol { MethodKind: MethodKind.Constructor } constructor:
+                    AddVisualBasicConstructor(constructor, container, namespaceName, type.Name, symbols);
+                    break;
+                case IPropertySymbol { ExplicitInterfaceImplementations.Length: 0 } property:
+                    AddVisualBasicProperty(property, container, namespaceName, symbols);
+                    break;
+                case IEventSymbol { ExplicitInterfaceImplementations.Length: 0 } eventSymbol:
+                    AddVisualBasicEvent(eventSymbol, container, namespaceName, symbols);
+                    break;
+                case IFieldSymbol field when field.AssociatedSymbol is null && type.TypeKind.ToString() != "Enum":
+                    AddVisualBasicField(field, container, namespaceName, symbols);
+                    break;
+            }
+        }
+    }
+
+    private static void AddVisualBasicMethod(IMethodSymbol method, string container, string? namespaceName, List<PublicApiSymbol> symbols)
+    {
+        SyntaxNode? declaration = PrimarySyntax(method);
+        if (declaration is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<PublicApiParameter> parameters = Parameters(method.Parameters);
+        IReadOnlyList<string> constraints = GenericConstraints(method.TypeParameters);
+        string name = TypeDisplayName(method.Name, method.TypeParameters);
+        string returnType = method.ReturnsVoid ? "void" : TypeName(method.ReturnType);
+        string signature = $"{returnType} {container}.{name}({string.Join(", ", parameters.Select(parameter => parameter.Type))}) {string.Join(" ", constraints)}";
+        symbols.Add(CreateSymbol(
+            declaration,
+            method.Name,
+            "Method",
+            container,
+            namespaceName,
+            AccessibilityName(method.DeclaredAccessibility),
+            signature,
+            SymbolModifiers(method),
+            [.. method.TypeParameters.Select(parameter => parameter.Name)],
+            parameters,
+            method.ReturnsVoid ? null : returnType,
+            propertyType: null,
+            fieldType: null,
+            eventType: null,
+            constraints,
+            NullableAnnotations(signature),
+            DefaultValues(parameters),
+            Attributes(method.GetAttributes())));
+    }
+
+    private static void AddVisualBasicConstructor(IMethodSymbol constructor, string container, string? namespaceName, string typeName, List<PublicApiSymbol> symbols)
+    {
+        SyntaxNode? declaration = PrimarySyntax(constructor);
+        if (declaration is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<PublicApiParameter> parameters = Parameters(constructor.Parameters);
+        string signature = $"{container}.{typeName}({string.Join(", ", parameters.Select(parameter => parameter.Type))})";
+        symbols.Add(CreateSymbol(
+            declaration,
+            typeName,
+            "Constructor",
+            container,
+            namespaceName,
+            AccessibilityName(constructor.DeclaredAccessibility),
+            signature,
+            SymbolModifiers(constructor),
+            typeParameters: [],
+            parameters,
+            returnType: null,
+            propertyType: null,
+            fieldType: null,
+            eventType: null,
+            genericConstraints: [],
+            NullableAnnotations(signature),
+            DefaultValues(parameters),
+            Attributes(constructor.GetAttributes())));
+    }
+
+    private static void AddVisualBasicProperty(IPropertySymbol property, string container, string? namespaceName, List<PublicApiSymbol> symbols)
+    {
+        SyntaxNode? declaration = PrimarySyntax(property);
+        if (declaration is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<PublicApiParameter> parameters = Parameters(property.Parameters);
+        string propertyType = TypeName(property.Type);
+        string name = property.IsIndexer
+            ? $"Item({string.Join(", ", parameters.Select(parameter => parameter.Type))})"
+            : property.Name;
+        string signature = property.IsIndexer
+            ? $"{propertyType} {container}.{name}"
+            : $"{propertyType} {container}.{property.Name}";
+        symbols.Add(CreateSymbol(
+            declaration,
+            property.IsIndexer ? "this[]" : property.Name,
+            property.IsIndexer ? "Indexer" : "Property",
+            container,
+            namespaceName,
+            AccessibilityName(property.DeclaredAccessibility),
+            signature,
+            SymbolModifiers(property),
+            typeParameters: [],
+            parameters,
+            returnType: null,
+            propertyType,
+            fieldType: null,
+            eventType: null,
+            genericConstraints: [],
+            NullableAnnotations(signature),
+            DefaultValues(parameters),
+            Attributes(property.GetAttributes())));
+    }
+
+    private static void AddVisualBasicEvent(IEventSymbol eventSymbol, string container, string? namespaceName, List<PublicApiSymbol> symbols)
+    {
+        SyntaxNode? declaration = PrimarySyntax(eventSymbol);
+        if (declaration is null)
+        {
+            return;
+        }
+
+        string eventType = TypeName(eventSymbol.Type);
+        string signature = $"{eventType} {container}.{eventSymbol.Name}";
+        symbols.Add(CreateSymbol(
+            declaration,
+            eventSymbol.Name,
+            "Event",
+            container,
+            namespaceName,
+            AccessibilityName(eventSymbol.DeclaredAccessibility),
+            signature,
+            SymbolModifiers(eventSymbol),
+            typeParameters: [],
+            parameters: [],
+            returnType: null,
+            propertyType: null,
+            fieldType: null,
+            eventType,
+            genericConstraints: [],
+            NullableAnnotations(signature),
+            defaultValues: [],
+            Attributes(eventSymbol.GetAttributes())));
+    }
+
+    private static void AddVisualBasicField(IFieldSymbol field, string container, string? namespaceName, List<PublicApiSymbol> symbols)
+    {
+        SyntaxNode? declaration = PrimarySyntax(field);
+        if (declaration is null)
+        {
+            return;
+        }
+
+        string fieldType = TypeName(field.Type);
+        string signature = $"{fieldType} {container}.{field.Name}";
+        symbols.Add(CreateSymbol(
+            declaration,
+            field.Name,
+            "Field",
+            container,
+            namespaceName,
+            AccessibilityName(field.DeclaredAccessibility),
+            signature,
+            SymbolModifiers(field),
+            typeParameters: [],
+            parameters: [],
+            returnType: null,
+            propertyType: null,
+            fieldType,
+            eventType: null,
+            genericConstraints: [],
+            NullableAnnotations(signature),
+            defaultValues: [],
+            Attributes(field.GetAttributes())));
+    }
+
+    private static bool AreContainingTypesApiVisible(INamedTypeSymbol type)
+    {
+        for (INamedTypeSymbol? current = type.ContainingType; current is not null; current = current.ContainingType)
+        {
+            if (!IsApiVisible(current))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsApiVisible(ISymbol symbol)
+    {
+        return symbol.DeclaredAccessibility is Accessibility.Public or Accessibility.Protected or Accessibility.ProtectedOrInternal;
+    }
+
+    private static string AccessibilityName(Accessibility accessibility)
+    {
+        return accessibility switch
+        {
+            Accessibility.Public => "Public",
+            Accessibility.Protected => "Protected",
+            Accessibility.ProtectedOrInternal => "ProtectedOrInternal",
+            Accessibility.ProtectedAndInternal => "PrivateProtected",
+            Accessibility.Internal => "Internal",
+            Accessibility.Private => "Private",
+            _ => "Private"
+        };
+    }
+
+    private static IReadOnlyList<string> SymbolModifiers(ISymbol symbol)
+    {
+        List<string> modifiers = [];
+        if (symbol.IsStatic)
+        {
+            modifiers.Add("static");
+        }
+
+        if (symbol.IsAbstract)
+        {
+            modifiers.Add("abstract");
+        }
+
+        if (symbol.IsVirtual)
+        {
+            modifiers.Add("virtual");
+        }
+
+        if (symbol.IsOverride)
+        {
+            modifiers.Add("override");
+        }
+
+        if (symbol.IsSealed && symbol is INamedTypeSymbol)
+        {
+            modifiers.Add("sealed");
+        }
+
+        if (symbol is IMethodSymbol { IsAsync: true })
+        {
+            modifiers.Add("async");
+        }
+
+        return [.. modifiers.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal)];
+    }
+
+    private static SyntaxNode? PrimarySyntax(ISymbol symbol)
+    {
+        return symbol.DeclaringSyntaxReferences
+            .Select(reference => reference.GetSyntax())
+            .OrderBy(node => node.SyntaxTree.FilePath, StringComparer.Ordinal)
+            .ThenBy(node => node.SpanStart)
+            .FirstOrDefault();
+    }
+
+    private static string SymbolIdentity(ISymbol symbol)
+    {
+        Location? location = symbol.Locations.FirstOrDefault(location => location.IsInSource);
+        return symbol.GetDocumentationCommentId() ??
+            $"{symbol.Kind}:{symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)}:{location?.SourceTree?.FilePath}:{location?.SourceSpan.Start}";
+    }
+
+    private static string? NamespaceName(INamedTypeSymbol type)
+    {
+        return type.ContainingNamespace is null || type.ContainingNamespace.IsGlobalNamespace
+            ? null
+            : type.ContainingNamespace.ToDisplayString();
+    }
+
+    private static IReadOnlyList<string> ContainingTypeNames(INamedTypeSymbol type)
+    {
+        Stack<string> names = [];
+        for (INamedTypeSymbol? current = type.ContainingType; current is not null; current = current.ContainingType)
+        {
+            names.Push(TypeDisplayName(current));
+        }
+
+        return [.. names];
+    }
+
+    private static string TypeDisplayName(INamedTypeSymbol type)
+    {
+        return TypeDisplayName(type.Name, type.TypeParameters);
+    }
+
+    private static string TypeDisplayName(string name, ImmutableArray<ITypeParameterSymbol> typeParameters)
+    {
+        return typeParameters.Length == 0
+            ? name
+            : $"{name}(Of {string.Join(", ", typeParameters.Select(parameter => parameter.Name))})";
+    }
+
+    private static string TypeKeyword(INamedTypeSymbol type)
+    {
+        return type.TypeKind.ToString() switch
+        {
+            "Interface" => "interface",
+            "Struct" or "Structure" => "struct",
+            "Module" => "module",
+            "Enum" => "enum",
+            "Delegate" => "delegate",
+            _ => "class"
+        };
+    }
+
+    private static IReadOnlyList<PublicApiParameter> Parameters(ImmutableArray<IParameterSymbol> parameters)
+    {
+        return [.. parameters.Select(parameter => new PublicApiParameter(
+            Name: parameter.Name,
+            Type: TypeName(parameter.Type),
+            Ordinal: parameter.Ordinal,
+            RefKind: parameter.RefKind switch
+            {
+                RefKind.Ref => "ref",
+                RefKind.Out => "out",
+                RefKind.In => "in",
+                _ => null
+            },
+            IsOptional: parameter.IsOptional || parameter.HasExplicitDefaultValue,
+            DefaultValue: parameter.HasExplicitDefaultValue ? Normalize(parameter.ExplicitDefaultValue?.ToString() ?? string.Empty) : null))];
+    }
+
+    private static string TypeName(ITypeSymbol? type)
+    {
+        return type is null
+            ? string.Empty
+            : Normalize(type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat));
+    }
+
+    private static IReadOnlyList<string> GenericConstraints(ImmutableArray<ITypeParameterSymbol> typeParameters)
+    {
+        return [.. typeParameters
+            .Select(parameter =>
+            {
+                List<string> constraints = [];
+                if (parameter.HasReferenceTypeConstraint)
+                {
+                    constraints.Add("class");
+                }
+
+                if (parameter.HasValueTypeConstraint)
+                {
+                    constraints.Add("struct");
+                }
+
+                constraints.AddRange(parameter.ConstraintTypes.Select(TypeName));
+                if (parameter.HasConstructorConstraint)
+                {
+                    constraints.Add("new()");
+                }
+
+                return constraints.Count == 0
+                    ? null
+                    : $"{parameter.Name}: {string.Join(", ", constraints.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal))}";
+            })
+            .OfType<string>()
+            .OrderBy(value => value, StringComparer.Ordinal)];
+    }
+
+    private static IReadOnlyList<string> Attributes(ImmutableArray<AttributeData> attributes)
+    {
+        return [.. attributes
+            .Select(attribute => attribute.ApplicationSyntaxReference?.GetSyntax().ToString() ??
+                attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => Normalize(value!))
+            .OrderBy(value => value, StringComparer.Ordinal)];
     }
 
     private static bool IsApiAccessibility(string accessibility)

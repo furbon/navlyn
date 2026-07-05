@@ -2,10 +2,12 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 using Navlyn.DependencyInjection;
 using Navlyn.Diagnostics;
 using Navlyn.Diffs;
 using Navlyn.GeneratedCode;
+using Navlyn.Languages;
 using Navlyn.Paths;
 using Navlyn.Workspaces;
 
@@ -128,7 +130,7 @@ internal sealed class ReviewPackResolver
 
             diff = diffResult.Diff!;
             diffPaths = [.. diff.Files
-                .Where(file => file.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                .Where(file => SourceLanguageFacts.IsSupportedSourceFile(file.Path))
                 .Select(file => file.Path)];
         }
 
@@ -139,7 +141,7 @@ internal sealed class ReviewPackResolver
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (document.FilePath is null ||
-                    !document.FilePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                    !SourceLanguageFacts.IsSupportedDocument(document))
                 {
                     continue;
                 }
@@ -184,6 +186,60 @@ internal sealed class ReviewPackResolver
         List<ReviewPackFinding> findings = [];
         foreach (ReviewPackDocument document in input.Documents)
         {
+            foreach (IMethodSymbol method in SourceLanguageFacts.EnumerateMethods(document.Root, document.SemanticModel, CancellationToken.None)
+                .Where(method => method.MethodKind == MethodKind.Ordinary))
+            {
+                Location? methodLocation = method.Locations.FirstOrDefault(location => location.IsInSource);
+                if (methodLocation is null)
+                {
+                    continue;
+                }
+
+                if (method.IsAsync && method.ReturnsVoid && !LooksLikeEventHandler(method))
+                {
+                    AddFinding(findings, document, "async", "async.async-void", "warning", "high", "Async void methods are hard for callers and tests to observe.", methodLocation, method.ToDisplayString(), options, ["async-void-method"]);
+                }
+
+                if (AcceptsCancellationToken(method))
+                {
+                    foreach (IInvocationOperation invocation in SourceLanguageFacts.EnumerateInvocations(document.Root, document.SemanticModel, CancellationToken.None)
+                        .Where(invocation => invocation.Syntax.SpanStart >= methodLocation.SourceSpan.Start && invocation.Syntax.Span.End <= methodLocation.SourceSpan.End))
+                    {
+                        IMethodSymbol target = invocation.TargetMethod;
+                        if (target.Parameters.Any(parameter => IsCancellationToken(parameter.Type)) &&
+                            !invocation.Arguments.Any(argument => IsCancellationToken(argument.Value.Type)))
+                        {
+                            AddFinding(findings, document, "async", "async.cancellation-token-not-forwarded", "info", "medium", "A method accepts CancellationToken but calls an overload with a token parameter without forwarding one.", invocation.Syntax.GetLocation(), method.ToDisplayString(), options, ["callee-has-cancellation-token-parameter", "caller-has-cancellation-token-parameter"]);
+                        }
+                    }
+                }
+            }
+
+            foreach (IInvocationOperation invocation in SourceLanguageFacts.EnumerateInvocations(document.Root, document.SemanticModel, CancellationToken.None))
+            {
+                IMethodSymbol symbol = invocation.TargetMethod;
+                string methodName = symbol.Name;
+                if (((methodName is "Wait" or "GetResult") && IsTaskLike(symbol.ContainingType)) ||
+                    IsGetAwaiterGetResult(invocation))
+                {
+                    AddFinding(findings, document, "async", "async.sync-over-async", "warning", "high", "Synchronous wait on a Task-like value can block async call paths.", invocation.Syntax.GetLocation(), ContainingSymbolName(invocation.Syntax, document.SemanticModel), options, ["task-like-sync-wait"]);
+                }
+
+                if (IsTaskLike(symbol.ReturnType) &&
+                    (invocation.Parent is IExpressionStatementOperation || invocation.Syntax.Parent?.GetType().Name == "ExpressionStatementSyntax"))
+                {
+                    AddFinding(findings, document, "async", "async.fire-and-forget", "info", "medium", "A Task-like invocation result is not awaited, returned, or assigned.", invocation.Syntax.GetLocation(), ContainingSymbolName(invocation.Syntax, document.SemanticModel), options, ["discarded-task-like-invocation"]);
+                }
+            }
+
+            foreach (IPropertyReferenceOperation property in EnumerateOperations<IPropertyReferenceOperation>(document.Root, document.SemanticModel))
+            {
+                if (property.Property.Name == "Result" && IsTaskLike(property.Instance?.Type))
+                {
+                    AddFinding(findings, document, "async", "async.sync-over-async", "warning", "high", "Synchronous wait on a Task-like value can block async call paths.", property.Syntax.GetLocation(), ContainingSymbolName(property.Syntax, document.SemanticModel), options, ["task-like-result-property"]);
+                }
+            }
+
             foreach (MethodDeclarationSyntax method in document.Root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
                 if (method.Modifiers.Any(SyntaxKind.AsyncKeyword) &&
@@ -243,6 +299,20 @@ internal sealed class ReviewPackResolver
         List<ReviewPackFinding> findings = [];
         foreach (ReviewPackDocument document in input.Documents)
         {
+            foreach (IUsingOperation usingOperation in EnumerateOperations<IUsingOperation>(document.Root, document.SemanticModel))
+            {
+                if (usingOperation.IsAsynchronous)
+                {
+                    continue;
+                }
+
+                ITypeSymbol? type = usingOperation.Resources.Type;
+                if (ImplementsInterface(type, "System.IAsyncDisposable"))
+                {
+                    AddFinding(findings, document, "disposal", "disposal.async-disposable-sync-dispose", "warning", "medium", "An async disposable value is used with synchronous disposal syntax.", usingOperation.Syntax.GetLocation(), ContainingSymbolName(usingOperation.Syntax, document.SemanticModel), options, ["async-disposable-sync-using"]);
+                }
+            }
+
             foreach (LocalDeclarationStatementSyntax local in document.Root.DescendantNodes().OfType<LocalDeclarationStatementSyntax>())
             {
                 bool isUsing = local.UsingKeyword.IsKind(SyntaxKind.UsingKeyword);
@@ -309,6 +379,19 @@ internal sealed class ReviewPackResolver
             Compilation? compilation = await document.Project.GetCompilationAsync(cancellationToken);
             if (compilation?.Options.NullableContextOptions is NullableContextOptions.Disable)
             {
+                foreach (ISymbol symbol in SourceLanguageFacts.EnumerateNamedTypes(document.Root, document.SemanticModel, cancellationToken)
+                    .Cast<ISymbol>()
+                    .Concat(SourceLanguageFacts.EnumerateMethods(document.Root, document.SemanticModel, cancellationToken))
+                    .Where(IsPublicApiSymbol)
+                    .Take(options.SymbolLimit))
+                {
+                    Location? location = symbol.Locations.FirstOrDefault(location => location.IsInSource);
+                    if (location is not null)
+                    {
+                        AddFinding(findings, document, "nullability", "nullability.oblivious-public-api", "info", "medium", "A public API declaration is in a project with nullable annotations disabled.", location, symbol.ToDisplayString(), options, ["nullable-disabled-public-api"]);
+                    }
+                }
+
                 foreach (MemberDeclarationSyntax member in document.Root.DescendantNodes().OfType<MemberDeclarationSyntax>().Where(IsPublicApiDeclaration).Take(options.SymbolLimit))
                 {
                     AddFinding(findings, document, "nullability", "nullability.oblivious-public-api", "info", "medium", "A public API declaration is in a project with nullable annotations disabled.", member.GetLocation(), ContainingSymbolName(member, document.SemanticModel), options, ["nullable-disabled-public-api"]);
@@ -329,6 +412,65 @@ internal sealed class ReviewPackResolver
         List<ReviewPackFinding> findings = [];
         foreach (ReviewPackDocument document in input.Documents)
         {
+            foreach (IMethodSymbol method in SourceLanguageFacts.EnumerateMethods(document.Root, document.SemanticModel, CancellationToken.None)
+                .Where(method => method.MethodKind == MethodKind.Ordinary))
+            {
+                if (LooksLikeAspNetEndpoint(method) &&
+                    !HasSecurityAttribute(method) &&
+                    (method.ContainingType is null || !HasSecurityAttribute(method.ContainingType)))
+                {
+                    Location? location = method.Locations.FirstOrDefault(location => location.IsInSource);
+                    if (location is not null)
+                    {
+                        AddFinding(findings, document, "security", "security.auth-surface-signal", "info", "medium", "A framework-facing endpoint has no nearby authorization metadata in source.", location, method.ToDisplayString(), options, ["endpoint-without-auth-metadata"]);
+                    }
+                }
+            }
+
+            foreach (IInvocationOperation invocation in SourceLanguageFacts.EnumerateInvocations(document.Root, document.SemanticModel, CancellationToken.None))
+            {
+                IMethodSymbol symbol = invocation.TargetMethod;
+                string name = symbol.Name;
+                string containing = symbol.ContainingType?.ToDisplayString() ?? string.Empty;
+                string invocationText = invocation.Syntax.ToString();
+
+                if ((name.Contains("Sql", StringComparison.OrdinalIgnoreCase) || containing.Contains("Sql", StringComparison.OrdinalIgnoreCase)) &&
+                    HasConstructedString(invocation.Arguments.Select(argument => argument.Value)))
+                {
+                    AddFinding(findings, document, "security", "security.sql-string-construction", "warning", "medium", "SQL-like invocation uses constructed string input that should be reviewed.", invocation.Syntax.GetLocation(), ContainingSymbolName(invocation.Syntax, document.SemanticModel), options, ["sql-like-constructed-string"]);
+                }
+
+                if (containing is "System.IO.File" or "System.Diagnostics.Process" ||
+                    containing.StartsWith("System.Reflection.", StringComparison.Ordinal) ||
+                    (containing == "System.Type" && name == "GetType"))
+                {
+                    AddFinding(findings, document, "security", "security.file-process-reflection-signal", "info", "medium", "File, process, or reflection API usage may need review near external input boundaries.", invocation.Syntax.GetLocation(), ContainingSymbolName(invocation.Syntax, document.SemanticModel), options, ["sensitive-api-family"]);
+                }
+
+                if (name.Contains("Deserialize", StringComparison.OrdinalIgnoreCase) ||
+                    containing.Contains("JsonSerializer", StringComparison.Ordinal) ||
+                    containing.Contains("XmlSerializer", StringComparison.Ordinal))
+                {
+                    AddFinding(findings, document, "security", "security.deserialization-signal", "info", "medium", "Deserialization API usage should be reviewed for input trust and target type.", invocation.Syntax.GetLocation(), ContainingSymbolName(invocation.Syntax, document.SemanticModel), options, ["deserialization-api"]);
+                }
+
+                if ((name.StartsWith("Log", StringComparison.Ordinal) || containing.Contains("ILogger", StringComparison.Ordinal)) &&
+                    SensitiveNames.Any(token => invocationText.Contains(token, StringComparison.OrdinalIgnoreCase)))
+                {
+                    AddFinding(findings, document, "security", "security.sensitive-logging-signal", "warning", "medium", "Logging call arguments contain sensitive-looking names.", invocation.Syntax.GetLocation(), ContainingSymbolName(invocation.Syntax, document.SemanticModel), options, ["sensitive-name-in-logging-call"]);
+                }
+            }
+
+            foreach (IObjectCreationOperation creation in EnumerateOperations<IObjectCreationOperation>(document.Root, document.SemanticModel))
+            {
+                ITypeSymbol? type = creation.Type;
+                if (type?.ToDisplayString().Contains("SqlCommand", StringComparison.Ordinal) == true &&
+                    HasConstructedString(creation.Arguments.Select(argument => argument.Value)))
+                {
+                    AddFinding(findings, document, "security", "security.sql-string-construction", "warning", "medium", "SQL command construction uses constructed string input that should be reviewed.", creation.Syntax.GetLocation(), ContainingSymbolName(creation.Syntax, document.SemanticModel), options, ["sql-command-constructed-string"]);
+                }
+            }
+
             foreach (MethodDeclarationSyntax method in document.Root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
                 if (LooksLikeAspNetEndpoint(method, document.SemanticModel) &&
@@ -427,15 +569,15 @@ internal sealed class ReviewPackResolver
             {
                 foreach (ReviewPackDocument document in input.Documents)
                 {
-                    string namespaceName = document.Root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString() ?? string.Empty;
+                    string namespaceName = GetDocumentNamespace(document);
                     if (!MatchesNamespace(rule.From, namespaceName))
                     {
                         continue;
                     }
 
-                    foreach (UsingDirectiveSyntax usingDirective in document.Root.DescendantNodes().OfType<UsingDirectiveSyntax>())
+                    foreach (SyntaxNode usingDirective in document.Root.DescendantNodes().Where(IsImportNode))
                     {
-                        string usedNamespace = usingDirective.Name?.ToString() ?? string.Empty;
+                        string usedNamespace = GetImportedNamespace(usingDirective) ?? string.Empty;
                         if (rule.Disallow.Any(disallowed => MatchesNamespace(disallowed, usedNamespace)))
                         {
                             AddFinding(
@@ -723,6 +865,110 @@ internal sealed class ReviewPackResolver
             .Select(group => group.First())];
     }
 
+    private static IReadOnlyList<TOperation> EnumerateOperations<TOperation>(SyntaxNode root, SemanticModel semanticModel)
+        where TOperation : class, IOperation
+    {
+        List<TOperation> operations = [];
+        foreach (SyntaxNode node in root.DescendantNodesAndSelf())
+        {
+            if (semanticModel.GetOperation(node) is TOperation operation &&
+                operation.Syntax == node)
+            {
+                operations.Add(operation);
+            }
+        }
+
+        return [.. operations
+            .GroupBy(operation => (operation.Syntax.SyntaxTree.FilePath, operation.Syntax.SpanStart, operation.Syntax.Span.End))
+            .Select(group => group.First())
+            .OrderBy(operation => operation.Syntax.SyntaxTree.FilePath, StringComparer.Ordinal)
+            .ThenBy(operation => operation.Syntax.SpanStart)];
+    }
+
+    private static bool IsGetAwaiterGetResult(IInvocationOperation invocation)
+    {
+        if (invocation.TargetMethod.Name != "GetResult")
+        {
+            return false;
+        }
+
+        IInvocationOperation? getAwaiterInvocation = SourceLanguageFacts.FindOperation<IInvocationOperation>(invocation.Instance ?? invocation);
+        return getAwaiterInvocation?.TargetMethod.Name == "GetAwaiter" &&
+            IsTaskLike(getAwaiterInvocation.Instance?.Type);
+    }
+
+    private static bool AcceptsCancellationToken(IMethodSymbol method)
+    {
+        return method.Parameters.Any(parameter => IsCancellationToken(parameter.Type));
+    }
+
+    private static bool LooksLikeEventHandler(IMethodSymbol method)
+    {
+        return method.Parameters.Length >= 2 &&
+            method.Parameters[0].Name is "sender" or "_" &&
+            (method.Parameters[1].Type.ToDisplayString().EndsWith("EventArgs", StringComparison.Ordinal) ||
+                method.Parameters[1].Name is "e" or "args");
+    }
+
+    private static bool IsPublicApiSymbol(ISymbol symbol)
+    {
+        return symbol.DeclaredAccessibility is Accessibility.Public or Accessibility.Protected or Accessibility.ProtectedOrInternal;
+    }
+
+    private static bool LooksLikeAspNetEndpoint(IMethodSymbol method)
+    {
+        string typeName = method.ContainingType?.Name ?? string.Empty;
+        return typeName.EndsWith("Controller", StringComparison.Ordinal) ||
+            SourceLanguageFacts.HasAttribute(method, "Http") ||
+            SourceLanguageFacts.HasAttribute(method, "Route");
+    }
+
+    private static bool HasSecurityAttribute(ISymbol? symbol)
+    {
+        return symbol is not null &&
+            (SourceLanguageFacts.HasAttribute(symbol, "Authorize") || SourceLanguageFacts.HasAttribute(symbol, "AllowAnonymous"));
+    }
+
+    private static bool HasConstructedString(IEnumerable<IOperation> operations)
+    {
+        return operations.Any(HasConstructedString);
+    }
+
+    private static bool HasConstructedString(IOperation operation)
+    {
+        if (operation is IInterpolatedStringOperation)
+        {
+            return true;
+        }
+
+        if (operation is IBinaryOperation binary &&
+            binary.Type?.SpecialType == SpecialType.System_String)
+        {
+            return true;
+        }
+
+        return operation.ChildOperations.Any(HasConstructedString);
+    }
+
+    private static string GetDocumentNamespace(ReviewPackDocument document)
+    {
+        return SourceLanguageFacts.EnumerateNamedTypes(document.Root, document.SemanticModel, CancellationToken.None)
+            .Select(type => type.ContainingNamespace)
+            .FirstOrDefault(ns => ns is not null && !ns.IsGlobalNamespace)
+            ?.ToDisplayString() ?? string.Empty;
+    }
+
+    private static bool IsImportNode(SyntaxNode node)
+    {
+        return node.GetType().Name is "UsingDirectiveSyntax" or "SimpleImportsClauseSyntax";
+    }
+
+    private static string? GetImportedNamespace(SyntaxNode node)
+    {
+        object? name = node.GetType().GetProperty("Name")?.GetValue(node);
+        return name?.ToString();
+    }
+
     private static bool IsTaskLike(ITypeSymbol? type)
     {
         string? name = type?.OriginalDefinition.ToDisplayString();
@@ -796,7 +1042,7 @@ internal sealed class ReviewPackResolver
             current = current.Parent;
         }
 
-        return null;
+        return model.GetEnclosingSymbol(node.SpanStart)?.ToDisplayString();
     }
 
     private static bool ImplementsInterface(ITypeSymbol? type, string metadataName)

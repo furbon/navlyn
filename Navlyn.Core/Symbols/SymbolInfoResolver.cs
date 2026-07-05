@@ -1,10 +1,9 @@
 ﻿using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Operations;
 using Microsoft.CodeAnalysis.Text;
 using Navlyn.Diagnostics;
+using Navlyn.Languages;
 using Navlyn.Paths;
 
 namespace Navlyn.Symbols;
@@ -43,7 +42,7 @@ internal sealed class SymbolInfoResolver
         {
             return SymbolInfoResolutionResult.Failed(
                 DiagnosticIds.SymbolNotFoundAtPosition,
-                $"No C# symbol found at {sourceDocument.DisplayPath}:{line}:{column}.",
+                $"No supported source symbol found at {sourceDocument.DisplayPath}:{line}:{column}.",
                 ExitCodes.UsageError);
         }
 
@@ -52,7 +51,7 @@ internal sealed class SymbolInfoResolver
         {
             return SymbolInfoResolutionResult.Failed(
                 DiagnosticIds.SymbolNotFoundAtPosition,
-                $"No C# symbol found at {sourceDocument.DisplayPath}:{line}:{column}.",
+                $"No supported source symbol found at {sourceDocument.DisplayPath}:{line}:{column}.",
                 ExitCodes.UsageError);
         }
 
@@ -61,12 +60,12 @@ internal sealed class SymbolInfoResolver
         {
             return SymbolInfoResolutionResult.Failed(
                 DiagnosticIds.SymbolNotFoundAtPosition,
-                $"No C# symbol found at {sourceDocument.DisplayPath}:{line}:{column}.",
+                $"No supported source symbol found at {sourceDocument.DisplayPath}:{line}:{column}.",
                 ExitCodes.UsageError);
         }
 
         string projectName = sourceDocument.Document.Project.Name;
-        ExpressionSyntax? expression = FindContainingExpression(token, position);
+        SyntaxNode? expression = SourceLanguageFacts.FindContainingExpression(token, position);
         ISymbol? containingSymbol = semanticModel.GetEnclosingSymbol(position, cancellationToken);
         if (containingSymbol is not null)
         {
@@ -112,25 +111,15 @@ internal sealed class SymbolInfoResolver
             EndColumn: sourceLocation?.EndColumn);
     }
 
-    private static ExpressionSyntax? FindContainingExpression(SyntaxToken token, int position)
-    {
-        return token.Parent?
-            .AncestorsAndSelf()
-            .OfType<ExpressionSyntax>()
-            .Where(expression => expression.Span.Contains(position))
-            .OrderBy(expression => expression.Span.Length)
-            .FirstOrDefault();
-    }
-
     private static SymbolExpressionInfo CreateExpressionInfo(
         SemanticModel semanticModel,
-        ExpressionSyntax expression,
+        SyntaxNode expression,
         CancellationToken cancellationToken)
     {
         TypeInfo typeInfo = semanticModel.GetTypeInfo(expression, cancellationToken);
         TextLocationInfo location = CreateLocation(expression.GetLocation());
         return new SymbolExpressionInfo(
-            Kind: expression.Kind().ToString(),
+            Kind: SourceLanguageFacts.GetSyntaxKindName(expression),
             Path: location.Path,
             Line: location.Line,
             Column: location.Column,
@@ -188,10 +177,7 @@ internal sealed class SymbolInfoResolver
         bool excludeGenerated,
         CancellationToken cancellationToken)
     {
-        AttributeSyntax? attributeSyntax = token.Parent?
-            .AncestorsAndSelf()
-            .OfType<AttributeSyntax>()
-            .FirstOrDefault(attribute => attribute.Span.Contains(position));
+        SyntaxNode? attributeSyntax = SourceLanguageFacts.FindAttributeNode(token, position);
 
         if (attributeSyntax is null)
         {
@@ -221,23 +207,14 @@ internal sealed class SymbolInfoResolver
         int position,
         CancellationToken cancellationToken)
     {
-        SyntaxNode? returnNode = token.Parent?
-            .AncestorsAndSelf()
-            .FirstOrDefault(node =>
-                node.Span.Contains(position) &&
-                node is ReturnStatementSyntax or ArrowExpressionClauseSyntax);
+        SyntaxNode? returnNode = SourceLanguageFacts.FindReturnNode(token, position);
 
         if (returnNode is null)
         {
             return null;
         }
 
-        ExpressionSyntax? expression = returnNode switch
-        {
-            ReturnStatementSyntax returnStatement => returnStatement.Expression,
-            ArrowExpressionClauseSyntax arrow => arrow.Expression,
-            _ => null
-        };
+        SyntaxNode? expression = SourceLanguageFacts.GetReturnExpression(returnNode);
 
         ISymbol? containingSymbol = semanticModel.GetEnclosingSymbol(position, cancellationToken);
         ITypeSymbol? declaredReturnType = containingSymbol switch
@@ -263,10 +240,7 @@ internal sealed class SymbolInfoResolver
         int position,
         CancellationToken cancellationToken)
     {
-        AnonymousFunctionExpressionSyntax? lambdaSyntax = token.Parent?
-            .AncestorsAndSelf()
-            .OfType<AnonymousFunctionExpressionSyntax>()
-            .FirstOrDefault(lambda => lambda.Span.Contains(position));
+        SyntaxNode? lambdaSyntax = SourceLanguageFacts.FindLambdaNode(token, position);
 
         if (lambdaSyntax is null)
         {

@@ -313,7 +313,7 @@ internal static class MessageCommandSupport
     {
         Option<string?> queryOption = new("--query") { Description = "Message type query." };
         Option<string?> candidateIdOption = FuzzyCommandSupport.CreateCandidateIdOption();
-        Option<FileInfo?> fileOption = new("--file") { Description = "Path to a C# source file in the workspace." };
+        Option<FileInfo?> fileOption = new("--file") { Description = "Path to a C# or Visual Basic source file in the workspace." };
         Option<int?> lineOption = new("--line") { Description = "1-based source line." };
         Option<int?> columnOption = new("--column") { Description = "1-based source column." };
         Option<string[]> assumeKindOption = FuzzyCommandSupport.CreateAssumeKindOption();
@@ -484,7 +484,7 @@ internal static class EntityImpactCommandSupport
     {
         Option<string?> queryOption = new("--query") { Description = "Entity type query." };
         Option<string?> candidateIdOption = FuzzyCommandSupport.CreateCandidateIdOption();
-        Option<FileInfo?> fileOption = new("--file") { Description = "Path to a C# source file in the workspace." };
+        Option<FileInfo?> fileOption = new("--file") { Description = "Path to a C# or Visual Basic source file in the workspace." };
         Option<int?> lineOption = new("--line") { Description = "1-based source line." };
         Option<int?> columnOption = new("--column") { Description = "1-based source column." };
         Option<string[]> assumeKindOption = FuzzyCommandSupport.CreateAssumeKindOption();

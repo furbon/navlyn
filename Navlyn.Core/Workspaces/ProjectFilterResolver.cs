@@ -1,5 +1,6 @@
 ﻿using Microsoft.CodeAnalysis;
 using Navlyn.Diagnostics;
+using Navlyn.Languages;
 using Navlyn.Paths;
 
 namespace Navlyn.Workspaces;
@@ -144,7 +145,7 @@ internal sealed class ProjectFilterResolver
     {
         return filter.Contains(Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
             filter.Contains(Path.AltDirectorySeparatorChar, StringComparison.Ordinal) ||
-            string.Equals(Path.GetExtension(filter), ".csproj", StringComparison.OrdinalIgnoreCase);
+            SourceLanguageFacts.IsSupportedProjectFile(filter);
     }
 
     private static AppliedProjectFilter CreateAppliedFilter(string filter, Project project)

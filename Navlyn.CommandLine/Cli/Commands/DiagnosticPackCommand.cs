@@ -20,7 +20,7 @@ internal static class DiagnosticPackCommand
         };
         Option<FileInfo?> fileOption = new("--file")
         {
-            Description = "Path to a C# source file containing the diagnostic."
+            Description = "Path to a C# or Visual Basic source file containing the diagnostic."
         };
         Option<int?> lineOption = new("--line")
         {
