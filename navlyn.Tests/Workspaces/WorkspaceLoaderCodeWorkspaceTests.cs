@@ -33,6 +33,31 @@ public sealed class WorkspaceLoaderCodeWorkspaceTests
     }
 
     [Fact]
+    public async Task LoadAsync_CodeWorkspaceWithVisualBasicCandidate_LoadsSelectedWorkspace()
+    {
+        string repoRoot = FindRepositoryRoot();
+        using TemporaryDirectory temp = TemporaryDirectory.Create();
+        string codeWorkspace = Path.Combine(temp.Path, "sample-vb.code-workspace");
+        string folder = Path.Combine(repoRoot, "tests", "fixtures", "VisualBasicFixture");
+        File.WriteAllText(codeWorkspace, $$"""
+            {
+                "folders": [
+                    { "path": "{{EscapeJson(folder)}}" }
+                ]
+            }
+            """);
+
+        WorkspaceLoadResult result = await new WorkspaceLoader().LoadAsync(new FileInfo(codeWorkspace), CancellationToken.None);
+
+        Assert.Null(result.Error);
+        Assert.Empty(result.Diagnostics);
+        Assert.NotNull(result.Workspace);
+        using LoadedWorkspace workspace = result.Workspace;
+        Assert.Equal("project", workspace.Kind);
+        Assert.Equal("tests/fixtures/VisualBasicFixture/VisualBasicFixture.vbproj", workspace.DisplayPath);
+    }
+
+    [Fact]
     public async Task LoadAsync_CodeWorkspaceWithMultipleBestCandidates_ReturnsAmbiguousError()
     {
         using TemporaryDirectory temp = TemporaryDirectory.Create();

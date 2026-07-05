@@ -21,7 +21,7 @@ internal static class ReferencesCommand
 
         return SourcePositionCommand.Create(
             "references",
-            "Find source references for the C# symbol at a source position.",
+            "Find source references for the C# or Visual Basic symbol at a source position.",
             [resultProjectOption, resultPathOption, resultKindOption, usageKindOption, groupByOption, limitOption, scopeOption, maxDocumentsOption],
             (workspace, options, parseResult, cancellationToken) => ExecuteAsync(
                 workspace,

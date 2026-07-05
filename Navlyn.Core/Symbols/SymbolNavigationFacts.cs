@@ -1,7 +1,7 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Navlyn.GeneratedCode;
 using Navlyn.Paths;
+using CSharpSyntax = Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Navlyn.Symbols;
 
@@ -102,7 +102,7 @@ internal static class SymbolNavigationFacts
                 return NormalizeSourceNavigationSymbol(declaredSymbol);
             }
 
-            if (node is NameSyntax nameSyntax)
+            if (node is CSharpSyntax.NameSyntax nameSyntax)
             {
                 IAliasSymbol? aliasSymbol = semanticModel.GetAliasInfo(nameSyntax, cancellationToken);
                 if (aliasSymbol is not null)

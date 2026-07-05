@@ -1,5 +1,6 @@
 ﻿using System.CommandLine;
 using System.CommandLine.Parsing;
+using System.Text.Json;
 using Navlyn.Diagnostics;
 using Navlyn.Workspaces;
 
@@ -52,7 +53,7 @@ internal static class WorkspaceCommand
         {
             FileInfo workspace = parseResult.GetValue(workspaceOption)!;
             string? workspaceRootPolicy = parseResult.GetValue(workspaceRootPolicyOption);
-            return ExecuteWithWorkspaceAsync(workspace, workspaceRootPolicy, parseResult, executeAsync, cancellationToken);
+            return ExecuteWithWorkspaceAsync(name, workspace, workspaceRootPolicy, parseResult, executeAsync, cancellationToken);
         });
 
         return command;
@@ -72,14 +73,22 @@ internal static class WorkspaceCommand
     }
 
     private static async Task<int> ExecuteWithWorkspaceAsync(
+        string commandName,
         FileInfo workspace,
         string? workspaceRootPolicy,
         ParseResult parseResult,
         Func<LoadedWorkspace, FileInfo, ParseResult, CancellationToken, Task<int>> executeAsync,
         CancellationToken cancellationToken)
     {
-        WorkspaceLoadOptions options = new(ParseWorkspaceRootPolicy(workspaceRootPolicy));
-        WorkspaceLoadResult loadResult = await new WorkspaceLoader().LoadAsync(workspace, options, cancellationToken);
+        WorkspaceTimingCollector? timing = IsTimingEnabled()
+            ? new WorkspaceTimingCollector()
+            : null;
+        WorkspaceLoadOptions options = new(ParseWorkspaceRootPolicy(workspaceRootPolicy), timing);
+        WorkspaceLoadResult loadResult;
+        using (timing?.Measure("workspace.total-load"))
+        {
+            loadResult = await new WorkspaceLoader().LoadAsync(workspace, options, cancellationToken);
+        }
 
         foreach (WorkspaceLoadDiagnostic diagnostic in loadResult.Diagnostics)
         {
@@ -93,7 +102,41 @@ internal static class WorkspaceCommand
         }
 
         using LoadedWorkspace workspaceHandle = loadResult.Workspace!;
-        return await executeAsync(workspaceHandle, workspace, parseResult, cancellationToken);
+        int exitCode;
+        using (timing?.Measure("command.execute-and-serialize"))
+        {
+            exitCode = await executeAsync(workspaceHandle, workspace, parseResult, cancellationToken);
+        }
+
+        WriteTimingIfEnabled(commandName, timing);
+        return exitCode;
+    }
+
+    private static bool IsTimingEnabled()
+    {
+        string? value = Environment.GetEnvironmentVariable("NAVLYN_PROFILE_TIMINGS");
+        return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void WriteTimingIfEnabled(string commandName, WorkspaceTimingCollector? timing)
+    {
+        if (timing is null)
+        {
+            return;
+        }
+
+        var payload = new
+        {
+            schemaVersion = "navlyn.timing.v1",
+            command = commandName,
+            stages = timing.Stages.Select(stage => new
+            {
+                name = stage.Name,
+                elapsedMs = stage.ElapsedMs
+            }).ToArray()
+        };
+        Console.Error.WriteLine($"NAVLYN_TIMING {JsonSerializer.Serialize(payload)}");
     }
 
     private static WorkspaceRootPolicy? ParseWorkspaceRootPolicy(string? value)

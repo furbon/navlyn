@@ -10,6 +10,8 @@ This directory contains envelope-first schemas plus focused schemas for high-ris
 - `navlyn-symbol-source-result.schema.json`: bounded `symbol-source` / MCP symbol source result shape.
 - `navlyn-workspace-status-result.schema.json`: `workspace-status` and `workspace-refresh` result shape, including snapshot and cache freshness fields.
 - `navlyn-symbol-search-metadata.schema.json`: `search` metadata emitted by scoped reverse-edge operations such as `references` and `callers`.
+- `navlyn-edit-preflight-result.schema.json`: `edit-preflight` / MCP edit-preflight anchor, evidence, confidence, and next-guard envelope.
+- `navlyn-agent-guard-result.schema.json`: `post-edit-guard` and `wrong-symbol-guard` result shape, including risk, match scores, and policy fields.
 
 The schemas intentionally focus on automation-critical envelopes and high-risk command results rather than every command-specific domain object. Those facts are documented in `docs/navlyn-cli-commands.md` and guarded by focused resolver tests, CLI contract tests, and representative golden snapshots. When a command adds automation-critical top-level fields or freshness/cost metadata, add or update a focused schema here and cover it from `navlyn.Tests/Contracts`.
 

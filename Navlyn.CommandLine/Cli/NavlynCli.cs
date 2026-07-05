@@ -50,6 +50,7 @@ internal static class NavlynCli
     private static RootCommand CreateRootCommand()
     {
         RootCommand rootCommand = new("Semantic code navigation and investigation for agents and automation.");
+        rootCommand.Subcommands.Add(DoctorCommand.Create());
         rootCommand.Subcommands.Add(CheckCommand.Create());
         rootCommand.Subcommands.Add(OverviewCommand.Create());
         rootCommand.Subcommands.Add(RepoGraphCommand.Create());
@@ -85,6 +86,12 @@ internal static class NavlynCli
         rootCommand.Subcommands.Add(ReviewPackCommand.Create());
         rootCommand.Subcommands.Add(DiagnosticPackCommand.Create());
         rootCommand.Subcommands.Add(ContextPackCommand.Create());
+        rootCommand.Subcommands.Add(AgentEvidenceCommand.CreateEditPreflight());
+        rootCommand.Subcommands.Add(AgentEvidenceCommand.CreatePostEditGuard());
+        rootCommand.Subcommands.Add(AgentEvidenceCommand.CreateWrongSymbolGuard());
+        rootCommand.Subcommands.Add(AgentEvidenceCommand.CreateChangeIntentPack());
+        rootCommand.Subcommands.Add(AgentEvidenceCommand.CreateAgentHandoffPack());
+        rootCommand.Subcommands.Add(AgentEvidenceCommand.CreateConfidenceLedger());
         rootCommand.Subcommands.Add(PublicApiDiffCommand.Create());
         rootCommand.Subcommands.Add(TestsForSymbolCommand.Create());
         rootCommand.Subcommands.Add(TestsForDiffCommand.Create());

@@ -1,7 +1,7 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 using Navlyn.Diagnostics;
+using Navlyn.Languages;
 
 namespace Navlyn.Symbols;
 
@@ -84,7 +84,7 @@ internal sealed class SymbolsInResolver
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!token.IsKind(SyntaxKind.IdentifierToken) || !Overlaps(token.Span, sourceSpan))
+            if (!SourceLanguageFacts.IsIdentifierToken(token) || !Overlaps(token.Span, sourceSpan))
             {
                 continue;
             }

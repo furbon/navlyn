@@ -1,8 +1,8 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using Navlyn.Diagnostics;
 using Navlyn.GeneratedCode;
+using Navlyn.Languages;
 using Navlyn.Paths;
 
 namespace Navlyn.Symbols;
@@ -92,7 +92,7 @@ internal sealed class SymbolSourceResolver
 
         SyntaxNode root = syntaxTree.GetRoot(cancellationToken);
         SourceText text = syntaxTree.GetText(cancellationToken);
-        SyntaxNode? declaration = FindDeclarationNode(root, symbol, location);
+        SyntaxNode? declaration = SourceLanguageFacts.FindDeclarationNode(root, symbol, location);
         if (declaration is null)
         {
             yield break;
@@ -126,28 +126,6 @@ internal sealed class SymbolSourceResolver
         }
     }
 
-    private static SyntaxNode? FindDeclarationNode(SyntaxNode root, ISymbol symbol, Location location)
-    {
-        SyntaxNode node = root.FindNode(location.SourceSpan, getInnermostNodeForTie: true);
-        IEnumerable<SyntaxNode> candidates = node.AncestorsAndSelf();
-        return symbol switch
-        {
-            INamedTypeSymbol { TypeKind: TypeKind.Delegate } => candidates.OfType<DelegateDeclarationSyntax>().FirstOrDefault(),
-            INamedTypeSymbol { TypeKind: TypeKind.Enum } => candidates.OfType<EnumDeclarationSyntax>().FirstOrDefault(),
-            INamedTypeSymbol => candidates.OfType<TypeDeclarationSyntax>().FirstOrDefault(),
-            IMethodSymbol { MethodKind: MethodKind.Constructor or MethodKind.StaticConstructor } => candidates.OfType<ConstructorDeclarationSyntax>().FirstOrDefault(),
-            IMethodSymbol { MethodKind: MethodKind.LocalFunction } => candidates.OfType<LocalFunctionStatementSyntax>().FirstOrDefault(),
-            IMethodSymbol => candidates.OfType<MethodDeclarationSyntax>().FirstOrDefault<SyntaxNode>() ?? candidates.OfType<OperatorDeclarationSyntax>().FirstOrDefault<SyntaxNode>(),
-            IPropertySymbol { IsIndexer: true } => candidates.OfType<IndexerDeclarationSyntax>().FirstOrDefault(),
-            IPropertySymbol => candidates.OfType<PropertyDeclarationSyntax>().FirstOrDefault(),
-            IEventSymbol => candidates.OfType<EventDeclarationSyntax>().FirstOrDefault<SyntaxNode>() ?? candidates.OfType<EventFieldDeclarationSyntax>().FirstOrDefault<SyntaxNode>(),
-            IFieldSymbol => candidates.OfType<FieldDeclarationSyntax>().FirstOrDefault(),
-            IParameterSymbol => candidates.OfType<ParameterSyntax>().FirstOrDefault(),
-            ILocalSymbol => candidates.OfType<VariableDeclaratorSyntax>().FirstOrDefault(),
-            _ => candidates.FirstOrDefault(candidate => candidate is MemberDeclarationSyntax)
-        };
-    }
-
     private static IEnumerable<(string TextKind, TextSpan Span)> GetViewSpans(
         SyntaxNode declaration,
         string view,
@@ -156,72 +134,12 @@ internal sealed class SymbolSourceResolver
         return view switch
         {
             "signature" => [],
-            "body" => GetBodySpans(declaration),
-            "members" => GetMemberSpans(declaration),
-            "xml-doc" => GetXmlDocSpans(declaration),
-            "attributes" => GetAttributeSpans(declaration),
+            "body" => SourceLanguageFacts.GetBodySpans(declaration),
+            "members" => SourceLanguageFacts.GetMemberSpans(declaration),
+            "xml-doc" => SourceLanguageFacts.GetXmlDocSpans(declaration),
+            "attributes" => SourceLanguageFacts.GetAttributeSpans(declaration),
             _ => [("declaration", declaration.Span)]
         };
-    }
-
-    private static IEnumerable<(string TextKind, TextSpan Span)> GetBodySpans(SyntaxNode declaration)
-    {
-        SyntaxNode? body = declaration switch
-        {
-            BaseMethodDeclarationSyntax method => (SyntaxNode?)method.Body ?? method.ExpressionBody,
-            LocalFunctionStatementSyntax local => (SyntaxNode?)local.Body ?? local.ExpressionBody,
-            PropertyDeclarationSyntax property => (SyntaxNode?)property.AccessorList ?? property.ExpressionBody,
-            IndexerDeclarationSyntax indexer => (SyntaxNode?)indexer.AccessorList ?? indexer.ExpressionBody,
-            AccessorDeclarationSyntax accessor => (SyntaxNode?)accessor.Body ?? accessor.ExpressionBody,
-            TypeDeclarationSyntax type => type.Members.Count == 0 ? null : type,
-            _ => declaration
-        };
-
-        if (body is not null)
-        {
-            yield return ("body", body.Span);
-        }
-    }
-
-    private static IEnumerable<(string TextKind, TextSpan Span)> GetMemberSpans(SyntaxNode declaration)
-    {
-        SyntaxList<MemberDeclarationSyntax> members = declaration switch
-        {
-            TypeDeclarationSyntax type => type.Members,
-            CompilationUnitSyntax unit => unit.Members,
-            _ => default
-        };
-
-        foreach (MemberDeclarationSyntax member in members)
-        {
-            yield return ("member", member.Span);
-        }
-    }
-
-    private static IEnumerable<(string TextKind, TextSpan Span)> GetXmlDocSpans(SyntaxNode declaration)
-    {
-        foreach (SyntaxTrivia trivia in declaration.GetLeadingTrivia())
-        {
-            if (trivia.GetStructure() is DocumentationCommentTriviaSyntax)
-            {
-                yield return ("xml-doc", trivia.FullSpan);
-            }
-        }
-    }
-
-    private static IEnumerable<(string TextKind, TextSpan Span)> GetAttributeSpans(SyntaxNode declaration)
-    {
-        SyntaxList<AttributeListSyntax> attributes = declaration switch
-        {
-            MemberDeclarationSyntax member => member.AttributeLists,
-            ParameterSyntax parameter => parameter.AttributeLists,
-            _ => default
-        };
-
-        foreach (AttributeListSyntax attribute in attributes)
-        {
-            yield return ("attributes", attribute.Span);
-        }
     }
 
     private static SymbolSourceSlice? CreateSlice(

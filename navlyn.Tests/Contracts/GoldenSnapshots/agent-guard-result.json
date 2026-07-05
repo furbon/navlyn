@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "navlyn.agent-guard.v1",
+  "workspace": "navlyn.slnx",
+  "kind": "solution",
+  "command": "post-edit-guard",
+  "ok": true,
+  "anchor": {
+    "candidateId": "sym:v1:0123456789abcdef",
+    "name": "CheckCommand",
+    "kind": "NamedType",
+    "container": "Navlyn.Cli.Commands",
+    "project": "Navlyn.CommandLine(net10.0)",
+    "path": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs",
+    "line": 6,
+    "column": 23,
+    "endLine": 31,
+    "endColumn": 2,
+    "selectedTarget": null,
+    "confidence": "high",
+    "ambiguityReason": null
+  },
+  "diff": {
+    "mode": "working-tree"
+  },
+  "changedSymbols": {
+    "totalSymbols": 1,
+    "symbols": [
+      {
+        "name": "CheckCommand",
+        "kind": "NamedType",
+        "container": "Navlyn.Cli.Commands",
+        "path": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs",
+        "line": 6,
+        "facts": {
+          "project": "Navlyn.CommandLine(net10.0)"
+        }
+      }
+    ]
+  },
+  "projectFilters": null,
+  "scores": [
+    {
+      "score": 1,
+      "symbol": {
+        "name": "CheckCommand",
+        "kind": "NamedType"
+      },
+      "matches": [
+        "name",
+        "kind",
+        "container",
+        "path",
+        "project"
+      ],
+      "mismatches": []
+    }
+  ],
+  "bestScore": 1,
+  "risk": "low",
+  "reasonCodes": [
+    "matched-container",
+    "matched-kind",
+    "matched-name",
+    "matched-path",
+    "matched-project"
+  ],
+  "policy": {
+    "failOnRisk": "high",
+    "passed": true
+  },
+  "warnings": [],
+  "recommendedAction": "Continue, then run focused tests related to the changed symbol.",
+  "proofBoundary": "Static source diff comparison only; generated/runtime/reflection behavior is outside this guard."
+}

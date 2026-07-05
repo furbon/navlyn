@@ -1,7 +1,7 @@
 ﻿using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
+using Microsoft.CodeAnalysis.Operations;
 using Microsoft.CodeAnalysis.Text;
 using Navlyn.Diagnostics;
 
@@ -145,7 +145,7 @@ internal sealed class CallHierarchyResolver
         {
             return CallsResolutionResult.Failed(
                 DiagnosticIds.SymbolNotFoundAtPosition,
-                $"No containing C# member found at {sourceDocument.DisplayPath}:{line}:{column}.",
+                $"No containing source member found at {sourceDocument.DisplayPath}:{line}:{column}.",
                 ExitCodes.UsageError);
         }
 
@@ -160,7 +160,7 @@ internal sealed class CallHierarchyResolver
         {
             return CallsResolutionResult.Failed(
                 DiagnosticIds.SymbolNotFoundAtPosition,
-                $"No containing C# member found at {sourceDocument.DisplayPath}:{line}:{column}.",
+                $"No containing source member found at {sourceDocument.DisplayPath}:{line}:{column}.",
                 ExitCodes.UsageError);
         }
 
@@ -332,41 +332,24 @@ internal sealed class CallHierarchyResolver
         SyntaxNode node,
         CancellationToken cancellationToken)
     {
-        ISymbol? symbol = node switch
+        IOperation? operation = semanticModel.GetOperation(node, cancellationToken);
+        ISymbol? symbol = operation switch
         {
-            InvocationExpressionSyntax invocation => ResolveInvocationCalleeSymbol(
-                semanticModel,
-                invocation,
-                cancellationToken),
-            ObjectCreationExpressionSyntax creation => semanticModel.GetSymbolInfo(creation, cancellationToken).Symbol,
-            ImplicitObjectCreationExpressionSyntax creation => semanticModel.GetSymbolInfo(creation, cancellationToken).Symbol,
-            ElementAccessExpressionSyntax elementAccess => semanticModel.GetSymbolInfo(elementAccess, cancellationToken).Symbol,
-            BinaryExpressionSyntax binary => GetUserDefinedOperator(semanticModel.GetSymbolInfo(binary, cancellationToken).Symbol),
-            IdentifierNameSyntax identifier => GetEventOrPropertySymbol(semanticModel.GetSymbolInfo(identifier, cancellationToken).Symbol),
+            IInvocationOperation invocation => invocation.TargetMethod,
+            IObjectCreationOperation creation => creation.Constructor,
+            IPropertyReferenceOperation property => property.Property,
+            IEventReferenceOperation eventReference => eventReference.Event,
+            IMethodReferenceOperation methodReference => methodReference.Method,
+            IBinaryOperation binary => binary.OperatorMethod,
+            IConversionOperation conversion => conversion.OperatorMethod,
             _ => null
         };
+
+        symbol ??= GetEventOrPropertySymbol(semanticModel.GetSymbolInfo(node, cancellationToken).Symbol);
 
         return symbol is IMethodSymbol { AssociatedSymbol: not null } method
             ? method.AssociatedSymbol
             : symbol?.OriginalDefinition ?? symbol;
-    }
-
-    private static ISymbol? ResolveInvocationCalleeSymbol(
-        SemanticModel semanticModel,
-        InvocationExpressionSyntax invocation,
-        CancellationToken cancellationToken)
-    {
-        ISymbol? symbol = semanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol;
-        if (symbol is not IMethodSymbol { MethodKind: MethodKind.DelegateInvoke })
-        {
-            return symbol;
-        }
-
-        ISymbol? invokedExpressionSymbol = semanticModel.GetSymbolInfo(invocation.Expression, cancellationToken).Symbol;
-        return invokedExpressionSymbol is not null &&
-            SymbolNavigationFacts.GetSourceLocations(invokedExpressionSymbol).Count > 0
-            ? invokedExpressionSymbol
-            : symbol;
     }
 
     private static ISymbol? GetUserDefinedOperator(ISymbol? symbol)

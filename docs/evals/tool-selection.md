@@ -2,6 +2,8 @@
 
 This eval checks whether an agent chooses the smallest useful Navlyn surface for a request. It is a tool-choice policy eval, not a model benchmark.
 
+For wrong-symbol avoidance, pre-edit anchors, and post-edit changed-symbol verification, see `docs/evals/agent-evidence.md`.
+
 The machine-readable scenario file is `docs/evals/tool-selection.scenarios.json`. Run the baseline scorer from the repository root:
 
 ```powershell
@@ -17,7 +19,7 @@ Mark each scenario:
 
 - `pass`: the chosen tools match the expected first step and stop condition.
 - `partial`: the tool is useful but broader than needed.
-- `fail`: the agent uses Navlyn when text/file reading is enough, skips Navlyn when C# semantic identity matters, or runs broad workflows as a checklist.
+- `fail`: the agent uses Navlyn when text/file reading is enough, skips Navlyn when C# or Visual Basic semantic identity matters, or runs broad workflows as a checklist.
 
 Record the prompt, chosen tool sequence, stop condition, and any stdout/stderr issues.
 
@@ -34,7 +36,7 @@ When evaluating MCP, record the active startup tool profile. Default `reader` pr
 | "Who calls this method?" | Resolve the target, then `navlyn_symbol_edges(operation: "callers")` or CLI `callers` | Callers answer the question or limits indicate rerun | `context-pack` before callers |
 | "What files should be read before changing this symbol?" | Start MCP with `--tool-profile edit`, resolve the target, inspect references or impact, then `navlyn_context_pack` if needed | Bounded reading queue is present | Treating `nextActions` as a checklist; running every exposed edit tool |
 | "What projects and target frameworks are in this repo?" | `navlyn_workspace_summary(profile: "compact")` or CLI `repo-graph --profile compact` | Project/target facts are returned | Symbol navigation |
-| "Inspect this known C# file before deciding if more facts are needed." | In MCP `reader` profile, `navlyn_file_outline` or `navlyn_inspect_file` | File outline answers or yields one selected follow-up | `navlyn_batch`, `navlyn_review_diff`, `navlyn_tests_for_diff`, `navlyn_public_api_diff`, `navlyn_di_impact` |
+| "Inspect this known C# or Visual Basic file before deciding if more facts are needed." | In MCP `reader` profile, `navlyn_file_outline` or `navlyn_inspect_file` | File outline answers or yields one selected follow-up | `navlyn_batch`, `navlyn_review_diff`, `navlyn_tests_for_diff`, `navlyn_public_api_diff`, `navlyn_di_impact` |
 | "Is this route protected?" | `route-map` or `route-impact` for ASP.NET facts | Route/auth source facts are returned with limitations understood | Runtime security claims |
 
 ## Manual Trace Template

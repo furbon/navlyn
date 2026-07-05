@@ -1,7 +1,7 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Navlyn.GeneratedCode;
+using Navlyn.Languages;
 
 namespace Navlyn.Symbols;
 
@@ -143,7 +143,7 @@ internal sealed class TypeHierarchyResolver
                     continue;
                 }
 
-                foreach (BaseTypeDeclarationSyntax declaration in root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
+                foreach (SyntaxNode declaration in root.DescendantNodes().Where(SourceLanguageFacts.IsDeclarationNode))
                 {
                     if (semanticModel.GetDeclaredSymbol(declaration, cancellationToken) is INamedTypeSymbol type)
                     {

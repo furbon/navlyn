@@ -25,7 +25,7 @@ internal static class SymbolDiagnosticsCommand
 
         return SourcePositionCommand.Create(
             "symbol-diagnostics",
-            "Return compiler diagnostics scoped to the C# symbol at a source position.",
+            "Return compiler diagnostics scoped to the C# or Visual Basic symbol at a source position.",
             [severityOption, idOption, limitOption],
             (workspace, options, parseResult, cancellationToken) => ExecuteAsync(
                 workspace,

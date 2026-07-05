@@ -1,6 +1,7 @@
 ﻿using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.VisualBasic;
 
 namespace Navlyn.Workspaces;
 
@@ -14,31 +15,49 @@ internal static partial class ProjectContextFacts
             return targetFramework;
         }
 
-        if (project.ParseOptions is not CSharpParseOptions parseOptions)
+        if (project.ParseOptions is CSharpParseOptions parseOptions)
         {
-            return null;
+            return parseOptions.PreprocessorSymbolNames
+                .Select(GetTargetFrameworkFromPreprocessorSymbol)
+                .Where(value => value is not null)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .FirstOrDefault();
         }
 
-        return parseOptions.PreprocessorSymbolNames
-            .Select(GetTargetFrameworkFromPreprocessorSymbol)
-            .Where(value => value is not null)
-            .OrderBy(value => value, StringComparer.Ordinal)
-            .FirstOrDefault();
+        if (project.ParseOptions is VisualBasicParseOptions visualBasicParseOptions)
+        {
+            return visualBasicParseOptions.PreprocessorSymbols
+                .Select(symbol => symbol.Key)
+                .Select(GetTargetFrameworkFromPreprocessorSymbol)
+                .Where(value => value is not null)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .FirstOrDefault();
+        }
+
+        return null;
     }
 
     public static string? GetLanguageVersion(Project project)
     {
-        return project.ParseOptions is CSharpParseOptions parseOptions
-            ? parseOptions.LanguageVersion.ToString()
-            : null;
+        return project.ParseOptions switch
+        {
+            CSharpParseOptions parseOptions => parseOptions.LanguageVersion.ToString(),
+            VisualBasicParseOptions parseOptions => parseOptions.LanguageVersion.ToString(),
+            _ => null
+        };
     }
 
     public static IReadOnlyList<string> GetPreprocessorSymbols(Project project)
     {
-        return project.ParseOptions is CSharpParseOptions parseOptions
-            ? [.. parseOptions.PreprocessorSymbolNames
-                .OrderBy(symbol => symbol, StringComparer.Ordinal)]
-            : [];
+        return project.ParseOptions switch
+        {
+            CSharpParseOptions parseOptions => [.. parseOptions.PreprocessorSymbolNames
+                .OrderBy(symbol => symbol, StringComparer.Ordinal)],
+            VisualBasicParseOptions parseOptions => [.. parseOptions.PreprocessorSymbols
+                .Select(symbol => symbol.Key)
+                .OrderBy(symbol => symbol, StringComparer.Ordinal)],
+            _ => []
+        };
     }
 
     private static string? GetTargetFrameworkFromProjectName(string projectName)

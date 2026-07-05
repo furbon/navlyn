@@ -12,7 +12,7 @@ internal static class SymbolAtCommand
     {
         return SourcePositionCommand.Create(
             "symbol-at",
-            "Resolve the C# symbol at a source position.",
+            "Resolve the C# or Visual Basic symbol at a source position.",
             ExecuteAsync);
     }
 

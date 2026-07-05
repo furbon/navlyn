@@ -10,7 +10,7 @@ internal static class SharedOptions
     {
         return new Option<FileInfo>("--workspace")
         {
-            Description = "Path to a navlyn.workspace.json, .code-workspace, .slnx, .sln, or .csproj workspace, or auto.",
+            Description = "Path to a navlyn.workspace.json, .code-workspace, .slnx, .sln, .csproj, or .vbproj workspace, or auto.",
             Required = true
         };
     }
@@ -96,7 +96,7 @@ internal static class SharedOptions
     {
         return new Option<string[]>("--project")
         {
-            Description = "Restrict results to a project name or repository-relative .csproj path. Can be specified more than once.",
+            Description = "Restrict results to a project name or repository-relative .csproj/.vbproj path. Can be specified more than once.",
             AllowMultipleArgumentsPerToken = true
         };
     }
@@ -105,7 +105,7 @@ internal static class SharedOptions
     {
         return new Option<string?>("--project")
         {
-            Description = "Resolve the source position in the context of a project name or repository-relative .csproj path."
+            Description = "Resolve the source position in the context of a project name or repository-relative .csproj/.vbproj path."
         };
     }
 
@@ -129,7 +129,7 @@ internal static class SharedOptions
     {
         return new Option<FileInfo>("--file")
         {
-            Description = "Path to a C# source file in the workspace.",
+            Description = "Path to a C# or Visual Basic source file in the workspace.",
             Required = true
         };
     }

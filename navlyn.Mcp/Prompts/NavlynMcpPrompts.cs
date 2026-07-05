@@ -6,7 +6,7 @@ namespace Navlyn.Mcp.Prompts;
 [McpServerPromptType]
 internal static class NavlynMcpPrompts
 {
-    [McpServerPrompt(Name = "navlyn_understand_symbol", Title = "Understand A C# Symbol")]
+    [McpServerPrompt(Name = "navlyn_understand_symbol", Title = "Understand A C# Or Visual Basic Symbol")]
     [Description("Guide an MCP client through a facts-only Navlyn symbol understanding flow.")]
     public static string UnderstandSymbol(
         [Description("Candidate id from navlyn_resolve_target or navlyn_find_symbol when available.")] string? candidateId = null,
@@ -14,7 +14,7 @@ internal static class NavlynMcpPrompts
     {
         string target = FormatTarget(candidateId, query);
         return $"""
-Use Navlyn as a facts-only C# semantic investigation server for {target}.
+Use Navlyn as a facts-only C#-first .NET semantic investigation server for {target}; Visual Basic source is supported through Roslyn/MSBuild.
 
 Recommended flow:
 1. If candidateId is missing, call navlyn_resolve_target with the query and inspect confidence, selectedTarget, candidates, and warnings.
@@ -26,7 +26,7 @@ Do not infer runtime behavior from static facts alone. Check confidence, warning
 """;
     }
 
-    [McpServerPrompt(Name = "navlyn_prepare_edit", Title = "Prepare A C# Edit")]
+    [McpServerPrompt(Name = "navlyn_prepare_edit", Title = "Prepare A C# Or Visual Basic Edit")]
     [Description("Guide an MCP client through pre-edit semantic investigation using Navlyn facts.")]
     public static string PrepareEdit(
         [Description("Candidate id from navlyn_resolve_target or navlyn_find_symbol when available.")] string? candidateId = null,
@@ -78,7 +78,7 @@ Navlyn does not generate review comments or approve changes. Treat it as source-
 """;
     }
 
-    [McpServerPrompt(Name = "navlyn_fix_diagnostic", Title = "Fix A C# Diagnostic")]
+    [McpServerPrompt(Name = "navlyn_fix_diagnostic", Title = "Fix A C# Or Visual Basic Diagnostic")]
     [Description("Guide an MCP client through a diagnostic-focused Navlyn investigation.")]
     public static string FixDiagnostic(
         [Description("Repository-relative diagnostic file path when known.")] string? file = null,

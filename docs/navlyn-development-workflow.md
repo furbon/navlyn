@@ -6,6 +6,8 @@ This document captures durable local development checks, command implementation 
 
 - `docs/navlyn-cli-commands.md`: public CLI contract. Update this when implemented command behavior changes.
 - `docs/navlyn-mcp-server.md`: public MCP server setup, tool surface, result envelope, and boundaries.
+- `docs/navlyn-first-10-minutes.md`: short first-run onboarding path.
+- `docs/navlyn-positioning.md`: category positioning against search, LSP, analyzers, MCP servers, and review bots.
 - `docs/navlyn-distribution.md`: package validation and release workflow.
 - `docs/navlyn-performance.md`: local performance measurement, MCP cost model, and release-readiness performance smoke.
 - `docs/navlyn-agent-recipes.md`: batch recipes for agents and automation.
@@ -37,7 +39,7 @@ The repository includes `.editorconfig` and `.gitattributes` for editor and Git 
 Navlyn uses separate validation layers so small changes can be checked quickly while release preparation still has a full quality gate.
 
 - Quick validation: `./scripts/test-quick.ps1`
-- CLI contract validation: `./scripts/test-cli-contract.ps1 -Suite core` for the regular loop, `./scripts/test-cli-contract.ps1 -Suite all` for release validation.
+- CLI contract validation: `./scripts/test-cli-contract.ps1 -Suite core` for the regular loop, focused suites for affected public surfaces, and `./scripts/test-cli-contract.ps1 -Suite all` for release validation.
 - xUnit component tests: `dotnet test navlyn.slnx`
 - Focused fixture validation:
   - `./scripts/test-symbol-navigation.ps1`
@@ -54,7 +56,17 @@ PowerShell process tests own the public CLI boundary: real process invocation, s
 
 The xUnit resolver component suite covers representative behavior for definition, references, source-position lookup, symbol info, implementation and hierarchy relationships, fuzzy candidate selection, fuzzy reference summaries, workspace diagnostics filtering, diff symbol resolution, repository graph facts, public API comparison, context pack budgeting, test impact, framework entrypoint detection, and dependency injection registration facts. These tests use controlled Roslyn fixture projects and source marker helpers, so they should be the first place to add coverage for resolver internals, binding edge cases, ranking choices, or diagnostic filtering that can be asserted without spawning the CLI.
 
-CI runs restore, build, xUnit, C# file format validation, quick validation without duplicate xUnit, and the CLI contract core suite on Windows, Ubuntu, and macOS through `pwsh`. Release validation keeps the full CLI contract suite and focused fixture scripts. Keep script examples compatible with PowerShell Core and prefer `./scripts/...` plus `/` path separators in command examples so they work across all CI operating systems.
+Validation timing can be recorded without changing public stdout/stderr contracts:
+
+```powershell
+./scripts/measure-validation.ps1 -Lane quick -NoBuild
+./scripts/measure-validation.ps1 -Lane contract-core -NoBuild
+./scripts/measure-validation.ps1 -Lane all -NoBuild
+```
+
+The wrapper writes structured reports under ignored `artifacts/test-timings/`. Use it before and after validation-script changes, release preparation, or performance-related refactors so slow lanes have concrete evidence instead of impressions.
+
+CI runs restore, build, xUnit, C# file format validation, quick validation without duplicate xUnit, and the CLI contract core suite on Windows, Ubuntu, and macOS through `pwsh`. Release validation keeps the full CLI contract suite and focused fixture scripts. Keep script examples compatible with PowerShell Core and prefer `./scripts/...` plus `/` path separators in command examples so they work across all CI operating systems. The xUnit project disables target-framework parallelism because resolver and MCP process tests can load the same MSBuild workspace while test infrastructure is writing per-framework output files; run explicit framework lanes when debugging runtime-specific failures.
 
 ## Standard Local Checks
 
@@ -123,11 +135,15 @@ dotnet test navlyn.slnx --framework net10.0 --no-build
 ./scripts/test-cli-contract.ps1
 ./scripts/test-cli-contract.ps1 -NoBuild
 ./scripts/test-cli-contract.ps1 -NoBuild -Suite core
+./scripts/test-cli-contract.ps1 -NoBuild -Suite navigation
+./scripts/test-cli-contract.ps1 -NoBuild -Suite workflow
+./scripts/test-cli-contract.ps1 -NoBuild -Suite domain
+./scripts/test-cli-contract.ps1 -NoBuild -Suite mcp-adjacent
 ./scripts/test-cli-contract.ps1 -NoBuild -Suite all
 ./scripts/test-cli-contract.ps1 -NoBuild -ShowOutput
 ```
 
-The CLI contract script defaults to `-Suite all` for backward compatibility. The `core` suite covers root help, required-option failures, workspace commands, top-level JSON shape, path normalization from subdirectories, diagnostics shape, and stable workspace errors. The `all` suite adds representative workflow, domain, fuzzy, source-position, batch, and invalid-input checks. Use a 600 second automation timeout for the `all` suite. It can exceed 300 seconds on slower local runs even when healthy.
+The CLI contract script defaults to `-Suite all` for backward compatibility. The `core` suite covers root help, required-option failures, workspace commands, top-level JSON shape, path normalization from subdirectories, diagnostics shape, and stable workspace errors. The `navigation` suite adds symbol search, source-position, fuzzy discovery, symbol source, references, callers, calls, and related navigation contracts. The `workflow` suite adds review diff, review pack, public API diff, tests-for-symbol/diff, and context-pack contracts. The `domain` suite covers framework entrypoints, dependency injection, routes, options, handlers, EF model, and package usage. The `mcp-adjacent` suite covers batch request contracts and tool-adjacent command envelopes that agent clients depend on. The `all` suite runs every contract lane. Use a 600 second automation timeout for the `all` suite. It can exceed 300 seconds on slower local runs even when healthy.
 
 ### Contract Schemas And Golden Snapshots
 
@@ -145,7 +161,7 @@ Envelope schemas live in `docs/schemas`. Golden snapshots live under `navlyn.Tes
 ./scripts/measure-navlyn-performance.ps1 -Workspace navlyn.slnx -Scenario all -Profile evidence -Iterations 1 -Warmup 0 -NoBuild
 ```
 
-The performance script emits structured JSON with elapsed time, stdout/stderr size, exit code, JSON validity, key counts, truncation state, profile, and command arguments. Keep generated reports under ignored local paths such as `artifacts/performance-smoke/` unless a curated baseline is intentionally being published. The MCP scenario starts a local stdio MCP session and records representative tool-call latency/output-size measurements when the MCP server assembly is built; use `navlyn.Tests.Mcp` coverage for functional MCP validation.
+The performance script emits structured JSON with elapsed time, stdout/stderr size, exit code, JSON validity, key counts, truncation state, profile, and command arguments. Keep generated reports under ignored local paths such as `artifacts/performance-smoke/` unless a curated baseline is intentionally being published. The MCP scenario starts a local stdio MCP session and records representative tool-call latency/output-size measurements when the MCP server assembly is built; use `navlyn.Tests.Mcp` coverage for functional MCP validation. For 0.6.x release work, record at least quick, file-first, agent-loop, diff, and MCP smoke reports. Treat failures, non-JSON stdout, non-empty stderr on success, unexpected truncation, or missing expected files as performance acceptance failures even when elapsed time looks good.
 
 ### Package And PR Facts Scripts
 
@@ -163,7 +179,7 @@ When publishing through GitHub Actions, use the guarded manual workflow with the
 
 ### Focused Fixture Validation
 
-Use focused fixture scripts for behavior that depends on controlled C# source layouts or MSBuild workspace context:
+Use focused fixture scripts for behavior that depends on controlled C# or Visual Basic source layouts or MSBuild workspace context:
 
 ```powershell
 ./scripts/test-symbol-navigation.ps1 -NoBuild
@@ -210,6 +226,8 @@ Recommended command timeouts for automation:
 - `./scripts/test-workspace-semantics.ps1`: at least 180 seconds.
 - `./scripts/test-release.ps1`: at least 900 seconds.
 
+Observed 0.6.0 local baseline on this Windows workstation after build: restore about 1-2 seconds, build about 4 seconds, `dotnet test navlyn.slnx --no-build` about 169 seconds with target frameworks serialized, quick validation without duplicate xUnit about 13 seconds, and CLI contract core about 34 seconds. Use these as a local sanity check, not a universal budget.
+
 When Navlyn has already been built in the same turn, prefer validation scripts with `-NoBuild` to avoid rebuilding and to reduce the chance of `bin`/`obj` file locks.
 
 If a command times out, do not immediately retry with the same timeout. First check whether a previous `dotnet` process is still running and whether it belongs to this repository. Then rerun once with the recommended timeout only after the previous process has exited or has been safely handled.
@@ -248,7 +266,7 @@ If unexpected files change while work is in progress, preserve them. If they aff
 
 ## Practical Agent Workflow Review
 
-Navlyn exists to be used by agents and automation on real C#/.NET repositories. Before closing a command change, review whether the current command set lets an agent avoid broad text search for semantic questions.
+Navlyn exists to be used by agents and automation on real C#-first .NET repositories, with Visual Basic support through Roslyn/MSBuild. Before closing a command change, review whether the current command set lets an agent avoid broad text search for semantic questions.
 
 Use this review when scoping follow-up work:
 
@@ -259,7 +277,7 @@ Use this review when scoping follow-up work:
 - Do symbol results include enough facts for an agent to choose between overloads, generic methods, constructors, extension methods, operators, indexers, nested types, and partial declarations?
 - Does the behavior remain clear for multi-targeting, conditional compilation, linked files, generated code, and metadata-only symbols?
 - Can the same workflow run efficiently through `batch`, including any new command or option?
-- Is the command still complementing text search rather than trying to answer comments, string literals, docs, or non-C# source questions?
+- Is the command still complementing text search rather than trying to answer comments, string literals, docs, or non-Roslyn-source questions?
 
 ## Command Implementation Checklist
 

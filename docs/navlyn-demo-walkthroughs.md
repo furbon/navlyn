@@ -10,18 +10,18 @@ Run from this repository after restore:
 
 ```powershell
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- resolve-target --workspace navlyn.slnx --project "Navlyn.CommandLine(net10.0)" --query CheckCommand --assume-kind NamedType --limit 5
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-source --workspace navlyn.slnx --project "Navlyn.CommandLine(net10.0)" --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23 --view declaration
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- edit-preflight --workspace navlyn.slnx --project "Navlyn.CommandLine(net10.0)" --query CheckCommand --assume-kind NamedType --goal modify --change-kind behavior
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review-diff --workspace navlyn.slnx --base HEAD --head HEAD --profile compact --symbol-limit 3 --impact-limit 3 --diagnostic-limit 3 --related-test-limit 3
 ```
 
-Check that stdout is JSON for each command and stderr is empty or diagnostic-only. The first two commands demonstrate fuzzy-to-exact symbol investigation. The third command demonstrates a bounded review envelope on an explicit Git range; replace the refs with PR refs or omit them on a dirty branch to inspect a real diff.
+Check that stdout is JSON for each command and stderr is empty or diagnostic-only. The first two commands demonstrate fuzzy-to-exact symbol anchoring plus an edit preflight envelope. The third command demonstrates a bounded review envelope on an explicit Git range; replace the refs with PR refs or omit them on a dirty branch to inspect a real diff.
 
 If you are evaluating Navlyn from a package install rather than this repository, run the same shape against your solution:
 
 ```powershell
-navlyn check --workspace path/to/YourRepo.slnx
+navlyn doctor --workspace path/to/YourRepo.slnx
 navlyn resolve-target --workspace path/to/YourRepo.slnx --query PaymentService --assume-kind NamedType
-navlyn references --workspace path/to/YourRepo.slnx --candidate-id sym:v1:... --group-by file --limit 50
+navlyn edit-preflight --workspace path/to/YourRepo.slnx --candidate-id sym:v1:... --goal modify --change-kind behavior
 ```
 
 ## Demo 1: Symbol Investigation
@@ -33,7 +33,7 @@ Run:
 ```powershell
 navlyn repo-graph --workspace navlyn.slnx --profile compact
 navlyn resolve-target --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --limit 5
-navlyn context-pack --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --goal modify --profile compact --budget-tokens 2000
+navlyn edit-preflight --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --goal modify --change-kind behavior --budget-tokens 2000
 ```
 
 Useful output excerpt:
@@ -62,7 +62,7 @@ Useful output excerpt:
 }
 ```
 
-Why it matters: the `candidateId` gives the agent a stable declaration anchor for follow-up commands. The `context-pack` output then gives bounded reading material instead of a raw source dump.
+Why it matters: the `candidateId` gives the agent a stable declaration anchor for follow-up commands. The `edit-preflight` output then gives bounded source, context, related test evidence, known unknowns, and a post-edit guard command instead of a raw source dump.
 
 ## Demo 2: PR Review Facts
 

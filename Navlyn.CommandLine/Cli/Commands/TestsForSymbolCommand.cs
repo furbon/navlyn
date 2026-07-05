@@ -273,7 +273,7 @@ internal static class TestsForSymbolCommand
     {
         return new Option<string[]>("--test-project")
         {
-            Description = "Restrict test discovery to a test project name or repository-relative .csproj path. Can be specified more than once.",
+            Description = "Restrict test discovery to a test project name or repository-relative .csproj/.vbproj path. Can be specified more than once.",
             AllowMultipleArgumentsPerToken = true
         };
     }

@@ -19,7 +19,7 @@ internal static class CallersCommand
 
         return SourcePositionCommand.Create(
             "callers",
-            "Find source callers for the C# symbol at a source position.",
+            "Find source callers for the C# or Visual Basic symbol at a source position.",
             [resultProjectOption, resultPathOption, resultKindOption, limitOption, scopeOption, maxDocumentsOption],
             (workspace, options, parseResult, cancellationToken) => ExecuteAsync(
                 workspace,

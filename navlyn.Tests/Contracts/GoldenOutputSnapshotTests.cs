@@ -298,6 +298,132 @@ public sealed class GoldenOutputSnapshotTests
         Assert.Equal(ReadSnapshot("resolve-target-result.json"), NormalizeJson(result));
     }
 
+    [Fact]
+    public void AgentEvidenceResults_MatchGoldenSnapshots()
+    {
+        JsonObject anchor = SampleAnchor();
+        JsonObject preflight = new()
+        {
+            ["schemaVersion"] = "navlyn.edit-preflight.v1",
+            ["workspace"] = "navlyn.slnx",
+            ["kind"] = "solution",
+            ["command"] = "edit-preflight",
+            ["intent"] = new JsonObject
+            {
+                ["goal"] = "modify",
+                ["changeKind"] = "behavior"
+            },
+            ["anchor"] = SampleAnchor(),
+            ["confidence"] = new JsonObject
+            {
+                ["overall"] = "high",
+                ["evidence"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["kind"] = "target-selected",
+                        ["effect"] = "raises",
+                        ["confidence"] = "high",
+                        ["reasonCodes"] = new JsonArray { "selected-target-present" }
+                    }
+                }
+            },
+            ["source"] = new JsonObject
+            {
+                ["status"] = "ok"
+            },
+            ["context"] = null,
+            ["tests"] = null,
+            ["risk"] = new JsonObject
+            {
+                ["level"] = "low",
+                ["reasonCodes"] = new JsonArray { "runtime-behavior-not-proven" }
+            },
+            ["knownUnknowns"] = new JsonArray { "runtime-behavior-not-proven" },
+            ["limitations"] = new JsonArray { "Navlyn reports static source evidence only; it does not prove runtime behavior." },
+            ["nextCommands"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["command"] = "post-edit-guard",
+                    ["arguments"] = new JsonArray { "--candidate-id", "sym:v1:0123456789abcdef" },
+                    ["reason"] = "Run after editing to confirm the dirty diff still matches the anchor."
+                }
+            },
+            ["stopConditions"] = new JsonArray { "After editing, run post-edit-guard against this preflight anchor before widening scope." },
+            ["commandsRun"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["command"] = "resolve-target",
+                    ["arguments"] = new JsonArray { "--query", "CheckCommand" }
+                }
+            }
+        };
+
+        JsonObject guard = new()
+        {
+            ["schemaVersion"] = "navlyn.agent-guard.v1",
+            ["workspace"] = "navlyn.slnx",
+            ["kind"] = "solution",
+            ["command"] = "post-edit-guard",
+            ["ok"] = true,
+            ["anchor"] = anchor,
+            ["diff"] = new JsonObject
+            {
+                ["mode"] = "working-tree"
+            },
+            ["changedSymbols"] = new JsonObject
+            {
+                ["totalSymbols"] = 1,
+                ["symbols"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["name"] = "CheckCommand",
+                        ["kind"] = "NamedType",
+                        ["container"] = "Navlyn.Cli.Commands",
+                        ["path"] = "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs",
+                        ["line"] = 6,
+                        ["facts"] = new JsonObject
+                        {
+                            ["project"] = "Navlyn.CommandLine(net10.0)"
+                        }
+                    }
+                }
+            },
+            ["projectFilters"] = null,
+            ["scores"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["score"] = 1,
+                    ["symbol"] = new JsonObject
+                    {
+                        ["name"] = "CheckCommand",
+                        ["kind"] = "NamedType"
+                    },
+                    ["matches"] = new JsonArray { "name", "kind", "container", "path", "project" },
+                    ["mismatches"] = new JsonArray()
+                }
+            },
+            ["bestScore"] = 1,
+            ["risk"] = "low",
+            ["reasonCodes"] = new JsonArray { "matched-container", "matched-kind", "matched-name", "matched-path", "matched-project" },
+            ["policy"] = new JsonObject
+            {
+                ["failOnRisk"] = "high",
+                ["passed"] = true
+            },
+            ["warnings"] = new JsonArray(),
+            ["recommendedAction"] = "Continue, then run focused tests related to the changed symbol.",
+            ["proofBoundary"] = "Static source diff comparison only; generated/runtime/reflection behavior is outside this guard."
+        };
+
+        Assert.Equal(ReadSnapshot("edit-preflight-result.json"), NormalizeJson(preflight));
+        Assert.Equal(ReadSnapshot("agent-guard-result.json"), NormalizeJson(guard));
+    }
+
     private static string ReadSnapshot(string fileName)
     {
         return File.ReadAllText(Path.Combine(FindRepositoryRoot(), "navlyn.Tests", "Contracts", "GoldenSnapshots", fileName))
@@ -324,6 +450,26 @@ public sealed class GoldenOutputSnapshotTests
             ["kind"] = kind,
             ["isSource"] = true,
             ["isMetadata"] = false
+        };
+    }
+
+    private static JsonObject SampleAnchor()
+    {
+        return new JsonObject
+        {
+            ["candidateId"] = "sym:v1:0123456789abcdef",
+            ["name"] = "CheckCommand",
+            ["kind"] = "NamedType",
+            ["container"] = "Navlyn.Cli.Commands",
+            ["project"] = "Navlyn.CommandLine(net10.0)",
+            ["path"] = "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs",
+            ["line"] = 6,
+            ["column"] = 23,
+            ["endLine"] = 31,
+            ["endColumn"] = 2,
+            ["selectedTarget"] = null,
+            ["confidence"] = "high",
+            ["ambiguityReason"] = null
         };
     }
 

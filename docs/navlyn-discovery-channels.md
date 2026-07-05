@@ -6,19 +6,19 @@ This note separates repository work from external publishing. External accounts,
 
 Package IDs:
 
-- `navlyn`: read-only semantic C#/.NET evidence CLI.
+- `navlyn`: read-only C#-first .NET semantic evidence CLI with Visual Basic support.
 - `navlyn-mcp`: read-only MCP server for Navlyn evidence workflows.
 
 Suggested package description:
 
 ```text
-Read-only C#/.NET semantic evidence for coding agents before they edit the wrong symbol.
+Read-only C#-first .NET semantic evidence for coding agents before they edit the wrong symbol, with Visual Basic support.
 ```
 
 Suggested tags:
 
 ```text
-dotnet-tool;csharp;dotnet;roslyn;mcp;ai-agents;semantic-code-navigation;automation
+dotnet-tool;csharp;visual-basic;dotnet;roslyn;mcp;ai-agents;semantic-code-navigation;automation
 ```
 
 Publishing is gated by the release runbook in [`navlyn-distribution.md`](navlyn-distribution.md).
@@ -28,19 +28,19 @@ Publishing is gated by the release runbook in [`navlyn-distribution.md`](navlyn-
 Suggested description:
 
 ```text
-Read-only C#/.NET semantic evidence for coding agents before they edit the wrong symbol.
+Read-only C#-first .NET semantic evidence for coding agents before they edit the wrong symbol, with Visual Basic support.
 ```
 
 Suggested topics:
 
 ```text
-csharp, dotnet, roslyn, mcp, mcp-server, ai-agents, code-navigation, semantic-search, cli, automation
+csharp, visual-basic, dotnet, roslyn, mcp, mcp-server, ai-agents, code-navigation, semantic-search, cli, automation
 ```
 
 Suggested release note opening:
 
 ```text
-Navlyn 0.5.0 helps C#/.NET coding agents avoid wrong-symbol edits. It resolves fuzzy intent into stable Roslyn-backed targets, opens bounded source and relationship facts, builds compact context packs, and collects review evidence without editing files. The `navlyn` CLI and standalone `navlyn-mcp` server share the same Navlyn engine.
+Navlyn 0.6.0 helps C#-first .NET coding agents avoid wrong-symbol edits, with Visual Basic support through Roslyn/MSBuild. It resolves fuzzy intent into stable Roslyn-backed targets, opens bounded source and relationship facts, builds compact context packs, and collects review evidence without editing files. The `navlyn` CLI and standalone `navlyn-mcp` server share the same Navlyn engine.
 ```
 
 ## VS Code MCP
@@ -64,7 +64,7 @@ Add a production install link only after testing it with the packaged `navlyn-mc
 }
 ```
 
-`--workspace auto` is convenient only for repositories with one top-level workspace candidate; it prefers `navlyn.workspace.json`, then `.code-workspace`, then `.slnx`, then `.sln`, then `.csproj`. Multi-solution repositories should use an explicit workspace path, preferably repository-local `navlyn.workspace.json` when candidate policy matters.
+`--workspace auto` is convenient only for repositories with one top-level workspace candidate; it prefers `navlyn.workspace.json`, then `.code-workspace`, then `.slnx`, then `.sln`, then `.csproj` or `.vbproj`. Multi-solution repositories should use an explicit workspace path, preferably repository-local `navlyn.workspace.json` when candidate policy matters.
 
 ## MCP Registry
 
@@ -86,10 +86,10 @@ Maintainer-owned external work:
 
 ## Lightweight VS Code Extension Boundary
 
-Navlyn 0.5.0 does not need a full editor extension. If a VS Code extension is justified by user demand, keep it to installer/configurator duties:
+Navlyn 0.6.0 does not need a full editor extension. If a VS Code extension is justified by user demand, keep it to installer/configurator duties:
 
 - detect whether `navlyn` and `navlyn-mcp` are installed;
-- locate likely `.slnx`, `.sln`, or `.csproj` workspace files;
+- locate likely `.slnx`, `.sln`, `.csproj`, or `.vbproj` workspace files;
 - create or update `.vscode/mcp.json`;
 - run `navlyn check` and show the result location;
 - link to MCP server logs.

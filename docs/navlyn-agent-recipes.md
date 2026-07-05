@@ -5,23 +5,25 @@ These recipes teach agents how to use Navlyn without turning it into a broad che
 The core habit is simple:
 
 1. use `rg` or normal file reads when text is enough;
-2. use one Navlyn call when C# semantic identity matters;
+2. use one Navlyn call when C# or Visual Basic semantic identity matters;
 3. reuse `candidateId`;
 4. stop when the returned facts answer the question;
 5. escalate to impact, tests, context, or batch only when the smaller fact shows it is needed.
+
+For a first install-to-success path, see [`navlyn-first-10-minutes.md`](navlyn-first-10-minutes.md). For category positioning, see [`navlyn-positioning.md`](navlyn-positioning.md).
 
 Use `compact` for first scans, `evidence` for review and CI facts, and `full` when downstream tooling expects the richest command result.
 
 ## Use And Stop Rules
 
-Use normal file reads and `rg` first when text is enough. Use Navlyn when a C# semantic fact would change the answer:
+Use normal file reads and `rg` first when text is enough. Use Navlyn when a C# or Visual Basic semantic fact would change the answer:
 
 - The user points at a type, method, property, overload, partial declaration, or source position.
 - Project, target framework, generated-code, or linked-file context matters.
 - The task is a real Git diff review or edit-risk investigation.
 - Static source-level DI, route, public API, package, framework entrypoint, or related-test facts are useful evidence.
 
-Do not use Navlyn for comments, strings, docs, Markdown, non-C# files, generated artifacts, or final review prose. Navlyn does not run tests, edit files, prove runtime behavior, or replace a human reviewer.
+Do not use Navlyn for comments, strings, docs, Markdown, non-Roslyn-source files, generated artifacts, or final review prose. Navlyn does not run tests, edit files, prove runtime behavior, or replace a human reviewer.
 
 Stop once the returned facts answer the question. Escalate only when the next fact is needed:
 
@@ -30,6 +32,8 @@ Stop once the returned facts answer the question. Escalate only when the next fa
 | Approximate symbol name | `resolve-target` | `find` if candidates are ambiguous or the user needs alternatives |
 | Known symbol identity | `definition`, `references`, or `symbol-source` via CLI; `navlyn_symbol_source` or `navlyn_symbol_edges` via MCP | `impact` for edit risk, `context-pack` for a reading queue |
 | Single-file review | `outline` via CLI or `navlyn_file_outline` / `navlyn_inspect_file` via MCP when semantic structure matters | `context-pack` only if the file does not contain enough context |
+| Agent edit preflight | `edit-preflight` via CLI or `navlyn_edit_preflight` in MCP `edit` profile | `change-intent-pack`, `agent-handoff-pack`, or `confidence-ledger` when the work is handed off or audited |
+| Post-edit wrong-symbol check | `post-edit-guard` with the pre-edit `candidateId` or saved preflight | `wrong-symbol-guard` when the intended target should be re-resolved from query/source position |
 | Real Git diff review | `review-diff` | `tests-for-diff`, `public-api-diff`, `review-pack`, or `context-pack --diff` only when relevant |
 | Multiple known facts from one workspace | Individual tools first | CLI `batch` or MCP `navlyn_batch` in `--tool-profile full` after the needed facts are known |
 
@@ -97,6 +101,27 @@ navlyn context-pack --workspace navlyn.slnx --candidate-id sym:v1:... --goal und
 ```
 
 `context-pack` returns ranked items, budget fields, truncation state, warnings, and next actions. It does not dump raw source files or generate prose summaries.
+
+## Pre-Edit And Post-Edit Guardrail
+
+Use Navlyn as an evidence loop around the edit, not as the editor.
+
+Before editing:
+
+```powershell
+navlyn edit-preflight --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --goal modify --change-kind behavior
+navlyn change-intent-pack --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --goal modify --change-kind behavior
+```
+
+After editing:
+
+```powershell
+navlyn post-edit-guard --workspace navlyn.slnx --candidate-id sym:v1:... --fail-on-risk high
+navlyn wrong-symbol-guard --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --fail-on-risk medium
+navlyn review-diff --workspace navlyn.slnx --profile evidence --symbol-limit 20 --impact-limit 40 --diagnostic-limit 40 --related-test-limit 20
+```
+
+`post-edit-guard` compares the diff with a saved anchor or `candidateId`; `wrong-symbol-guard` re-resolves the intended target from query, candidate, or source position and then compares changed symbols. Both commands write JSON even when policy fails. A mismatch is a warning to pause and inspect; it is not a proof that the edit is wrong.
 
 ## PR Review Facts
 
@@ -190,6 +215,7 @@ Entrypoint detection is evidence-backed and bounded. It is not a runtime route t
 Minimal MCP flow for a symbol investigation:
 
 ```text
+navlyn_doctor()
 navlyn_resolve_target(query: "CheckCommand", assumeKind: "NamedType")
 navlyn_exact_navigation(operation: "references", candidateId: "sym:v1:...", usageKinds: ["invoke", "construct"], groupBy: ["file", "usage-kind"], limit: 50)
 navlyn_about_symbol(candidateId: "sym:v1:...")
@@ -201,6 +227,15 @@ Escalate from that flow only when needed:
 navlyn_workspace_summary(profile: "compact") // project/package/test context is needed
 navlyn_related_files(candidateId: "sym:v1:...", limit: 30) // file map is needed
 navlyn_context_pack(candidateId: "sym:v1:...", goal: "modify", changeKind: "signature", profile: "compact") // bounded reading queue is needed
+```
+
+MCP flow for a non-trivial edit:
+
+```text
+Start navlyn-mcp with --tool-profile edit.
+navlyn_edit_preflight(query: "CheckCommand", assumeKind: "NamedType", goal: "modify", changeKind: "behavior")
+// edit outside Navlyn
+navlyn_post_edit_guard(candidateId: "sym:v1:...", failOnRisk: "high")
 ```
 
 MCP flow for a real diff review:
@@ -241,3 +276,7 @@ Use the performance script as a local measurement source:
 ```
 
 Track tool call count, stdout size, latency, truncation, and whether expected files appear in related/context outputs. Keep local reports under ignored paths such as `artifacts/`.
+
+## Agent Evidence Evals
+
+Use [`evals/agent-evidence.md`](evals/agent-evidence.md) to evaluate wrong-symbol avoidance, pre-edit anchor presence, post-edit changed-symbol checks, tool-call count, JSON validity, stderr cleanliness, latency, output size, and expected-file presence.

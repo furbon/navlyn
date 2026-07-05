@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.navlyn.dev/navlyn-edit-preflight-result.schema.json",
+  "title": "Navlyn Edit Preflight Result",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion",
+    "workspace",
+    "kind",
+    "command",
+    "intent",
+    "anchor",
+    "confidence",
+    "risk",
+    "knownUnknowns",
+    "limitations",
+    "nextCommands",
+    "stopConditions",
+    "commandsRun"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "navlyn.edit-preflight.v1" },
+    "workspace": { "type": "string", "minLength": 1 },
+    "kind": { "type": "string", "minLength": 1 },
+    "command": { "const": "edit-preflight" },
+    "intent": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [ "goal" ],
+      "properties": {
+        "goal": { "type": "string", "enum": [ "review", "modify", "understand" ] },
+        "changeKind": {
+          "type": [ "string", "null" ],
+          "enum": [ "behavior", "signature", "rename", "constructor", "nullability", "async", "public-api", "di-registration", "endpoint", null ]
+        }
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [ "confidence" ],
+      "properties": {
+        "candidateId": { "type": [ "string", "null" ], "pattern": "^sym:v1:" },
+        "name": { "type": [ "string", "null" ] },
+        "kind": { "type": [ "string", "null" ] },
+        "container": { "type": [ "string", "null" ] },
+        "project": { "type": [ "string", "null" ] },
+        "path": { "type": [ "string", "null" ] },
+        "line": { "type": [ "integer", "null" ], "minimum": 1 },
+        "column": { "type": [ "integer", "null" ], "minimum": 1 },
+        "confidence": { "type": "string" },
+        "ambiguityReason": { "type": [ "string", "null" ] }
+      }
+    },
+    "confidence": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [ "overall", "evidence" ],
+      "properties": {
+        "overall": { "type": "string" },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true }
+        }
+      }
+    },
+    "source": { "type": [ "object", "null" ], "additionalProperties": true },
+    "context": { "type": [ "object", "null" ], "additionalProperties": true },
+    "tests": { "type": [ "object", "null" ], "additionalProperties": true },
+    "risk": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [ "level", "reasonCodes" ],
+      "properties": {
+        "level": { "type": "string", "enum": [ "low", "medium", "high" ] },
+        "reasonCodes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "knownUnknowns": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "limitations": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "nextCommands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [ "command", "arguments", "reason" ],
+        "properties": {
+          "command": { "type": "string" },
+          "arguments": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "stopConditions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "commandsRun": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    }
+  }
+}

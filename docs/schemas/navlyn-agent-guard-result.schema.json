@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.navlyn.dev/navlyn-agent-guard-result.schema.json",
+  "title": "Navlyn Agent Guard Result",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schemaVersion",
+    "workspace",
+    "kind",
+    "command",
+    "ok",
+    "anchor",
+    "scores",
+    "bestScore",
+    "risk",
+    "reasonCodes",
+    "policy",
+    "warnings",
+    "recommendedAction",
+    "proofBoundary"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "navlyn.agent-guard.v1" },
+    "workspace": { "type": "string", "minLength": 1 },
+    "kind": { "type": "string", "minLength": 1 },
+    "command": { "type": "string", "enum": [ "post-edit-guard", "wrong-symbol-guard" ] },
+    "ok": { "type": "boolean" },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [ "confidence" ],
+      "properties": {
+        "candidateId": { "type": [ "string", "null" ], "pattern": "^sym:v1:" },
+        "name": { "type": [ "string", "null" ] },
+        "kind": { "type": [ "string", "null" ] },
+        "container": { "type": [ "string", "null" ] },
+        "project": { "type": [ "string", "null" ] },
+        "path": { "type": [ "string", "null" ] },
+        "line": { "type": [ "integer", "null" ], "minimum": 1 },
+        "column": { "type": [ "integer", "null" ], "minimum": 1 },
+        "confidence": { "type": "string" },
+        "ambiguityReason": { "type": [ "string", "null" ] }
+      }
+    },
+    "diff": { "type": [ "object", "null" ], "additionalProperties": true },
+    "changedSymbols": { "type": [ "object", "null" ], "additionalProperties": true },
+    "projectFilters": {
+      "type": [ "array", "null" ],
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "scores": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [ "score", "symbol", "matches", "mismatches" ],
+        "properties": {
+          "score": { "type": "number", "minimum": 0, "maximum": 1 },
+          "symbol": { "type": "object", "additionalProperties": true },
+          "matches": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "mismatches": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "bestScore": { "type": "number", "minimum": 0, "maximum": 1 },
+    "risk": { "type": "string", "enum": [ "low", "medium", "high" ] },
+    "reasonCodes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [ "failOnRisk", "passed" ],
+      "properties": {
+        "failOnRisk": { "type": "string", "enum": [ "low", "medium", "high" ] },
+        "passed": { "type": "boolean" }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "recommendedAction": { "type": "string", "minLength": 1 },
+    "proofBoundary": { "type": "string", "minLength": 1 }
+  }
+}

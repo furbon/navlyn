@@ -1,5 +1,5 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Navlyn.Languages;
 using Navlyn.GeneratedCode;
 using Navlyn.Paths;
 using Navlyn.RepoGraph;
@@ -32,6 +32,7 @@ internal sealed class TestDiscoveryResolver
         {
             foreach (Document document in project.Documents
                 .Where(document => document.FilePath is not null)
+                .Where(SourceLanguageFacts.IsSupportedDocument)
                 .Where(document => !excludeGenerated || !GeneratedCodeFacts.IsGeneratedPath(document.FilePath))
                 .OrderBy(document => document.FilePath, StringComparer.Ordinal))
             {
@@ -43,7 +44,7 @@ internal sealed class TestDiscoveryResolver
                     continue;
                 }
 
-                foreach (MethodDeclarationSyntax method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+                foreach (IMethodSymbol method in EnumerateSourceMethods(root, semanticModel, cancellationToken))
                 {
                     string? framework = GetTestFramework(method);
                     if (framework is null)
@@ -51,13 +52,7 @@ internal sealed class TestDiscoveryResolver
                         continue;
                     }
 
-                    ISymbol? symbol = semanticModel.GetDeclaredSymbol(method, cancellationToken);
-                    if (symbol is null)
-                    {
-                        continue;
-                    }
-
-                    SymbolSourceLocation? location = SymbolNavigationFacts.GetSourceLocations(symbol, excludeGenerated).FirstOrDefault();
+                    SymbolSourceLocation? location = SymbolNavigationFacts.GetSourceLocations(method, excludeGenerated).FirstOrDefault();
                     if (location is null)
                     {
                         continue;
@@ -66,9 +61,9 @@ internal sealed class TestDiscoveryResolver
                     candidates.Add(new TestImpactCandidate(
                         Kind: "testMethod",
                         Framework: framework,
-                        Name: symbol.Name,
-                        Container: SymbolNavigationFacts.GetContainer(symbol),
-                        Facts: SymbolFactsBuilder.Create(symbol, project.Name),
+                        Name: method.Name,
+                        Container: SymbolNavigationFacts.GetContainer(method),
+                        Facts: SymbolFactsBuilder.Create(method, project.Name),
                         Path: location.Path,
                         Line: location.Line,
                         Column: location.Column,
@@ -113,11 +108,30 @@ internal sealed class TestDiscoveryResolver
             ReasonCodes: reasons);
     }
 
-    private static string? GetTestFramework(MethodDeclarationSyntax method)
+    private static IReadOnlyList<IMethodSymbol> EnumerateSourceMethods(
+        SyntaxNode root,
+        SemanticModel semanticModel,
+        CancellationToken cancellationToken)
     {
-        foreach (AttributeSyntax attribute in method.AttributeLists.SelectMany(list => list.Attributes))
+        return [.. root.DescendantNodes()
+            .Select(node => semanticModel.GetDeclaredSymbol(node, cancellationToken))
+            .OfType<IMethodSymbol>()
+            .Where(method => method.MethodKind == MethodKind.Ordinary)
+            .Where(method => !method.IsImplicitlyDeclared)
+            .Where(method => method.Locations.Any(location => location.IsInSource))
+            .GroupBy(method => method.GetDocumentationCommentId() ?? $"{method.ContainingType?.ToDisplayString()}.{method.Name}:{method.Locations.FirstOrDefault()?.SourceSpan.Start}")
+            .Select(group => group.First())
+            .OrderBy(method => method.Locations.FirstOrDefault()?.SourceTree?.FilePath, StringComparer.Ordinal)
+            .ThenBy(method => method.Locations.FirstOrDefault()?.SourceSpan.Start ?? int.MaxValue)];
+    }
+
+    private static string? GetTestFramework(IMethodSymbol method)
+    {
+        foreach (AttributeData attribute in method.GetAttributes())
         {
-            string name = attribute.Name.ToString();
+            string name = attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ??
+                attribute.AttributeClass?.Name ??
+                string.Empty;
             string shortName = name.EndsWith("Attribute", StringComparison.Ordinal) ? name[..^"Attribute".Length] : name;
             if (shortName.EndsWith(".Fact", StringComparison.Ordinal) || shortName is "Fact" or "Theory")
             {

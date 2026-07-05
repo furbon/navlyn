@@ -1,6 +1,5 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Navlyn.Languages;
 
 namespace Navlyn.Symbols;
 
@@ -183,12 +182,12 @@ internal static class ReferenceUsageClassifier
         SyntaxNode root = semanticModel.SyntaxTree.GetRoot(cancellationToken);
         SyntaxNode node = root.FindNode(location.SourceSpan, getInnermostNodeForTie: true);
 
-        if (node.FirstAncestorOrSelf<AttributeSyntax>() is not null)
+        if (node.AncestorsAndSelf().Any(IsAttributeNode))
         {
             return "attribute";
         }
 
-        if (node.FirstAncestorOrSelf<TypeOfExpressionSyntax>() is not null)
+        if (node.AncestorsAndSelf().Any(IsTypeOfNode))
         {
             return "typeof";
         }
@@ -198,7 +197,7 @@ internal static class ReferenceUsageClassifier
             return "nameof";
         }
 
-        if (node.FirstAncestorOrSelf<BaseListSyntax>() is not null)
+        if (node.AncestorsAndSelf().Any(IsBaseOrImplementsNode))
         {
             return selectedSymbol is INamedTypeSymbol { TypeKind: TypeKind.Interface }
                 ? "implement"
@@ -238,53 +237,71 @@ internal static class ReferenceUsageClassifier
     private static bool IsInsideNameOf(SyntaxNode node)
     {
         return node.AncestorsAndSelf()
-            .OfType<InvocationExpressionSyntax>()
-            .Any(invocation => invocation.Expression is IdentifierNameSyntax identifier &&
-                string.Equals(identifier.Identifier.ValueText, "nameof", StringComparison.Ordinal));
+            .Any(ancestor =>
+                ancestor.GetType().Name == "InvocationExpressionSyntax" &&
+                ancestor.ToString().TrimStart().StartsWith("nameof", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsOverrideDeclaration(SyntaxNode node)
     {
-        MemberDeclarationSyntax? member = node.FirstAncestorOrSelf<MemberDeclarationSyntax>();
-        return member switch
-        {
-            MethodDeclarationSyntax method => method.Modifiers.Any(SyntaxKind.OverrideKeyword),
-            PropertyDeclarationSyntax property => property.Modifiers.Any(SyntaxKind.OverrideKeyword),
-            EventDeclarationSyntax @event => @event.Modifiers.Any(SyntaxKind.OverrideKeyword),
-            EventFieldDeclarationSyntax @event => @event.Modifiers.Any(SyntaxKind.OverrideKeyword),
-            IndexerDeclarationSyntax indexer => indexer.Modifiers.Any(SyntaxKind.OverrideKeyword),
-            _ => false
-        };
+        return node.AncestorsAndSelf()
+            .Any(ancestor => SourceLanguageFacts.GetModifierTexts(ancestor)
+                .Any(modifier => modifier.Equals("override", StringComparison.OrdinalIgnoreCase) ||
+                    modifier.Equals("overrides", StringComparison.OrdinalIgnoreCase)));
     }
 
     private static bool IsObjectCreation(SyntaxNode node)
     {
-        return node.FirstAncestorOrSelf<ObjectCreationExpressionSyntax>() is not null ||
-            node.FirstAncestorOrSelf<ImplicitObjectCreationExpressionSyntax>() is not null;
+        return node.AncestorsAndSelf().Any(ancestor =>
+            ancestor.GetType().Name is "ObjectCreationExpressionSyntax" or "ImplicitObjectCreationExpressionSyntax");
     }
 
     private static bool IsWrite(SyntaxNode node)
     {
-        AssignmentExpressionSyntax? assignment = node.FirstAncestorOrSelf<AssignmentExpressionSyntax>();
-        if (assignment is not null && assignment.Left.Span.Contains(node.SpanStart))
+        foreach (SyntaxNode ancestor in node.AncestorsAndSelf())
         {
-            return true;
+            if (ancestor.GetType().Name is "PrefixUnaryExpressionSyntax" or "PostfixUnaryExpressionSyntax")
+            {
+                return true;
+            }
+
+            if (ancestor.GetType().Name is "AssignmentExpressionSyntax" or "AssignmentStatementSyntax")
+            {
+                return IsWithinAssignmentLeft(node, ancestor);
+            }
         }
 
-        PrefixUnaryExpressionSyntax? prefix = node.FirstAncestorOrSelf<PrefixUnaryExpressionSyntax>();
-        if (prefix is not null && prefix.IsKind(SyntaxKind.PreIncrementExpression) || prefix is not null && prefix.IsKind(SyntaxKind.PreDecrementExpression))
+        return false;
+    }
+
+    private static bool IsWithinAssignmentLeft(SyntaxNode node, SyntaxNode assignment)
+    {
+        if (assignment.GetType().GetProperty("Left")?.GetValue(assignment) is not SyntaxNode left)
         {
-            return true;
+            return false;
         }
 
-        PostfixUnaryExpressionSyntax? postfix = node.FirstAncestorOrSelf<PostfixUnaryExpressionSyntax>();
-        return postfix is not null && postfix.IsKind(SyntaxKind.PostIncrementExpression) ||
-            postfix is not null && postfix.IsKind(SyntaxKind.PostDecrementExpression);
+        return left.Span.Contains(node.SpanStart) && node.Span.End <= left.Span.End;
     }
 
     private static bool IsInvocation(SyntaxNode node)
     {
-        return node.FirstAncestorOrSelf<InvocationExpressionSyntax>() is not null;
+        return node.AncestorsAndSelf().Any(ancestor => ancestor.GetType().Name == "InvocationExpressionSyntax");
+    }
+
+    private static bool IsAttributeNode(SyntaxNode node)
+    {
+        return node.GetType().Name == "AttributeSyntax";
+    }
+
+    private static bool IsTypeOfNode(SyntaxNode node)
+    {
+        return node.GetType().Name is "TypeOfExpressionSyntax" or "GetTypeExpressionSyntax";
+    }
+
+    private static bool IsBaseOrImplementsNode(SyntaxNode node)
+    {
+        return node.GetType().Name is "BaseListSyntax" or "InheritsStatementSyntax" or "ImplementsStatementSyntax";
     }
 
     private static bool ContainsTestToken(string value)

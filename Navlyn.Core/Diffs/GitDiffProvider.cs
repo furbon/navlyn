@@ -136,7 +136,7 @@ internal sealed class GitDiffProvider : IDiffProvider
         {
             string path = line.Replace('\\', '/');
             string fullPath = Path.Combine(repositoryRoot, line.Replace('/', Path.DirectorySeparatorChar));
-            int lineCount = path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && File.Exists(fullPath)
+            int lineCount = Navlyn.Languages.SourceLanguageFacts.IsSupportedSourceFile(path) && File.Exists(fullPath)
                 ? File.ReadLines(fullPath).Count()
                 : 0;
             files.Add(new DiffFile(

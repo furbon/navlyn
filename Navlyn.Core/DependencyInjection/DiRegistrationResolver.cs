@@ -1,6 +1,7 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 using Navlyn.GeneratedCode;
+using Navlyn.Languages;
 using Navlyn.Paths;
 using Navlyn.Symbols;
 using Navlyn.Workspaces;
@@ -85,6 +86,7 @@ internal sealed class DiRegistrationResolver
 
             foreach (Document document in project.Documents
                 .Where(document => document.FilePath is not null)
+                .Where(SourceLanguageFacts.IsSupportedDocument)
                 .Where(document => !options.ExcludeGenerated || !GeneratedCodeFacts.IsGeneratedPath(document.FilePath))
                 .OrderBy(document => document.FilePath, StringComparer.Ordinal))
             {
@@ -96,9 +98,9 @@ internal sealed class DiRegistrationResolver
                     continue;
                 }
 
-                foreach (InvocationExpressionSyntax invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                foreach (IInvocationOperation invocation in EnumerateInvocations(root, semanticModel, cancellationToken))
                 {
-                    RegistrationWithSymbols? registration = TryCreateRegistration(invocation, semanticModel, projectInfo, options);
+                    RegistrationWithSymbols? registration = TryCreateRegistration(invocation, projectInfo, options);
                     if (registration is not null)
                     {
                         registrations.Add(registration);
@@ -120,9 +122,31 @@ internal sealed class DiRegistrationResolver
             .Select(group => group.First())];
     }
 
-    private static RegistrationWithSymbols? TryCreateRegistration(
-        InvocationExpressionSyntax invocation,
+    private static IReadOnlyList<IInvocationOperation> EnumerateInvocations(
+        SyntaxNode root,
         SemanticModel semanticModel,
+        CancellationToken cancellationToken)
+    {
+        List<IInvocationOperation> invocations = [];
+        foreach (SyntaxNode node in root.DescendantNodesAndSelf())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (semanticModel.GetOperation(node, cancellationToken) is IInvocationOperation invocation &&
+                invocation.Syntax == node)
+            {
+                invocations.Add(invocation);
+            }
+        }
+
+        return [.. invocations
+            .GroupBy(invocation => (invocation.Syntax.SyntaxTree.FilePath, invocation.Syntax.SpanStart, invocation.Syntax.Span.End))
+            .Select(group => group.First())
+            .OrderBy(invocation => invocation.Syntax.SyntaxTree.FilePath, StringComparer.Ordinal)
+            .ThenBy(invocation => invocation.Syntax.SpanStart)];
+    }
+
+    private static RegistrationWithSymbols? TryCreateRegistration(
+        IInvocationOperation invocation,
         DiProjectInfo project,
         DiGraphOptions options)
     {
@@ -132,9 +156,9 @@ internal sealed class DiRegistrationResolver
             return null;
         }
 
-        if (name == "Add" && invocation.ArgumentList.Arguments.FirstOrDefault()?.Expression is InvocationExpressionSyntax descriptorInvocation)
+        if (name == "Add" && GetInvocationArgument(invocation, 0) is IInvocationOperation descriptorInvocation)
         {
-            return TryCreateServiceDescriptorRegistration(invocation, descriptorInvocation, semanticModel, project, options);
+            return TryCreateServiceDescriptorRegistration(invocation, descriptorInvocation, project, options);
         }
 
         string lifetime = LifetimeFromMethodName(name);
@@ -154,7 +178,7 @@ internal sealed class DiRegistrationResolver
             return null;
         }
 
-        IReadOnlyList<ITypeSymbol> genericTypes = GetGenericTypeArguments(invocation, semanticModel);
+        IReadOnlyList<ITypeSymbol> genericTypes = GetGenericTypeArguments(invocation);
         List<string> reasons = ["iservicecollection-registration-call"];
         string registrationKind = "service";
         INamedTypeSymbol? serviceType = null;
@@ -185,19 +209,21 @@ internal sealed class DiRegistrationResolver
                 reasons.Add("tryadd-call");
             }
 
-            (serviceType, implementationType) = ResolveRegistrationTypes(invocation, semanticModel, genericTypes);
-            ArgumentSyntax? factoryArgument = invocation.ArgumentList.Arguments.FirstOrDefault(argument => argument.Expression is LambdaExpressionSyntax);
+            (serviceType, implementationType) = ResolveRegistrationTypes(invocation, genericTypes);
+            IArgumentOperation? factoryArgument = invocation.Arguments.FirstOrDefault(argument => FindOperation<IAnonymousFunctionOperation>(argument.Value) is not null);
             if (factoryArgument is not null)
             {
-                factory = new DiFactoryInfo("lambda", [CreateEvidence(factoryArgument.GetLocation(), "factory", ["factory-registration"])]);
+                factory = new DiFactoryInfo("lambda", [CreateEvidence(factoryArgument.Syntax.GetLocation(), "factory", ["factory-registration"])]);
                 reasons.Add("factory-registration");
             }
 
             if (implementationType is null &&
-                invocation.ArgumentList.Arguments.FirstOrDefault(argument => argument.Expression is not TypeOfExpressionSyntax and not LambdaExpressionSyntax) is { } instanceArgument)
+                invocation.Arguments.FirstOrDefault(argument =>
+                    FindOperation<ITypeOfOperation>(argument.Value) is null &&
+                    FindOperation<IAnonymousFunctionOperation>(argument.Value) is null) is { } instanceArgument)
             {
-                ITypeSymbol? instanceType = semanticModel.GetTypeInfo(instanceArgument.Expression).Type;
-                instance = new DiInstanceInfo(instanceType is null ? null : CreateTypeInfo(instanceType, project.Name, options.ExcludeGenerated), [CreateEvidence(instanceArgument.GetLocation(), "instance", ["instance-registration"])]);
+                ITypeSymbol? instanceType = instanceArgument.Value.Type;
+                instance = new DiInstanceInfo(instanceType is null ? null : CreateTypeInfo(instanceType, project.Name, options.ExcludeGenerated), [CreateEvidence(instanceArgument.Syntax.GetLocation(), "instance", ["instance-registration"])]);
                 reasons.Add("instance-registration");
             }
         }
@@ -207,7 +233,7 @@ internal sealed class DiRegistrationResolver
             return null;
         }
 
-        SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(invocation.GetLocation(), options.ExcludeGenerated);
+        SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(invocation.Syntax.GetLocation(), options.ExcludeGenerated);
         if (location is null)
         {
             return null;
@@ -228,16 +254,15 @@ internal sealed class DiRegistrationResolver
             Project: project,
             Confidence: "high",
             ReasonCodes: OrderedReasons(reasons),
-            Evidence: [CreateEvidence(invocation.GetLocation(), "invocation", OrderedReasons(reasons))],
+            Evidence: [CreateEvidence(invocation.Syntax.GetLocation(), "invocation", OrderedReasons(reasons))],
             Snippet: options.IncludeSnippets ? FuzzySnippetReader.TryRead(location.Path, location.Line, options.SnippetLines) : null);
 
         return new RegistrationWithSymbols(item, serviceType, implementationType);
     }
 
     private static RegistrationWithSymbols? TryCreateServiceDescriptorRegistration(
-        InvocationExpressionSyntax outerInvocation,
-        InvocationExpressionSyntax descriptorInvocation,
-        SemanticModel semanticModel,
+        IInvocationOperation outerInvocation,
+        IInvocationOperation descriptorInvocation,
         DiProjectInfo project,
         DiGraphOptions options)
     {
@@ -248,14 +273,14 @@ internal sealed class DiRegistrationResolver
             return null;
         }
 
-        IReadOnlyList<ITypeSymbol> genericTypes = GetGenericTypeArguments(descriptorInvocation, semanticModel);
-        (INamedTypeSymbol? serviceType, INamedTypeSymbol? implementationType) = ResolveRegistrationTypes(descriptorInvocation, semanticModel, genericTypes);
+        IReadOnlyList<ITypeSymbol> genericTypes = GetGenericTypeArguments(descriptorInvocation);
+        (INamedTypeSymbol? serviceType, INamedTypeSymbol? implementationType) = ResolveRegistrationTypes(descriptorInvocation, genericTypes);
         if (serviceType is null && implementationType is null)
         {
             return null;
         }
 
-        SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(outerInvocation.GetLocation(), options.ExcludeGenerated);
+        SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(outerInvocation.Syntax.GetLocation(), options.ExcludeGenerated);
         if (location is null)
         {
             return null;
@@ -277,7 +302,7 @@ internal sealed class DiRegistrationResolver
             Project: project,
             Confidence: "high",
             ReasonCodes: OrderedReasons(reasons),
-            Evidence: [CreateEvidence(descriptorInvocation.GetLocation(), "invocation", ["servicedescriptor-call"])],
+            Evidence: [CreateEvidence(descriptorInvocation.Syntax.GetLocation(), "invocation", ["servicedescriptor-call"])],
             Snippet: options.IncludeSnippets ? FuzzySnippetReader.TryRead(location.Path, location.Line, options.SnippetLines) : null);
         return new RegistrationWithSymbols(item, serviceType, implementationType);
     }
@@ -426,17 +451,14 @@ internal sealed class DiRegistrationResolver
     }
 
     private static (INamedTypeSymbol? ServiceType, INamedTypeSymbol? ImplementationType) ResolveRegistrationTypes(
-        InvocationExpressionSyntax invocation,
-        SemanticModel semanticModel,
+        IInvocationOperation invocation,
         IReadOnlyList<ITypeSymbol> genericTypes)
     {
         INamedTypeSymbol? serviceType = genericTypes.ElementAtOrDefault(0) as INamedTypeSymbol;
         INamedTypeSymbol? implementationType = genericTypes.ElementAtOrDefault(1) as INamedTypeSymbol;
 
-        IReadOnlyList<INamedTypeSymbol> typeofTypes = [.. invocation.ArgumentList.Arguments
-            .Select(argument => argument.Expression)
-            .OfType<TypeOfExpressionSyntax>()
-            .Select(typeOf => semanticModel.GetTypeInfo(typeOf.Type).Type)
+        IReadOnlyList<INamedTypeSymbol> typeofTypes = [.. invocation.Arguments
+            .Select(argument => FindOperation<ITypeOfOperation>(argument.Value)?.TypeOperand)
             .OfType<INamedTypeSymbol>()];
         serviceType ??= typeofTypes.ElementAtOrDefault(0);
         implementationType ??= typeofTypes.ElementAtOrDefault(1);
@@ -449,32 +471,42 @@ internal sealed class DiRegistrationResolver
         return (serviceType, implementationType);
     }
 
-    private static IReadOnlyList<ITypeSymbol> GetGenericTypeArguments(InvocationExpressionSyntax invocation, SemanticModel semanticModel)
+    private static IReadOnlyList<ITypeSymbol> GetGenericTypeArguments(IInvocationOperation invocation)
     {
-        GenericNameSyntax? genericName = invocation.Expression switch
-        {
-            GenericNameSyntax generic => generic,
-            MemberAccessExpressionSyntax { Name: GenericNameSyntax generic } => generic,
-            _ => null
-        };
-
-        return genericName is null
-            ? []
-            : [.. genericName.TypeArgumentList.Arguments
-                .Select(type => semanticModel.GetTypeInfo(type).Type)
-                .OfType<ITypeSymbol>()];
+        return [.. invocation.TargetMethod.TypeArguments];
     }
 
-    private static string? GetInvocationName(InvocationExpressionSyntax invocation)
+    private static string? GetInvocationName(IInvocationOperation invocation)
     {
-        return invocation.Expression switch
+        return invocation.TargetMethod.Name;
+    }
+
+    private static IInvocationOperation? GetInvocationArgument(IInvocationOperation invocation, int index)
+    {
+        IArgumentOperation? argument = invocation.Arguments
+            .OrderBy(argument => argument.Syntax.SpanStart)
+            .ElementAtOrDefault(index);
+        return argument is null ? null : FindOperation<IInvocationOperation>(argument.Value);
+    }
+
+    private static TOperation? FindOperation<TOperation>(IOperation operation)
+        where TOperation : class, IOperation
+    {
+        if (operation is TOperation typed)
         {
-            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
-            MemberAccessExpressionSyntax { Name: IdentifierNameSyntax identifier } => identifier.Identifier.ValueText,
-            MemberAccessExpressionSyntax { Name: GenericNameSyntax generic } => generic.Identifier.ValueText,
-            GenericNameSyntax generic => generic.Identifier.ValueText,
-            _ => null
-        };
+            return typed;
+        }
+
+        foreach (IOperation child in operation.ChildOperations)
+        {
+            TOperation? found = FindOperation<TOperation>(child);
+            if (found is not null)
+            {
+                return found;
+            }
+        }
+
+        return null;
     }
 
     private static string LifetimeFromMethodName(string name)

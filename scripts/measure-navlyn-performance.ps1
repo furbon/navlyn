@@ -17,6 +17,8 @@ param(
 
     [switch]$NoBuild,
 
+    [switch]$IncludeStageTimings,
+
     [switch]$IncludeGeneratedComparison,
 
     [int]$TimeoutSeconds = 180,
@@ -209,6 +211,41 @@ function Get-TruncatedFlag {
     return $false
 }
 
+function Get-TimingLines {
+    param([string]$Stderr)
+
+    if ([string]::IsNullOrEmpty($Stderr)) {
+        return @()
+    }
+
+    $timings = New-Object System.Collections.Generic.List[object]
+    foreach ($line in ($Stderr -split "`r?`n")) {
+        if (!$line.StartsWith('NAVLYN_TIMING ', [System.StringComparison]::Ordinal)) {
+            continue
+        }
+
+        $payload = $line.Substring('NAVLYN_TIMING '.Length)
+        try {
+            $timings.Add(($payload | ConvertFrom-Json -Depth 20))
+        }
+        catch {
+        }
+    }
+
+    return $timings.ToArray()
+}
+
+function Get-DiagnosticStderrLength {
+    param([string]$Stderr)
+
+    if ([string]::IsNullOrEmpty($Stderr)) {
+        return 0
+    }
+
+    $diagnosticLines = @($Stderr -split "`r?`n" | Where-Object { !$_.StartsWith('NAVLYN_TIMING ', [System.StringComparison]::Ordinal) })
+    return (($diagnosticLines -join [Environment]::NewLine).Trim()).Length
+}
+
 function Invoke-MeasuredProcess {
     param(
         [string]$Name,
@@ -229,6 +266,9 @@ function Invoke-MeasuredProcess {
     $startInfo.StandardOutputEncoding = [System.Text.Encoding]::UTF8
     $startInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8
     $startInfo.UseShellExecute = $false
+    if ($IncludeStageTimings) {
+        $startInfo.Environment['NAVLYN_PROFILE_TIMINGS'] = '1'
+    }
     foreach ($argument in $Arguments) {
         [void]$startInfo.ArgumentList.Add($argument)
     }
@@ -263,6 +303,8 @@ function Invoke-MeasuredProcess {
     $counts = [pscustomobject]@{}
     $truncated = $false
     $warnings = @()
+    $stageTimings = Get-TimingLines -Stderr $stderr
+    $diagnosticStderrChars = Get-DiagnosticStderrLength -Stderr $stderr
 
     if ($stdout.Length -gt 0) {
         try {
@@ -304,12 +346,14 @@ function Invoke-MeasuredProcess {
         elapsedMs = [int][Math]::Round($stopwatch.Elapsed.TotalMilliseconds)
         stdoutChars = $stdout.Length
         stderrChars = $stderr.Length
+        diagnosticStderrChars = $diagnosticStderrChars
         jsonValid = $jsonValid
         topLevelCommand = $topLevelCommand
         profile = $resultProfile
         counts = $counts
         truncated = $truncated
         warnings = $warnings
+        stageTimings = $stageTimings
         timedOut = !$finished
         skipped = $false
     }
@@ -333,12 +377,14 @@ function New-SkippedMeasurement {
         elapsedMs = 0
         stdoutChars = 0
         stderrChars = 0
+        diagnosticStderrChars = 0
         jsonValid = $false
         topLevelCommand = $null
         profile = $null
         counts = [pscustomobject]@{}
         truncated = $false
         warnings = @()
+        stageTimings = @()
         timedOut = $false
     }
 }
@@ -376,6 +422,9 @@ function Invoke-ParallelMeasuredProcesses {
         $startInfo.StandardOutputEncoding = [System.Text.Encoding]::UTF8
         $startInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8
         $startInfo.UseShellExecute = $false
+        if ($IncludeStageTimings) {
+            $startInfo.Environment['NAVLYN_PROFILE_TIMINGS'] = '1'
+        }
         foreach ($argument in $command.arguments) {
             [void]$startInfo.ArgumentList.Add($argument)
         }
@@ -419,6 +468,8 @@ function Invoke-ParallelMeasuredProcesses {
         $counts = [pscustomobject]@{}
         $truncated = $false
         $warnings = @()
+        $stageTimings = Get-TimingLines -Stderr $stderr
+        $diagnosticStderrChars = Get-DiagnosticStderrLength -Stderr $stderr
 
         if ($stdout.Length -gt 0) {
             try {
@@ -454,12 +505,14 @@ function Invoke-ParallelMeasuredProcesses {
             elapsedMs = [int][Math]::Round($entry.stopwatch.Elapsed.TotalMilliseconds)
             stdoutChars = $stdout.Length
             stderrChars = $stderr.Length
+            diagnosticStderrChars = $diagnosticStderrChars
             jsonValid = $jsonValid
             topLevelCommand = $topLevelCommand
             profile = $resultProfile
             counts = $counts
             truncated = $truncated
             warnings = $warnings
+            stageTimings = $stageTimings
             timedOut = !$finished
             skipped = $false
         })
@@ -549,7 +602,7 @@ function Invoke-McpToolScenario {
                 capabilities = @{}
                 clientInfo = @{
                     name = 'navlyn-performance'
-                    version = '0.5.0'
+                    version = '0.6.0'
                 }
             }
         }
@@ -718,8 +771,10 @@ function Get-ScenarioCommands {
             $batchInput = @{
                 requests = @(
                     @{ id = 'repo'; command = 'repo-graph'; profile = $Profile; relationshipLimit = 50 },
-                    @{ id = 'find'; command = 'find'; query = $Query; assumeKind = $AssumeKind; limit = 20 },
-                    @{ id = 'tests'; command = 'tests-for-symbol'; query = $Query; assumeKind = $AssumeKind; profile = $Profile; testLimit = 20 }
+                    @{ id = 'target'; command = 'resolve-target'; query = $Query; assumeKind = $AssumeKind },
+                    @{ id = 'source'; command = 'symbol-source'; candidateIdFrom = 'target'; view = 'declaration'; maxLines = 80; budgetTokens = 2000 },
+                    @{ id = 'refs'; command = 'references'; candidateIdFrom = 'target'; limit = 50 },
+                    @{ id = 'tests'; command = 'tests-for-symbol'; candidateIdFrom = 'target'; profile = $Profile; testLimit = 20 }
                 )
             } | ConvertTo-Json -Depth 20 -Compress
             $commands += New-CliCommand -Name 'batch-agent-loop' -Arguments @('batch', '--workspace', $workspaceArg) -StandardInput $batchInput
@@ -873,6 +928,42 @@ if ($workspacePath.StartsWith($repoRoot, [System.StringComparison]::OrdinalIgnor
     $reportWorkspace = $workspacePath.Substring($repoRoot.Length).TrimStart('\', '/').Replace('\', '/')
 }
 $measurementArray = $measurements.ToArray()
+$stageRows = New-Object System.Collections.Generic.List[object]
+foreach ($measurement in $measured) {
+    if ($measurement.PSObject.Properties.Name -notcontains 'stageTimings') {
+        continue
+    }
+
+    foreach ($timing in @($measurement.stageTimings)) {
+        if ($null -eq $timing -or $timing.PSObject.Properties.Name -notcontains 'stages') {
+            continue
+        }
+
+        foreach ($stage in @($timing.stages)) {
+            $stageRows.Add([pscustomobject]@{
+                command = $measurement.name
+                stage = $stage.name
+                elapsedMs = [int]$stage.elapsedMs
+            })
+        }
+    }
+}
+$stageSummary = @(
+    $stageRows.ToArray() |
+        Group-Object -Property stage |
+        ForEach-Object {
+            $values = @($_.Group | ForEach-Object { $_.elapsedMs } | Sort-Object)
+            $stageMedian = if ($values.Count -eq 0) { 0 } else { $values[[int][Math]::Floor(($values.Count - 1) / 2)] }
+            [pscustomobject]@{
+                stage = $_.Name
+                samples = $_.Count
+                totalElapsedMs = [int](($_.Group | Measure-Object -Property elapsedMs -Sum).Sum)
+                medianElapsedMs = [int]$stageMedian
+                maxElapsedMs = [int](($_.Group | Measure-Object -Property elapsedMs -Maximum).Maximum)
+            }
+        } |
+        Sort-Object -Property totalElapsedMs -Descending
+)
 $dotnetVersion = [string](& dotnet --version)
 $environment = [ordered]@{
     os = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription
@@ -888,6 +979,8 @@ $summary = [ordered]@{
     p95ElapsedMs = $p95
     maxStdoutChars = $maxStdoutChars
     anyTruncated = $truncatedCount -gt 0
+    stageTimingEnabled = [bool]$IncludeStageTimings
+    topStageBottlenecks = @($stageSummary | Select-Object -First 5)
 }
 
 $report = [ordered]@{
@@ -898,6 +991,7 @@ $report = [ordered]@{
     profile = $Profile
     environment = $environment
     summary = $summary
+    stageBreakdown = $stageSummary
     measurements = $measurementArray
 }
 

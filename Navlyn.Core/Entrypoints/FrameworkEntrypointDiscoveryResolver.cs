@@ -1,7 +1,8 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
+using System.Collections.Immutable;
 using Navlyn.GeneratedCode;
+using Navlyn.Languages;
 using Navlyn.Paths;
 using Navlyn.RepoGraph;
 using Navlyn.Symbols;
@@ -144,6 +145,7 @@ internal sealed class FrameworkEntrypointDiscoveryResolver
 
             foreach (Document document in project.Documents
                 .Where(document => document.FilePath is not null)
+                .Where(SourceLanguageFacts.IsSupportedDocument)
                 .Where(document => !options.ExcludeGenerated || !GeneratedCodeFacts.IsGeneratedPath(document.FilePath))
                 .OrderBy(document => document.FilePath, StringComparer.Ordinal))
             {
@@ -156,12 +158,12 @@ internal sealed class FrameworkEntrypointDiscoveryResolver
 
                 if (frameworks.Contains("aspnetcore"))
                 {
-                    items.AddRange(DiscoverAspNetCoreEntrypoints(root, semanticModel, projectInfo, webProject, options));
+                    items.AddRange(DiscoverAspNetCoreEntrypoints(root, semanticModel, projectInfo, webProject, options, cancellationToken));
                 }
 
                 if (frameworks.Contains("worker"))
                 {
-                    items.AddRange(DiscoverWorkerEntrypoints(root, semanticModel, projectInfo, options));
+                    items.AddRange(DiscoverWorkerEntrypoints(root, semanticModel, projectInfo, options, cancellationToken));
                 }
             }
         }
@@ -174,33 +176,32 @@ internal sealed class FrameworkEntrypointDiscoveryResolver
         SemanticModel semanticModel,
         FrameworkEntrypointProject project,
         bool webProject,
-        FrameworkEntrypointOptions options)
+        FrameworkEntrypointOptions options,
+        CancellationToken cancellationToken)
     {
-        foreach (ClassDeclarationSyntax type in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+        foreach (INamedTypeSymbol typeSymbol in SourceLanguageFacts.EnumerateNamedTypes(root, semanticModel, cancellationToken)
+            .Where(symbol => symbol.TypeKind.ToString() == "Class"))
         {
-            INamedTypeSymbol? typeSymbol = semanticModel.GetDeclaredSymbol(type);
-            if (typeSymbol is null)
+            bool controllerType = IsControllerType(typeSymbol);
+            foreach (IMethodSymbol methodSymbol in typeSymbol.GetMembers()
+                .OfType<IMethodSymbol>()
+                .Where(method => method.MethodKind == MethodKind.Ordinary)
+                .Where(method => !method.IsImplicitlyDeclared)
+                .Where(method => method.Locations.Any(location => location.IsInSource)))
             {
-                continue;
-            }
-
-            bool controllerType = IsControllerType(type, typeSymbol);
-            foreach (MethodDeclarationSyntax method in type.Members.OfType<MethodDeclarationSyntax>())
-            {
-                if (HasAttribute(method.AttributeLists, "NonAction"))
+                if (SourceLanguageFacts.HasAttribute(methodSymbol, "NonAction"))
                 {
                     continue;
                 }
 
-                IMethodSymbol? methodSymbol = semanticModel.GetDeclaredSymbol(method);
-                if (methodSymbol is null || methodSymbol.DeclaredAccessibility != Accessibility.Public || methodSymbol.IsStatic)
+                if (methodSymbol.DeclaredAccessibility != Accessibility.Public || methodSymbol.IsStatic)
                 {
                     continue;
                 }
 
-                bool routeAttribute = HasRouteAttribute(method.AttributeLists);
-                bool httpMethodAttribute = HasHttpMethodAttribute(method.AttributeLists);
-                bool controllerConvention = type.Identifier.ValueText.EndsWith("Controller", StringComparison.Ordinal);
+                bool routeAttribute = HasRouteAttribute(methodSymbol.GetAttributes());
+                bool httpMethodAttribute = HasHttpMethodAttribute(methodSymbol.GetAttributes());
+                bool controllerConvention = typeSymbol.Name.EndsWith("Controller", StringComparison.Ordinal);
                 if (!controllerType && !routeAttribute && !(controllerConvention && webProject))
                 {
                     continue;
@@ -242,7 +243,7 @@ internal sealed class FrameworkEntrypointDiscoveryResolver
                     project,
                     confidence,
                     reasons,
-                    CreateAttributeEvidence(method.AttributeLists, options.EvidenceLimit),
+                    CreateAttributeEvidence(methodSymbol.GetAttributes(), options.EvidenceLimit),
                     options);
                 if (item is not null)
                 {
@@ -251,7 +252,7 @@ internal sealed class FrameworkEntrypointDiscoveryResolver
             }
         }
 
-        foreach (InvocationExpressionSyntax invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        foreach (IInvocationOperation invocation in SourceLanguageFacts.EnumerateInvocations(root, semanticModel, cancellationToken))
         {
             string? invocationName = GetInvocationName(invocation);
             if (invocationName is not ("MapGet" or "MapPost" or "MapPut" or "MapDelete" or "MapPatch" or "MapMethods" or "MapFallback" or "Map"))
@@ -259,16 +260,16 @@ internal sealed class FrameworkEntrypointDiscoveryResolver
                 continue;
             }
 
-            ExpressionSyntax? handlerExpression = invocation.ArgumentList.Arguments.LastOrDefault()?.Expression;
+            IOperation? handlerOperation = invocation.Arguments.OrderBy(argument => argument.Syntax.SpanStart).LastOrDefault()?.Value;
             FrameworkEntrypointItem? item = CreateHandlerItem(
                 "aspnetcore-minimal-api-handler",
                 "aspnetcore",
-                handlerExpression,
+                handlerOperation,
                 semanticModel,
                 project,
                 "high",
                 ["aspnetcore-minimal-api-map-call"],
-                invocation.GetLocation(),
+                invocation.Syntax.GetLocation(),
                 ["minimal-api-map-call"],
                 options);
             if (item is not null)
@@ -277,18 +278,14 @@ internal sealed class FrameworkEntrypointDiscoveryResolver
             }
         }
 
-        foreach (InvocationExpressionSyntax invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        foreach (IInvocationOperation invocation in SourceLanguageFacts.EnumerateInvocations(root, semanticModel, cancellationToken))
         {
             if (GetInvocationName(invocation) != "UseMiddleware")
             {
                 continue;
             }
 
-            TypeSyntax? middlewareType = invocation.ArgumentList.Arguments.Count == 0
-                ? null
-                : invocation.Expression is MemberAccessExpressionSyntax { Name: GenericNameSyntax genericName } ? genericName.TypeArgumentList.Arguments.FirstOrDefault() : null;
-            ISymbol? symbol = middlewareType is null ? null : semanticModel.GetSymbolInfo(middlewareType).Symbol;
-            if (symbol is INamedTypeSymbol typeSymbol)
+            if (invocation.TargetMethod.TypeArguments.FirstOrDefault() is INamedTypeSymbol typeSymbol)
             {
                 IMethodSymbol? invokeMethod = typeSymbol.GetMembers()
                     .OfType<IMethodSymbol>()
@@ -296,8 +293,8 @@ internal sealed class FrameworkEntrypointDiscoveryResolver
                     .OrderBy(method => method.Name, StringComparer.Ordinal)
                     .FirstOrDefault();
                 FrameworkEntrypointItem? item = invokeMethod is null
-                    ? CreateItem("aspnetcore-middleware", "aspnetcore", typeSymbol, project, "medium", ["aspnetcore-middleware-registration"], [CreateEvidence(invocation.GetLocation(), "invocation", ["usemiddleware-call"])], options)
-                    : CreateItem("aspnetcore-middleware", "aspnetcore", invokeMethod, project, "high", ["aspnetcore-middleware-registration", "aspnetcore-middleware-invoke-method"], [CreateEvidence(invocation.GetLocation(), "invocation", ["usemiddleware-call"])], options);
+                    ? CreateItem("aspnetcore-middleware", "aspnetcore", typeSymbol, project, "medium", ["aspnetcore-middleware-registration"], [CreateEvidence(invocation.Syntax.GetLocation(), "invocation", ["usemiddleware-call"])], options)
+                    : CreateItem("aspnetcore-middleware", "aspnetcore", invokeMethod, project, "high", ["aspnetcore-middleware-registration", "aspnetcore-middleware-invoke-method"], [CreateEvidence(invocation.Syntax.GetLocation(), "invocation", ["usemiddleware-call"])], options);
                 if (item is not null)
                 {
                     yield return item;
@@ -310,16 +307,12 @@ internal sealed class FrameworkEntrypointDiscoveryResolver
         SyntaxNode root,
         SemanticModel semanticModel,
         FrameworkEntrypointProject project,
-        FrameworkEntrypointOptions options)
+        FrameworkEntrypointOptions options,
+        CancellationToken cancellationToken)
     {
-        foreach (ClassDeclarationSyntax type in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+        foreach (INamedTypeSymbol typeSymbol in SourceLanguageFacts.EnumerateNamedTypes(root, semanticModel, cancellationToken)
+            .Where(symbol => symbol.TypeKind.ToString() == "Class"))
         {
-            INamedTypeSymbol? typeSymbol = semanticModel.GetDeclaredSymbol(type);
-            if (typeSymbol is null)
-            {
-                continue;
-            }
-
             if (typeSymbol.ContainingNamespace?.ToDisplayString().StartsWith("Microsoft.Extensions.", StringComparison.Ordinal) == true)
             {
                 continue;
@@ -327,14 +320,12 @@ internal sealed class FrameworkEntrypointDiscoveryResolver
 
             bool backgroundService = InheritsTypeNamed(typeSymbol, "BackgroundService");
             bool hostedService = ImplementsTypeNamed(typeSymbol, "IHostedService");
-            foreach (MethodDeclarationSyntax method in type.Members.OfType<MethodDeclarationSyntax>())
+            foreach (IMethodSymbol methodSymbol in typeSymbol.GetMembers()
+                .OfType<IMethodSymbol>()
+                .Where(method => method.MethodKind == MethodKind.Ordinary)
+                .Where(method => !method.IsImplicitlyDeclared)
+                .Where(method => method.Locations.Any(location => location.IsInSource)))
             {
-                IMethodSymbol? methodSymbol = semanticModel.GetDeclaredSymbol(method);
-                if (methodSymbol is null)
-                {
-                    continue;
-                }
-
                 if (backgroundService && methodSymbol.Name == "ExecuteAsync")
                 {
                     FrameworkEntrypointItem? item = CreateItem(
@@ -371,18 +362,14 @@ internal sealed class FrameworkEntrypointDiscoveryResolver
             }
         }
 
-        foreach (InvocationExpressionSyntax invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        foreach (IInvocationOperation invocation in SourceLanguageFacts.EnumerateInvocations(root, semanticModel, cancellationToken))
         {
             if (GetInvocationName(invocation) != "AddHostedService")
             {
                 continue;
             }
 
-            TypeSyntax? hostedType = invocation.Expression is MemberAccessExpressionSyntax { Name: GenericNameSyntax genericName }
-                ? genericName.TypeArgumentList.Arguments.FirstOrDefault()
-                : null;
-            ISymbol? symbol = hostedType is null ? null : semanticModel.GetSymbolInfo(hostedType).Symbol;
-            if (symbol is INamedTypeSymbol typeSymbol)
+            if (invocation.TargetMethod.TypeArguments.FirstOrDefault() is INamedTypeSymbol typeSymbol)
             {
                 FrameworkEntrypointItem? item = CreateItem(
                     "worker-hosted-service-registration",
@@ -391,7 +378,7 @@ internal sealed class FrameworkEntrypointDiscoveryResolver
                     project,
                     "medium",
                     ["worker-addhostedservice-registration"],
-                    [CreateEvidence(invocation.GetLocation(), "invocation", ["addhostedservice-call"])],
+                    [CreateEvidence(invocation.Syntax.GetLocation(), "invocation", ["addhostedservice-call"])],
                     options);
                 if (item is not null)
                 {
@@ -404,7 +391,7 @@ internal sealed class FrameworkEntrypointDiscoveryResolver
     private static FrameworkEntrypointItem? CreateHandlerItem(
         string kind,
         string framework,
-        ExpressionSyntax? expression,
+        IOperation? operation,
         SemanticModel semanticModel,
         FrameworkEntrypointProject project,
         string confidence,
@@ -413,15 +400,15 @@ internal sealed class FrameworkEntrypointDiscoveryResolver
         IReadOnlyList<string> evidenceReasons,
         FrameworkEntrypointOptions options)
     {
-        if (expression is null)
+        if (operation is null)
         {
             return null;
         }
 
-        if (expression is LambdaExpressionSyntax lambda)
+        if (SourceLanguageFacts.FindOperation<IAnonymousFunctionOperation>(operation) is IAnonymousFunctionOperation lambda)
         {
-            ISymbol? containingSymbol = semanticModel.GetEnclosingSymbol(lambda.SpanStart);
-            SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(lambda.GetLocation(), options.ExcludeGenerated);
+            ISymbol? containingSymbol = semanticModel.GetEnclosingSymbol(lambda.Syntax.SpanStart);
+            SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(lambda.Syntax.GetLocation(), options.ExcludeGenerated);
             if (location is null)
             {
                 return null;
@@ -445,8 +432,9 @@ internal sealed class FrameworkEntrypointDiscoveryResolver
                 Snippet: options.IncludeSnippets ? FuzzySnippetReader.TryRead(location.Path, location.Line, options.SnippetLines) : null);
         }
 
-        SymbolInfo symbolInfo = semanticModel.GetSymbolInfo(expression);
+        SymbolInfo symbolInfo = semanticModel.GetSymbolInfo(operation.Syntax);
         ISymbol? symbol = symbolInfo.Symbol ??
+            SourceLanguageFacts.FindOperation<IMethodReferenceOperation>(operation)?.Method ??
             symbolInfo.CandidateSymbols
                 .OrderBy(symbol => symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat), StringComparer.Ordinal)
                 .FirstOrDefault();
@@ -543,11 +531,12 @@ internal sealed class FrameworkEntrypointDiscoveryResolver
             Attributes: null);
     }
 
-    private static IReadOnlyList<FrameworkEntrypointEvidence> CreateAttributeEvidence(SyntaxList<AttributeListSyntax> attributeLists, int limit)
+    private static IReadOnlyList<FrameworkEntrypointEvidence> CreateAttributeEvidence(ImmutableArray<AttributeData> attributes, int limit)
     {
-        return [.. attributeLists
-            .SelectMany(list => list.Attributes)
-            .Select(attribute => CreateEvidence(attribute.GetLocation(), "attribute", [NormalizeAttributeReason(attribute.Name.ToString())]))
+        return [.. attributes
+            .Select(attribute => (Attribute: attribute, Node: attribute.ApplicationSyntaxReference?.GetSyntax()))
+            .Where(item => item.Node is not null)
+            .Select(item => CreateEvidence(item.Node!.GetLocation(), "attribute", [SourceLanguageFacts.NormalizeAttributeReason(item.Attribute)]))
             .Take(limit)];
     }
 
@@ -559,56 +548,31 @@ internal sealed class FrameworkEntrypointDiscoveryResolver
             : new FrameworkEntrypointEvidence(kind, source.Path, source.Line, source.Column, source.EndLine, source.EndColumn, reasonCodes);
     }
 
-    private static bool IsControllerType(ClassDeclarationSyntax type, INamedTypeSymbol symbol)
+    private static bool IsControllerType(INamedTypeSymbol symbol)
     {
-        return type.Identifier.ValueText.EndsWith("Controller", StringComparison.Ordinal) ||
-            HasAttribute(type.AttributeLists, "ApiController") ||
+        return symbol.Name.EndsWith("Controller", StringComparison.Ordinal) ||
+            SourceLanguageFacts.HasAttribute(symbol, "ApiController") ||
             InheritsTypeNamed(symbol, "ControllerBase") ||
             InheritsTypeNamed(symbol, "Controller");
     }
 
-    private static bool HasHttpMethodAttribute(SyntaxList<AttributeListSyntax> attributeLists)
+    private static bool HasHttpMethodAttribute(ImmutableArray<AttributeData> attributes)
     {
-        return attributeLists
-            .SelectMany(list => list.Attributes)
-            .Select(attribute => ShortAttributeName(attribute.Name.ToString()))
+        return attributes
+            .Select(SourceLanguageFacts.ShortAttributeName)
             .Any(name => name is "HttpGet" or "HttpPost" or "HttpPut" or "HttpDelete" or "HttpPatch" or "HttpHead" or "HttpOptions");
     }
 
-    private static bool HasRouteAttribute(SyntaxList<AttributeListSyntax> attributeLists)
+    private static bool HasRouteAttribute(ImmutableArray<AttributeData> attributes)
     {
-        return HasAttribute(attributeLists, "Route");
+        return attributes
+            .Select(SourceLanguageFacts.ShortAttributeName)
+            .Any(name => name == "Route" || name.EndsWith(".Route", StringComparison.Ordinal));
     }
 
-    private static bool HasAttribute(SyntaxList<AttributeListSyntax> attributeLists, string expectedShortName)
+    private static string? GetInvocationName(IInvocationOperation invocation)
     {
-        return attributeLists
-            .SelectMany(list => list.Attributes)
-            .Select(attribute => ShortAttributeName(attribute.Name.ToString()))
-            .Any(name => name == expectedShortName || name.EndsWith($".{expectedShortName}", StringComparison.Ordinal));
-    }
-
-    private static string ShortAttributeName(string name)
-    {
-        string shortName = name.EndsWith("Attribute", StringComparison.Ordinal) ? name[..^"Attribute".Length] : name;
-        int dot = shortName.LastIndexOf('.');
-        return dot >= 0 ? shortName[(dot + 1)..] : shortName;
-    }
-
-    private static string NormalizeAttributeReason(string name)
-    {
-        return $"{ShortAttributeName(name).ToLowerInvariant()}-attribute";
-    }
-
-    private static string? GetInvocationName(InvocationExpressionSyntax invocation)
-    {
-        return invocation.Expression switch
-        {
-            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
-            MemberAccessExpressionSyntax { Name: IdentifierNameSyntax identifier } => identifier.Identifier.ValueText,
-            MemberAccessExpressionSyntax { Name: GenericNameSyntax generic } => generic.Identifier.ValueText,
-            _ => null
-        };
+        return invocation.TargetMethod.Name;
     }
 
     private static bool InheritsTypeNamed(INamedTypeSymbol symbol, string name)

@@ -17,7 +17,7 @@ internal static class OutlineCommand
 
         return WorkspaceCommand.Create(
             "outline",
-            "Return a semantic outline for a C# source file.",
+            "Return a semantic outline for a C# or Visual Basic source file.",
             [fileOption, projectOption, excludeGeneratedOption],
             (workspace, parseResult, cancellationToken) => ExecuteAsync(
                 workspace,

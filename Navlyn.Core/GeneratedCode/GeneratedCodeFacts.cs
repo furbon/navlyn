@@ -12,10 +12,15 @@ internal static class GeneratedCodeFacts
         string fileName = Path.GetFileName(path);
         if (fileName.StartsWith("TemporaryGeneratedFile_", StringComparison.OrdinalIgnoreCase) ||
             fileName.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase) ||
+            fileName.EndsWith(".g.vb", StringComparison.OrdinalIgnoreCase) ||
             fileName.EndsWith(".generated.cs", StringComparison.OrdinalIgnoreCase) ||
+            fileName.EndsWith(".generated.vb", StringComparison.OrdinalIgnoreCase) ||
             fileName.EndsWith(".designer.cs", StringComparison.OrdinalIgnoreCase) ||
+            fileName.EndsWith(".designer.vb", StringComparison.OrdinalIgnoreCase) ||
             fileName.EndsWith(".AssemblyInfo.cs", StringComparison.OrdinalIgnoreCase) ||
-            fileName.EndsWith(".AssemblyAttributes.cs", StringComparison.OrdinalIgnoreCase))
+            fileName.EndsWith(".AssemblyInfo.vb", StringComparison.OrdinalIgnoreCase) ||
+            fileName.EndsWith(".AssemblyAttributes.cs", StringComparison.OrdinalIgnoreCase) ||
+            fileName.EndsWith(".AssemblyAttributes.vb", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }

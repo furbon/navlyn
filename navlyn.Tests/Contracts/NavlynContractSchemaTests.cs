@@ -179,6 +179,26 @@ public sealed class NavlynContractSchemaTests
         Assert.Contains(selectionInput["required"]!.AsArray(), value => value!.GetValue<string>() == "mode");
     }
 
+    [Fact]
+    public void AgentEvidenceSchemas_RequireGuardrailFields()
+    {
+        JsonObject preflight = ReadSchema("navlyn-edit-preflight-result.schema.json");
+        JsonArray preflightRequired = preflight["required"]!.AsArray();
+        Assert.Contains(preflightRequired, value => value!.GetValue<string>() == "anchor");
+        Assert.Contains(preflightRequired, value => value!.GetValue<string>() == "confidence");
+        Assert.Contains(preflightRequired, value => value!.GetValue<string>() == "knownUnknowns");
+        Assert.Contains(preflightRequired, value => value!.GetValue<string>() == "nextCommands");
+        Assert.Equal("navlyn.edit-preflight.v1", preflight["properties"]!["schemaVersion"]!["const"]!.GetValue<string>());
+
+        JsonObject guard = ReadSchema("navlyn-agent-guard-result.schema.json");
+        JsonArray guardRequired = guard["required"]!.AsArray();
+        Assert.Contains(guardRequired, value => value!.GetValue<string>() == "risk");
+        Assert.Contains(guardRequired, value => value!.GetValue<string>() == "reasonCodes");
+        Assert.Contains(guardRequired, value => value!.GetValue<string>() == "policy");
+        Assert.Contains(guardRequired, value => value!.GetValue<string>() == "proofBoundary");
+        Assert.Equal("navlyn.agent-guard.v1", guard["properties"]!["schemaVersion"]!["const"]!.GetValue<string>());
+    }
+
     private static JsonObject ReadSchema(string fileName)
     {
         return JsonNode.Parse(File.ReadAllText(Path.Combine(GetSchemaDirectory(), fileName)))!.AsObject();

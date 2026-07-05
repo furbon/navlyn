@@ -1,7 +1,7 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using Navlyn.GeneratedCode;
+using Navlyn.Languages;
 using Navlyn.Paths;
 using Navlyn.Symbols;
 using Navlyn.Workspaces;
@@ -27,7 +27,7 @@ internal sealed class ChangedSymbolResolver
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!file.Path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            if (!SourceLanguageFacts.IsSupportedSourceFile(file.Path))
             {
                 continue;
             }
@@ -157,7 +157,7 @@ internal sealed class ChangedSymbolResolver
     {
         SyntaxNode? declaration = root
             .DescendantNodes()
-            .Where(node => IsSupportedDeclaration(node) && ContainsLine(node.FullSpan, line))
+            .Where(node => SourceLanguageFacts.IsDeclarationNode(node) && ContainsLine(node.FullSpan, line))
             .OrderBy(node => node.FullSpan.Length)
             .FirstOrDefault();
 
@@ -173,35 +173,12 @@ internal sealed class ChangedSymbolResolver
         return span.Start <= start && span.End >= end;
     }
 
-    private static bool IsSupportedDeclaration(SyntaxNode node)
-    {
-        return node is BaseMethodDeclarationSyntax or
-            LocalFunctionStatementSyntax or
-            PropertyDeclarationSyntax or
-            EventDeclarationSyntax or
-            IndexerDeclarationSyntax or
-            BaseTypeDeclarationSyntax or
-            DelegateDeclarationSyntax or
-            EnumMemberDeclarationSyntax or
-            FieldDeclarationSyntax or
-            EventFieldDeclarationSyntax;
-    }
-
     private static ISymbol? GetDeclaredSymbol(
         SemanticModel semanticModel,
         SyntaxNode node,
         CancellationToken cancellationToken)
     {
-        ISymbol? symbol = node switch
-        {
-            FieldDeclarationSyntax field => field.Declaration.Variables
-                .Select(variable => semanticModel.GetDeclaredSymbol(variable, cancellationToken))
-                .FirstOrDefault(fieldSymbol => fieldSymbol is not null),
-            EventFieldDeclarationSyntax eventField => eventField.Declaration.Variables
-                .Select(variable => semanticModel.GetDeclaredSymbol(variable, cancellationToken))
-                .FirstOrDefault(eventSymbol => eventSymbol is not null),
-            _ => semanticModel.GetDeclaredSymbol(node, cancellationToken)
-        };
+        ISymbol? symbol = semanticModel.GetDeclaredSymbol(node, cancellationToken);
 
         return symbol is null ? null : SymbolNavigationFacts.NormalizeSourceNavigationSymbol(symbol);
     }

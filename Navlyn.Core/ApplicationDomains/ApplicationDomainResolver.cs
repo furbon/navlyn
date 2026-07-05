@@ -1,7 +1,8 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
+using System.Collections.Immutable;
 using Navlyn.GeneratedCode;
+using Navlyn.Languages;
 using Navlyn.Paths;
 using Navlyn.RepoGraph;
 using Navlyn.Symbols;
@@ -326,6 +327,7 @@ internal sealed class ApplicationDomainResolver
 
             foreach (Document document in project.Documents
                 .Where(document => document.FilePath is not null)
+                .Where(SourceLanguageFacts.IsSupportedDocument)
                 .Where(document => !excludeGenerated || !GeneratedCodeFacts.IsGeneratedPath(document.FilePath))
                 .OrderBy(document => document.FilePath, StringComparer.Ordinal))
             {
@@ -337,14 +339,14 @@ internal sealed class ApplicationDomainResolver
                     continue;
                 }
 
-                routes.AddRange(DiscoverRoutes(root, semanticModel, projectInfo, excludeGenerated));
-                DiscoverOptions(root, semanticModel, projectInfo, excludeGenerated, options, optionBindings, optionConsumers, optionValidations);
-                DiscoverMessages(root, semanticModel, projectInfo, excludeGenerated, messageHandlers, messageCallSites);
-                DiscoverEf(root, semanticModel, projectInfo, excludeGenerated, dbContexts, entities, dbSets, efConfigurations, querySites, knownEfEntities);
+                routes.AddRange(DiscoverRoutes(root, semanticModel, projectInfo, excludeGenerated, cancellationToken));
+                DiscoverOptions(root, semanticModel, projectInfo, excludeGenerated, options, optionBindings, optionConsumers, optionValidations, cancellationToken);
+                DiscoverMessages(root, semanticModel, projectInfo, excludeGenerated, messageHandlers, messageCallSites, cancellationToken);
+                DiscoverEf(root, semanticModel, projectInfo, excludeGenerated, dbContexts, entities, dbSets, efConfigurations, querySites, knownEfEntities, cancellationToken);
 
                 if (includePackageUsage && packageOptions is not null)
                 {
-                    packageUsages.AddRange(DiscoverPackageUsages(root, semanticModel, projectInfo, excludeGenerated, packageOptions));
+                    packageUsages.AddRange(DiscoverPackageUsages(root, semanticModel, projectInfo, excludeGenerated, packageOptions, cancellationToken));
                 }
             }
         }
@@ -370,34 +372,38 @@ internal sealed class ApplicationDomainResolver
         SyntaxNode root,
         SemanticModel semanticModel,
         ApplicationDomainProject project,
-        bool excludeGenerated)
+        bool excludeGenerated,
+        CancellationToken cancellationToken)
     {
-        foreach (ClassDeclarationSyntax type in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+        foreach (INamedTypeSymbol typeSymbol in SourceLanguageFacts.EnumerateNamedTypes(root, semanticModel, cancellationToken)
+            .Where(symbol => symbol.TypeKind.ToString() == "Class"))
         {
-            INamedTypeSymbol? typeSymbol = semanticModel.GetDeclaredSymbol(type);
-            if (typeSymbol is null || !IsControllerType(type, typeSymbol))
+            if (!IsControllerType(typeSymbol))
             {
                 continue;
             }
 
-            IReadOnlyList<string> typeRoutes = GetRouteTemplates(type.AttributeLists);
-            foreach (MethodDeclarationSyntax method in type.Members.OfType<MethodDeclarationSyntax>())
+            IReadOnlyList<string> typeRoutes = GetRouteTemplates(typeSymbol.GetAttributes());
+            foreach (IMethodSymbol methodSymbol in typeSymbol.GetMembers()
+                .OfType<IMethodSymbol>()
+                .Where(method => method.MethodKind == MethodKind.Ordinary)
+                .Where(method => !method.IsImplicitlyDeclared)
+                .Where(method => method.Locations.Any(location => location.IsInSource)))
             {
-                if (HasAttribute(method.AttributeLists, "NonAction"))
+                if (SourceLanguageFacts.HasAttribute(methodSymbol, "NonAction"))
                 {
                     continue;
                 }
 
-                IMethodSymbol? methodSymbol = semanticModel.GetDeclaredSymbol(method);
-                if (methodSymbol is null || methodSymbol.DeclaredAccessibility != Accessibility.Public || methodSymbol.IsStatic)
+                if (methodSymbol.DeclaredAccessibility != Accessibility.Public || methodSymbol.IsStatic)
                 {
                     continue;
                 }
 
-                IReadOnlyList<string> methods = GetHttpMethods(method.AttributeLists);
-                IReadOnlyList<string> methodRoutes = GetRouteTemplates(method.AttributeLists);
+                IReadOnlyList<string> methods = GetHttpMethods(methodSymbol.GetAttributes());
+                IReadOnlyList<string> methodRoutes = GetRouteTemplates(methodSymbol.GetAttributes());
                 bool hasRouteEvidence = typeRoutes.Count > 0 || methodRoutes.Count > 0 || methods.Count > 0;
-                if (!hasRouteEvidence && !type.Identifier.ValueText.EndsWith("Controller", StringComparison.Ordinal))
+                if (!hasRouteEvidence && !typeSymbol.Name.EndsWith("Controller", StringComparison.Ordinal))
                 {
                     continue;
                 }
@@ -408,8 +414,8 @@ internal sealed class ApplicationDomainResolver
                     continue;
                 }
 
-                IReadOnlyList<ApplicationDomainEvidence> evidence = CreateAttributeEvidence(type.AttributeLists, ["controller-route-or-auth"], excludeGenerated)
-                    .Concat(CreateAttributeEvidence(method.AttributeLists, ["action-route-or-auth"], excludeGenerated))
+                IReadOnlyList<ApplicationDomainEvidence> evidence = CreateAttributeEvidence(typeSymbol.GetAttributes(), ["controller-route-or-auth"], excludeGenerated)
+                    .Concat(CreateAttributeEvidence(methodSymbol.GetAttributes(), ["action-route-or-auth"], excludeGenerated))
                     .ToArray();
 
                 yield return new RouteEndpointFact(
@@ -418,7 +424,7 @@ internal sealed class ApplicationDomainResolver
                     CombineRoutePatterns(typeRoutes, methodRoutes),
                     NormalizeRoutePattern(CombineRoutePatterns(typeRoutes, methodRoutes)),
                     CreateSymbol(methodSymbol, project.Name, excludeGenerated),
-                    CreateAuth(type.AttributeLists, method.AttributeLists, excludeGenerated),
+                    CreateAuth(typeSymbol.GetAttributes(), methodSymbol.GetAttributes(), excludeGenerated),
                     project,
                     location.Path,
                     location.Line,
@@ -432,7 +438,7 @@ internal sealed class ApplicationDomainResolver
             }
         }
 
-        foreach (InvocationExpressionSyntax invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        foreach (IInvocationOperation invocation in SourceLanguageFacts.EnumerateInvocations(root, semanticModel, cancellationToken))
         {
             string? name = GetInvocationName(invocation);
             if (name is not ("MapGet" or "MapPost" or "MapPut" or "MapDelete" or "MapPatch" or "MapMethods" or "MapFallback" or "Map"))
@@ -440,18 +446,15 @@ internal sealed class ApplicationDomainResolver
                 continue;
             }
 
-            ExpressionSyntax? handlerExpression = invocation.ArgumentList.Arguments.LastOrDefault()?.Expression;
-            ApplicationDomainSymbol? handler = CreateHandlerSymbol(handlerExpression, semanticModel, project.Name, excludeGenerated);
-            SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation((handlerExpression ?? invocation).GetLocation(), excludeGenerated);
+            IOperation? handlerOperation = SourceLanguageFacts.GetOrderedArguments(invocation).LastOrDefault()?.Value;
+            ApplicationDomainSymbol? handler = CreateHandlerSymbol(handlerOperation, semanticModel, project.Name, excludeGenerated);
+            SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation((handlerOperation?.Syntax ?? invocation.Syntax).GetLocation(), excludeGenerated);
             if (handler is null || location is null)
             {
                 continue;
             }
 
-            string? routePattern = invocation.ArgumentList.Arguments.FirstOrDefault()?.Expression is LiteralExpressionSyntax literal &&
-                literal.IsKind(SyntaxKind.StringLiteralExpression)
-                ? literal.Token.ValueText
-                : null;
+            string? routePattern = SourceLanguageFacts.GetStringArgument(invocation, 0);
 
             yield return new RouteEndpointFact(
                 "minimal-api",
@@ -468,7 +471,7 @@ internal sealed class ApplicationDomainResolver
                 location.EndColumn,
                 routePattern is null ? "medium" : "high",
                 Ordered(["minimal-api-map-call", $"{name.ToLowerInvariant()}-call"]),
-                [CreateEvidence(invocation.GetLocation(), "invocation", ["minimal-api-map-call"], excludeGenerated)],
+                [CreateEvidence(invocation.Syntax.GetLocation(), "invocation", ["minimal-api-map-call"], excludeGenerated)],
                 null);
         }
     }
@@ -481,9 +484,10 @@ internal sealed class ApplicationDomainResolver
         List<OptionTypeFact> options,
         List<OptionBindingFact> bindings,
         List<OptionConsumerFact> consumers,
-        List<OptionValidationFact> validations)
+        List<OptionValidationFact> validations,
+        CancellationToken cancellationToken)
     {
-        foreach (InvocationExpressionSyntax invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        foreach (IInvocationOperation invocation in SourceLanguageFacts.EnumerateInvocations(root, semanticModel, cancellationToken))
         {
             string? name = GetInvocationName(invocation);
             if (name is not ("Configure" or "AddOptions" or "Bind" or "Validate" or "ValidateDataAnnotations" or "ValidateOnStart"))
@@ -491,16 +495,16 @@ internal sealed class ApplicationDomainResolver
                 continue;
             }
 
-            INamedTypeSymbol? optionType = GetOptionsTypeFromInvocation(invocation, semanticModel);
+            INamedTypeSymbol? optionType = GetOptionsTypeFromInvocation(invocation);
             if (optionType is null)
             {
                 continue;
             }
 
             ApplicationDomainSymbol optionSymbol = CreateSymbol(optionType, project.Name, excludeGenerated);
-            options.Add(new OptionTypeFact(optionSymbol, project, "high", Ordered(["options-type"]), [CreateEvidence(invocation.GetLocation(), "invocation", ["options-registration-or-binding"], excludeGenerated)]));
+            options.Add(new OptionTypeFact(optionSymbol, project, "high", Ordered(["options-type"]), [CreateEvidence(invocation.Syntax.GetLocation(), "invocation", ["options-registration-or-binding"], excludeGenerated)]));
 
-            SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(invocation.GetLocation(), excludeGenerated);
+            SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(invocation.Syntax.GetLocation(), excludeGenerated);
             if (location is null)
             {
                 continue;
@@ -520,7 +524,7 @@ internal sealed class ApplicationDomainResolver
                     location.EndColumn,
                     "high",
                     Ordered(["options-binding", $"{name.ToLowerInvariant()}-call"]),
-                    [CreateEvidence(invocation.GetLocation(), "invocation", ["options-binding"], excludeGenerated)]));
+                    [CreateEvidence(invocation.Syntax.GetLocation(), "invocation", ["options-binding"], excludeGenerated)]));
             }
             else
             {
@@ -535,36 +539,41 @@ internal sealed class ApplicationDomainResolver
                     location.EndColumn,
                     "medium",
                     Ordered(["options-validation", $"{name.ToLowerInvariant()}-call"]),
-                    [CreateEvidence(invocation.GetLocation(), "invocation", ["options-validation"], excludeGenerated)]));
+                    [CreateEvidence(invocation.Syntax.GetLocation(), "invocation", ["options-validation"], excludeGenerated)]));
             }
         }
 
-        foreach (ConstructorDeclarationSyntax constructor in root.DescendantNodes().OfType<ConstructorDeclarationSyntax>())
+        foreach (IMethodSymbol constructorSymbol in EnumerateConstructorSymbols(root, semanticModel, cancellationToken))
         {
-            IMethodSymbol? constructorSymbol = semanticModel.GetDeclaredSymbol(constructor);
-            INamedTypeSymbol? consumerType = constructorSymbol?.ContainingType;
+            INamedTypeSymbol? consumerType = constructorSymbol.ContainingType;
             if (consumerType is null)
             {
                 continue;
             }
 
-            foreach (ParameterSyntax parameter in constructor.ParameterList.Parameters)
+            foreach (IParameterSymbol parameter in constructorSymbol.Parameters)
             {
-                ITypeSymbol? parameterType = semanticModel.GetTypeInfo(parameter.Type!).Type;
+                ITypeSymbol? parameterType = parameter.Type;
                 INamedTypeSymbol? optionType = GetOptionsTypeArgument(parameterType);
                 if (optionType is null)
                 {
                     continue;
                 }
 
-                SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(parameter.GetLocation(), excludeGenerated);
+                Location? parameterLocation = parameter.Locations.FirstOrDefault(location => location.IsInSource);
+                if (parameterLocation is null)
+                {
+                    continue;
+                }
+
+                SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(parameterLocation, excludeGenerated);
                 if (location is null)
                 {
                     continue;
                 }
 
                 ApplicationDomainSymbol optionSymbol = CreateSymbol(optionType, project.Name, excludeGenerated);
-                options.Add(new OptionTypeFact(optionSymbol, project, "high", Ordered(["options-type"]), [CreateEvidence(parameter.GetLocation(), "parameter", ["options-consumer"], excludeGenerated)]));
+                options.Add(new OptionTypeFact(optionSymbol, project, "high", Ordered(["options-type"]), [CreateEvidence(parameterLocation, "parameter", ["options-consumer"], excludeGenerated)]));
                 consumers.Add(new OptionConsumerFact(
                     CreateSymbol(consumerType, project.Name, excludeGenerated),
                     optionSymbol,
@@ -576,48 +585,8 @@ internal sealed class ApplicationDomainResolver
                     location.EndLine,
                     location.EndColumn,
                     "high",
-                    Ordered(["options-constructor-consumer", parameterType.Name.ToLowerInvariant()]),
-                    [CreateEvidence(parameter.GetLocation(), "parameter", ["options-constructor-consumer"], excludeGenerated)]));
-            }
-        }
-
-        foreach (ClassDeclarationSyntax type in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
-        {
-            if (type.ParameterList is null || semanticModel.GetDeclaredSymbol(type) is not INamedTypeSymbol consumerType)
-            {
-                continue;
-            }
-
-            foreach (ParameterSyntax parameter in type.ParameterList.Parameters)
-            {
-                ITypeSymbol? parameterType = semanticModel.GetTypeInfo(parameter.Type!).Type;
-                INamedTypeSymbol? optionType = GetOptionsTypeArgument(parameterType);
-                if (optionType is null)
-                {
-                    continue;
-                }
-
-                SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(parameter.GetLocation(), excludeGenerated);
-                if (location is null)
-                {
-                    continue;
-                }
-
-                ApplicationDomainSymbol optionSymbol = CreateSymbol(optionType, project.Name, excludeGenerated);
-                options.Add(new OptionTypeFact(optionSymbol, project, "high", Ordered(["options-type"]), [CreateEvidence(parameter.GetLocation(), "parameter", ["options-consumer"], excludeGenerated)]));
-                consumers.Add(new OptionConsumerFact(
-                    CreateSymbol(consumerType, project.Name, excludeGenerated),
-                    optionSymbol,
-                    parameterType!.Name,
-                    project,
-                    location.Path,
-                    location.Line,
-                    location.Column,
-                    location.EndLine,
-                    location.EndColumn,
-                    "high",
-                    Ordered(["options-primary-constructor-consumer", parameterType.Name.ToLowerInvariant()]),
-                    [CreateEvidence(parameter.GetLocation(), "parameter", ["options-primary-constructor-consumer"], excludeGenerated)]));
+                    Ordered(["options-constructor-consumer", (parameterType?.Name ?? "options").ToLowerInvariant()]),
+                    [CreateEvidence(parameterLocation, "parameter", ["options-constructor-consumer"], excludeGenerated)]));
             }
         }
     }
@@ -628,16 +597,12 @@ internal sealed class ApplicationDomainResolver
         ApplicationDomainProject project,
         bool excludeGenerated,
         List<MessageHandlerFact> handlers,
-        List<MessageCallSiteFact> callSites)
+        List<MessageCallSiteFact> callSites,
+        CancellationToken cancellationToken)
     {
-        foreach (ClassDeclarationSyntax type in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+        foreach (INamedTypeSymbol typeSymbol in SourceLanguageFacts.EnumerateNamedTypes(root, semanticModel, cancellationToken)
+            .Where(symbol => symbol.TypeKind.ToString() == "Class"))
         {
-            INamedTypeSymbol? typeSymbol = semanticModel.GetDeclaredSymbol(type);
-            if (typeSymbol is null)
-            {
-                continue;
-            }
-
             foreach (INamedTypeSymbol iface in typeSymbol.AllInterfaces)
             {
                 string ifaceName = iface.Name;
@@ -666,11 +631,11 @@ internal sealed class ApplicationDomainResolver
                     project,
                     "high",
                     Ordered(["mediatr-handler-interface", ifaceName.ToLowerInvariant()]),
-                    [CreateEvidence(type.GetLocation(), "type", ["mediatr-handler-interface"], excludeGenerated)]));
+                    CreateSymbolEvidence(typeSymbol, "type", ["mediatr-handler-interface"], excludeGenerated)));
             }
         }
 
-        foreach (InvocationExpressionSyntax invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        foreach (IInvocationOperation invocation in SourceLanguageFacts.EnumerateInvocations(root, semanticModel, cancellationToken))
         {
             string? name = GetInvocationName(invocation);
             if (name is not ("Send" or "Publish"))
@@ -678,22 +643,22 @@ internal sealed class ApplicationDomainResolver
                 continue;
             }
 
-            ExpressionSyntax? messageExpression = invocation.ArgumentList.Arguments.FirstOrDefault()?.Expression;
-            INamedTypeSymbol? messageType = messageExpression is null
-                ? null
-                : semanticModel.GetTypeInfo(messageExpression).Type as INamedTypeSymbol;
+            INamedTypeSymbol? messageType = SourceLanguageFacts.GetOrderedArguments(invocation)
+                .Select(argument => GetMessageTypeFromArgument(argument, semanticModel))
+                .OfType<INamedTypeSymbol>()
+                .FirstOrDefault(messageType => !IsFrameworkType(messageType));
             if (messageType is null || IsFrameworkType(messageType))
             {
                 continue;
             }
 
-            SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(invocation.GetLocation(), excludeGenerated);
+            SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(invocation.Syntax.GetLocation(), excludeGenerated);
             if (location is null)
             {
                 continue;
             }
 
-            ISymbol? containing = semanticModel.GetEnclosingSymbol(invocation.SpanStart);
+            ISymbol? containing = semanticModel.GetEnclosingSymbol(invocation.Syntax.SpanStart);
             callSites.Add(new MessageCallSiteFact(
                 name == "Publish" ? "publish" : "send",
                 CreateSymbol(messageType, project.Name, excludeGenerated),
@@ -706,7 +671,7 @@ internal sealed class ApplicationDomainResolver
                 location.EndColumn,
                 "medium",
                 Ordered(["mediatr-send-or-publish", $"{name.ToLowerInvariant()}-call"]),
-                [CreateEvidence(invocation.GetLocation(), "invocation", ["mediatr-send-or-publish"], excludeGenerated)]));
+                [CreateEvidence(invocation.Syntax.GetLocation(), "invocation", ["mediatr-send-or-publish"], excludeGenerated)]));
         }
     }
 
@@ -720,25 +685,20 @@ internal sealed class ApplicationDomainResolver
         List<EfDbSetFact> dbSets,
         List<EfConfigurationFact> configurations,
         List<EfQuerySiteFact> querySites,
-        Dictionary<string, ApplicationDomainSymbol> knownEntities)
+        Dictionary<string, ApplicationDomainSymbol> knownEntities,
+        CancellationToken cancellationToken)
     {
-        foreach (ClassDeclarationSyntax type in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+        foreach (INamedTypeSymbol typeSymbol in SourceLanguageFacts.EnumerateNamedTypes(root, semanticModel, cancellationToken)
+            .Where(symbol => symbol.TypeKind.ToString() == "Class"))
         {
-            INamedTypeSymbol? typeSymbol = semanticModel.GetDeclaredSymbol(type);
-            if (typeSymbol is null)
-            {
-                continue;
-            }
-
             if (InheritsTypeNamed(typeSymbol, "DbContext"))
             {
                 ApplicationDomainSymbol contextSymbol = CreateSymbol(typeSymbol, project.Name, excludeGenerated);
-                dbContexts.Add(new EfDbContextFact(contextSymbol, project, "high", Ordered(["ef-dbcontext-base-type"]), [CreateEvidence(type.GetLocation(), "type", ["ef-dbcontext-base-type"], excludeGenerated)]));
+                dbContexts.Add(new EfDbContextFact(contextSymbol, project, "high", Ordered(["ef-dbcontext-base-type"]), CreateSymbolEvidence(typeSymbol, "type", ["ef-dbcontext-base-type"], excludeGenerated)));
 
-                foreach (PropertyDeclarationSyntax property in type.Members.OfType<PropertyDeclarationSyntax>())
+                foreach (IPropertySymbol propertySymbol in typeSymbol.GetMembers().OfType<IPropertySymbol>())
                 {
-                    if (semanticModel.GetDeclaredSymbol(property) is not IPropertySymbol propertySymbol ||
-                        propertySymbol.Type is not INamedTypeSymbol propertyType ||
+                    if (propertySymbol.Type is not INamedTypeSymbol propertyType ||
                         propertyType.Name != "DbSet" ||
                         propertyType.TypeArguments.FirstOrDefault() is not INamedTypeSymbol entityType)
                     {
@@ -753,7 +713,8 @@ internal sealed class ApplicationDomainResolver
 
                     ApplicationDomainSymbol entitySymbol = CreateSymbol(entityType, project.Name, excludeGenerated);
                     knownEntities.TryAdd(Identity(entitySymbol), entitySymbol);
-                    entities.Add(new EfEntityFact(entitySymbol, project, "high", Ordered(["ef-dbset-entity"]), [CreateEvidence(property.GetLocation(), "property", ["ef-dbset-property"], excludeGenerated)]));
+                    IReadOnlyList<ApplicationDomainEvidence> propertyEvidence = CreateSymbolEvidence(propertySymbol, "property", ["ef-dbset-property"], excludeGenerated);
+                    entities.Add(new EfEntityFact(entitySymbol, project, "high", Ordered(["ef-dbset-entity"]), propertyEvidence));
                     dbSets.Add(new EfDbSetFact(
                         contextSymbol,
                         entitySymbol,
@@ -766,7 +727,7 @@ internal sealed class ApplicationDomainResolver
                         location.EndColumn,
                         "high",
                         Ordered(["ef-dbset-property"]),
-                        [CreateEvidence(property.GetLocation(), "property", ["ef-dbset-property"], excludeGenerated)]));
+                        propertyEvidence));
                 }
             }
 
@@ -779,30 +740,29 @@ internal sealed class ApplicationDomainResolver
 
                 ApplicationDomainSymbol entitySymbol = CreateSymbol(entityType, project.Name, excludeGenerated);
                 knownEntities.TryAdd(Identity(entitySymbol), entitySymbol);
-                entities.Add(new EfEntityFact(entitySymbol, project, "high", Ordered(["ef-configuration-entity"]), [CreateEvidence(type.GetLocation(), "type", ["ef-entitytypeconfiguration-interface"], excludeGenerated)]));
+                IReadOnlyList<ApplicationDomainEvidence> typeEvidence = CreateSymbolEvidence(typeSymbol, "type", ["ef-entitytypeconfiguration-interface"], excludeGenerated);
+                entities.Add(new EfEntityFact(entitySymbol, project, "high", Ordered(["ef-configuration-entity"]), typeEvidence));
                 configurations.Add(new EfConfigurationFact(
                     entitySymbol,
                     CreateSymbol(typeSymbol, project.Name, excludeGenerated),
                     project,
                     "high",
                     Ordered(["ef-entitytypeconfiguration-interface"]),
-                    [CreateEvidence(type.GetLocation(), "type", ["ef-entitytypeconfiguration-interface"], excludeGenerated)]));
+                    typeEvidence));
             }
         }
 
-        foreach (InvocationExpressionSyntax invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        foreach (IInvocationOperation invocation in SourceLanguageFacts.EnumerateInvocations(root, semanticModel, cancellationToken))
         {
-            ExpressionSyntax queryExpression = invocation.Expression is MemberAccessExpressionSyntax memberAccess
-                ? memberAccess.Expression
-                : invocation.Expression;
-            ITypeSymbol? expressionType = semanticModel.GetTypeInfo(queryExpression).Type;
+            ITypeSymbol? expressionType = invocation.Instance?.Type ??
+                invocation.Arguments.OrderBy(argument => argument.Syntax.SpanStart).FirstOrDefault()?.Value.Type;
             INamedTypeSymbol? entityType = GetQueryableEntityType(expressionType);
             if (entityType is null)
             {
                 continue;
             }
 
-            SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(invocation.GetLocation(), excludeGenerated);
+            SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(invocation.Syntax.GetLocation(), excludeGenerated);
             if (location is null)
             {
                 continue;
@@ -810,7 +770,7 @@ internal sealed class ApplicationDomainResolver
 
             ApplicationDomainSymbol entitySymbol = CreateSymbol(entityType, project.Name, excludeGenerated);
             knownEntities.TryAdd(Identity(entitySymbol), entitySymbol);
-            ISymbol? containing = semanticModel.GetEnclosingSymbol(invocation.SpanStart);
+            ISymbol? containing = semanticModel.GetEnclosingSymbol(invocation.Syntax.SpanStart);
             querySites.Add(new EfQuerySiteFact(
                 entitySymbol,
                 containing is null ? null : CreateSymbol(containing, project.Name, excludeGenerated),
@@ -823,7 +783,7 @@ internal sealed class ApplicationDomainResolver
                 location.EndColumn,
                 "medium",
                 Ordered(["ef-queryable-call"]),
-                [CreateEvidence(invocation.GetLocation(), "invocation", ["ef-queryable-call"], excludeGenerated)]));
+                [CreateEvidence(invocation.Syntax.GetLocation(), "invocation", ["ef-queryable-call"], excludeGenerated)]));
         }
     }
 
@@ -852,7 +812,8 @@ internal sealed class ApplicationDomainResolver
         SemanticModel semanticModel,
         ApplicationDomainProject project,
         bool excludeGenerated,
-        PackageUsageOptions options)
+        PackageUsageOptions options,
+        CancellationToken cancellationToken)
     {
         IReadOnlyList<string> hints = options.NamespaceHints.Count == 0
             ? GuessPackageNamespaceHints(options.Package)
@@ -862,15 +823,15 @@ internal sealed class ApplicationDomainResolver
             yield break;
         }
 
-        foreach (UsingDirectiveSyntax usingDirective in root.DescendantNodes().OfType<UsingDirectiveSyntax>())
+        foreach (SyntaxNode import in root.DescendantNodes().Where(IsImportNode))
         {
-            string namespaceName = usingDirective.Name?.ToString() ?? "";
+            string namespaceName = GetImportedNamespace(import) ?? "";
             if (!MatchesAnyHint(namespaceName, hints))
             {
                 continue;
             }
 
-            SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(usingDirective.GetLocation(), excludeGenerated);
+            SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(import.GetLocation(), excludeGenerated);
             if (location is null)
             {
                 continue;
@@ -889,11 +850,12 @@ internal sealed class ApplicationDomainResolver
                 location.EndColumn,
                 options.NamespaceHints.Count == 0 ? "low" : "medium",
                 Ordered(options.NamespaceHints.Count == 0 ? ["package-namespace-guess"] : ["package-namespace-hint"]),
-                [CreateEvidence(usingDirective.GetLocation(), "using", ["package-source-usage"], excludeGenerated)]);
+                [CreateEvidence(import.GetLocation(), "using", ["package-source-usage"], excludeGenerated)]);
         }
 
-        foreach (SyntaxNode node in root.DescendantNodes().Where(node => node is IdentifierNameSyntax or QualifiedNameSyntax or MemberAccessExpressionSyntax))
+        foreach (SyntaxNode node in root.DescendantNodes().Where(IsSymbolReferenceCandidate))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             SymbolInfo symbolInfo = semanticModel.GetSymbolInfo(node);
             ISymbol? symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
             if (symbol is null)
@@ -1035,17 +997,17 @@ internal sealed class ApplicationDomainResolver
             location?.EndColumn);
     }
 
-    private static ApplicationDomainSymbol? CreateHandlerSymbol(ExpressionSyntax? expression, SemanticModel semanticModel, string projectName, bool excludeGenerated)
+    private static ApplicationDomainSymbol? CreateHandlerSymbol(IOperation? operation, SemanticModel semanticModel, string projectName, bool excludeGenerated)
     {
-        if (expression is null)
+        if (operation is null)
         {
             return null;
         }
 
-        if (expression is LambdaExpressionSyntax lambda)
+        if (SourceLanguageFacts.FindOperation<IAnonymousFunctionOperation>(operation) is IAnonymousFunctionOperation lambda)
         {
-            SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(lambda.GetLocation(), excludeGenerated);
-            ISymbol? enclosing = semanticModel.GetEnclosingSymbol(lambda.SpanStart);
+            SymbolSourceLocation? location = SymbolNavigationFacts.CreateSourceLocation(lambda.Syntax.GetLocation(), excludeGenerated);
+            ISymbol? enclosing = semanticModel.GetEnclosingSymbol(lambda.Syntax.SpanStart);
             return new ApplicationDomainSymbol(
                 "<lambda>",
                 "Lambda",
@@ -1058,8 +1020,10 @@ internal sealed class ApplicationDomainResolver
                 location?.EndColumn);
         }
 
-        SymbolInfo info = semanticModel.GetSymbolInfo(expression);
-        ISymbol? symbol = info.Symbol ?? info.CandidateSymbols.OrderBy(symbol => symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat), StringComparer.Ordinal).FirstOrDefault();
+        SymbolInfo info = semanticModel.GetSymbolInfo(operation.Syntax);
+        ISymbol? symbol = info.Symbol ??
+            SourceLanguageFacts.FindOperation<IMethodReferenceOperation>(operation)?.Method ??
+            info.CandidateSymbols.OrderBy(symbol => symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat), StringComparer.Ordinal).FirstOrDefault();
         return symbol is null ? null : CreateSymbol(symbol, projectName, excludeGenerated);
     }
 
@@ -1106,43 +1070,54 @@ internal sealed class ApplicationDomainResolver
             : new ApplicationDomainEvidence(kind, source.Path, source.Line, source.Column, source.EndLine, source.EndColumn, reasons);
     }
 
-    private static IReadOnlyList<ApplicationDomainEvidence> CreateAttributeEvidence(SyntaxList<AttributeListSyntax> attributeLists, IReadOnlyList<string> reasons, bool excludeGenerated)
+    private static IReadOnlyList<ApplicationDomainEvidence> CreateSymbolEvidence(ISymbol symbol, string kind, IReadOnlyList<string> reasons, bool excludeGenerated)
     {
-        return [.. attributeLists.SelectMany(list => list.Attributes).Select(attribute => CreateEvidence(attribute.GetLocation(), "attribute", reasons, excludeGenerated))];
+        return [.. symbol.Locations
+            .Where(location => location.IsInSource)
+            .Take(1)
+            .Select(location => CreateEvidence(location, kind, reasons, excludeGenerated))];
     }
 
-    private static RouteAuthFact CreateAuth(SyntaxList<AttributeListSyntax> typeAttributes, SyntaxList<AttributeListSyntax> methodAttributes, bool excludeGenerated)
+    private static IReadOnlyList<ApplicationDomainEvidence> CreateAttributeEvidence(IEnumerable<AttributeData> attributes, IReadOnlyList<string> reasons, bool excludeGenerated)
     {
-        IReadOnlyList<AttributeSyntax> attributes = [.. typeAttributes.Concat(methodAttributes).SelectMany(list => list.Attributes)];
-        return CreateAuthFromAttributes(attributes, excludeGenerated);
+        return [.. attributes
+            .Select(attribute => attribute.ApplicationSyntaxReference?.GetSyntax())
+            .Where(node => node is not null)
+            .Select(node => CreateEvidence(node!.GetLocation(), "attribute", reasons, excludeGenerated))];
     }
 
-    private static RouteAuthFact CreateMinimalApiAuth(InvocationExpressionSyntax mapInvocation, bool excludeGenerated)
+    private static RouteAuthFact CreateAuth(IEnumerable<AttributeData> typeAttributes, IEnumerable<AttributeData> methodAttributes, bool excludeGenerated)
     {
-        List<AttributeSyntax> attributes = [];
+        return CreateAuthFromAttributes([.. typeAttributes.Concat(methodAttributes)], excludeGenerated);
+    }
+
+    private static RouteAuthFact CreateMinimalApiAuth(IInvocationOperation mapInvocation, bool excludeGenerated)
+    {
         List<ApplicationDomainEvidence> evidence = [];
         bool required = false;
         bool anonymous = false;
 
-        SyntaxNode? node = mapInvocation.Parent;
+        SyntaxNode? node = mapInvocation.Syntax.Parent;
         while (node is not null)
         {
-            if (node is InvocationExpressionSyntax invocation)
+            if (node.GetType().Name == "InvocationExpressionSyntax")
             {
-                string? name = GetInvocationName(invocation);
-                if (name == "RequireAuthorization")
+                string text = node.ToString();
+                if (LooksLikeInvocationName(text, "RequireAuthorization"))
                 {
                     required = true;
-                    evidence.Add(CreateEvidence(invocation.GetLocation(), "invocation", ["requireauthorization-call"], excludeGenerated));
+                    evidence.Add(CreateEvidence(node.GetLocation(), "invocation", ["requireauthorization-call"], excludeGenerated));
                 }
-                else if (name == "AllowAnonymous")
+                else if (LooksLikeInvocationName(text, "AllowAnonymous"))
                 {
                     anonymous = true;
-                    evidence.Add(CreateEvidence(invocation.GetLocation(), "invocation", ["allowanonymous-call"], excludeGenerated));
+                    evidence.Add(CreateEvidence(node.GetLocation(), "invocation", ["allowanonymous-call"], excludeGenerated));
                 }
             }
 
-            node = node.Parent is MemberAccessExpressionSyntax or InvocationExpressionSyntax ? node.Parent : null;
+            node = node.Parent is not null && (node.Parent.GetType().Name is "MemberAccessExpressionSyntax" or "InvocationExpressionSyntax")
+                ? node.Parent
+                : null;
         }
 
         if (anonymous)
@@ -1155,15 +1130,13 @@ internal sealed class ApplicationDomainResolver
             return new RouteAuthFact("required", [], [], [], evidence);
         }
 
-        return attributes.Count == 0
-            ? new RouteAuthFact("unknown", [], [], [], [])
-            : CreateAuthFromAttributes(attributes, excludeGenerated);
+        return new RouteAuthFact("unknown", [], [], [], []);
     }
 
-    private static RouteAuthFact CreateAuthFromAttributes(IReadOnlyList<AttributeSyntax> attributes, bool excludeGenerated)
+    private static RouteAuthFact CreateAuthFromAttributes(IReadOnlyList<AttributeData> attributes, bool excludeGenerated)
     {
-        bool anonymous = attributes.Any(attribute => ShortAttributeName(attribute.Name.ToString()) == "AllowAnonymous");
-        IReadOnlyList<AttributeSyntax> authorize = [.. attributes.Where(attribute => ShortAttributeName(attribute.Name.ToString()) == "Authorize")];
+        bool anonymous = attributes.Any(attribute => SourceLanguageFacts.ShortAttributeName(attribute) == "AllowAnonymous");
+        IReadOnlyList<AttributeData> authorize = [.. attributes.Where(attribute => SourceLanguageFacts.ShortAttributeName(attribute) == "Authorize")];
         if (anonymous)
         {
             return new RouteAuthFact(
@@ -1171,24 +1144,23 @@ internal sealed class ApplicationDomainResolver
                 [],
                 [],
                 [],
-                [.. attributes.Where(attribute => ShortAttributeName(attribute.Name.ToString()) == "AllowAnonymous").Select(attribute => CreateEvidence(attribute.GetLocation(), "attribute", ["allowanonymous-attribute"], excludeGenerated))]);
+                CreateAttributeEvidence([.. attributes.Where(attribute => SourceLanguageFacts.ShortAttributeName(attribute) == "AllowAnonymous")], ["allowanonymous-attribute"], excludeGenerated));
         }
 
         return authorize.Count == 0
             ? new RouteAuthFact("unknown", [], [], [], [])
             : new RouteAuthFact(
                 "required",
-                [.. authorize.Select(attribute => GetNamedString(attribute, "Policy") ?? GetFirstStringArgument(attribute)).Where(value => !string.IsNullOrWhiteSpace(value))!],
-                [.. authorize.Select(attribute => GetNamedString(attribute, "Roles")).Where(value => !string.IsNullOrWhiteSpace(value))!],
-                [.. authorize.Select(attribute => GetNamedString(attribute, "AuthenticationSchemes")).Where(value => !string.IsNullOrWhiteSpace(value))!],
-                [.. authorize.Select(attribute => CreateEvidence(attribute.GetLocation(), "attribute", ["authorize-attribute"], excludeGenerated))]);
+                [.. authorize.Select(attribute => SourceLanguageFacts.GetNamedStringArgument(attribute, "Policy") ?? SourceLanguageFacts.GetFirstStringArgument(attribute)).Where(value => !string.IsNullOrWhiteSpace(value))!],
+                [.. authorize.Select(attribute => SourceLanguageFacts.GetNamedStringArgument(attribute, "Roles")).Where(value => !string.IsNullOrWhiteSpace(value))!],
+                [.. authorize.Select(attribute => SourceLanguageFacts.GetNamedStringArgument(attribute, "AuthenticationSchemes")).Where(value => !string.IsNullOrWhiteSpace(value))!],
+                CreateAttributeEvidence(authorize, ["authorize-attribute"], excludeGenerated));
     }
 
-    private static IReadOnlyList<string> GetHttpMethods(SyntaxList<AttributeListSyntax> attributes)
+    private static IReadOnlyList<string> GetHttpMethods(IEnumerable<AttributeData> attributes)
     {
         return [.. attributes
-            .SelectMany(list => list.Attributes)
-            .Select(attribute => ShortAttributeName(attribute.Name.ToString()))
+            .Select(SourceLanguageFacts.ShortAttributeName)
             .Select(name => name switch
             {
                 "HttpGet" => "GET",
@@ -1205,7 +1177,7 @@ internal sealed class ApplicationDomainResolver
             .OrderBy(value => value, StringComparer.Ordinal)];
     }
 
-    private static IReadOnlyList<string> GetMinimalApiHttpMethods(string name, InvocationExpressionSyntax invocation)
+    private static IReadOnlyList<string> GetMinimalApiHttpMethods(string name, IInvocationOperation invocation)
     {
         return name switch
         {
@@ -1220,29 +1192,30 @@ internal sealed class ApplicationDomainResolver
         };
     }
 
-    private static IReadOnlyList<string> GetMapMethods(InvocationExpressionSyntax invocation)
+    private static IReadOnlyList<string> GetMapMethods(IInvocationOperation invocation)
     {
-        ArgumentSyntax? methodsArgument = invocation.ArgumentList.Arguments.ElementAtOrDefault(1);
-        if (methodsArgument?.Expression is not InitializerExpressionSyntax initializer)
+        foreach (IArgumentOperation argument in SourceLanguageFacts.GetOrderedArguments(invocation))
         {
-            return ["ANY"];
+            if (argument.Value.Type?.SpecialType == SpecialType.System_String)
+            {
+                continue;
+            }
+
+            IReadOnlyList<string> methods = SourceLanguageFacts.GetStringArguments(argument);
+            if (methods.Count > 0)
+            {
+                return methods;
+            }
         }
 
-        IReadOnlyList<string> methods = [.. initializer.Expressions
-            .OfType<LiteralExpressionSyntax>()
-            .Where(literal => literal.IsKind(SyntaxKind.StringLiteralExpression))
-            .Select(literal => literal.Token.ValueText.ToUpperInvariant())
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(value => value, StringComparer.Ordinal)];
-        return methods.Count == 0 ? ["ANY"] : methods;
+        return ["ANY"];
     }
 
-    private static IReadOnlyList<string> GetRouteTemplates(SyntaxList<AttributeListSyntax> attributes)
+    private static IReadOnlyList<string> GetRouteTemplates(IEnumerable<AttributeData> attributes)
     {
         return [.. attributes
-            .SelectMany(list => list.Attributes)
             .Where(attribute => IsRouteAttribute(attribute) || IsHttpMethodAttribute(attribute))
-            .Select(GetFirstStringArgument)
+            .Select(SourceLanguageFacts.GetFirstStringArgument)
             .Where(value => value is not null)
             .Select(value => value!)
             .Distinct(StringComparer.Ordinal)
@@ -1283,35 +1256,105 @@ internal sealed class ApplicationDomainResolver
         return normalized;
     }
 
-    private static bool IsRouteAttribute(AttributeSyntax attribute)
+    private static bool IsRouteAttribute(AttributeData attribute)
     {
-        return ShortAttributeName(attribute.Name.ToString()) == "Route";
+        return SourceLanguageFacts.ShortAttributeName(attribute) == "Route";
     }
 
-    private static bool IsHttpMethodAttribute(AttributeSyntax attribute)
+    private static bool IsHttpMethodAttribute(AttributeData attribute)
     {
-        return ShortAttributeName(attribute.Name.ToString()) is "HttpGet" or "HttpPost" or "HttpPut" or "HttpDelete" or "HttpPatch" or "HttpHead" or "HttpOptions";
+        return SourceLanguageFacts.ShortAttributeName(attribute) is "HttpGet" or "HttpPost" or "HttpPut" or "HttpDelete" or "HttpPatch" or "HttpHead" or "HttpOptions";
     }
 
-    private static bool IsControllerType(ClassDeclarationSyntax type, INamedTypeSymbol symbol)
+    private static bool IsControllerType(INamedTypeSymbol symbol)
     {
-        return type.Identifier.ValueText.EndsWith("Controller", StringComparison.Ordinal) ||
-            HasAttribute(type.AttributeLists, "ApiController") ||
+        return symbol.Name.EndsWith("Controller", StringComparison.Ordinal) ||
+            SourceLanguageFacts.HasAttribute(symbol, "ApiController") ||
             InheritsTypeNamed(symbol, "ControllerBase") ||
             InheritsTypeNamed(symbol, "Controller");
     }
 
-    private static INamedTypeSymbol? GetOptionsTypeFromInvocation(InvocationExpressionSyntax invocation, SemanticModel semanticModel)
+    private static INamedTypeSymbol? GetOptionsTypeFromInvocation(IInvocationOperation invocation)
     {
-        IReadOnlyList<ITypeSymbol> genericTypes = GetGenericTypeArguments(invocation, semanticModel);
+        return GetOptionsTypeFromInvocation(invocation, includeNestedInvocations: true);
+    }
+
+    private static INamedTypeSymbol? GetOptionsTypeFromInvocation(IInvocationOperation invocation, bool includeNestedInvocations)
+    {
+        IReadOnlyList<ITypeSymbol> genericTypes = GetGenericTypeArguments(invocation);
         if (genericTypes.FirstOrDefault() is INamedTypeSymbol genericType)
         {
             return genericType;
         }
 
-        ExpressionSyntax? target = invocation.Expression is MemberAccessExpressionSyntax memberAccess ? memberAccess.Expression : null;
-        ITypeSymbol? targetType = target is null ? null : semanticModel.GetTypeInfo(target).Type;
-        return GetOptionsTypeArgument(targetType);
+        INamedTypeSymbol? instanceOptionType = GetOptionsTypeArgument(invocation.Instance?.Type);
+        if (instanceOptionType is not null)
+        {
+            return instanceOptionType;
+        }
+
+        INamedTypeSymbol? argumentOptionType = SourceLanguageFacts.GetOrderedArguments(invocation)
+            .Select(argument => GetOptionsTypeArgument(argument.Value.Type))
+            .FirstOrDefault(type => type is not null);
+        if (argumentOptionType is not null)
+        {
+            return argumentOptionType;
+        }
+
+        if (!includeNestedInvocations)
+        {
+            return null;
+        }
+
+        return EnumerateInvocationOperations(invocation)
+            .Where(nested => !ReferenceEquals(nested, invocation))
+            .Select(nested => GetOptionsTypeFromInvocation(nested, includeNestedInvocations: false))
+            .FirstOrDefault(type => type is not null);
+    }
+
+    private static INamedTypeSymbol? GetMessageTypeFromArgument(IArgumentOperation argument, SemanticModel semanticModel)
+    {
+        foreach (INamedTypeSymbol candidate in GetMessageTypeCandidates(argument, semanticModel))
+        {
+            if (candidate.Name is "ISender" or "IPublisher" or "IRequest" or "INotification" or "IRequestHandler" or "INotificationHandler" ||
+                IsFrameworkType(candidate))
+            {
+                continue;
+            }
+
+            return candidate;
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<INamedTypeSymbol> GetMessageTypeCandidates(IArgumentOperation argument, SemanticModel semanticModel)
+    {
+        if (SourceLanguageFacts.FindOperation<IObjectCreationOperation>(argument.Value)?.Type is INamedTypeSymbol createdType)
+        {
+            yield return createdType;
+        }
+
+        if (argument.Value is IConversionOperation conversion && conversion.Operand.Type is INamedTypeSymbol operandType)
+        {
+            yield return operandType;
+        }
+
+        TypeInfo typeInfo = semanticModel.GetTypeInfo(argument.Value.Syntax);
+        if (typeInfo.Type is INamedTypeSymbol syntaxType)
+        {
+            yield return syntaxType;
+        }
+
+        if (argument.Value.Type is INamedTypeSymbol valueType)
+        {
+            yield return valueType;
+        }
+
+        if (typeInfo.ConvertedType is INamedTypeSymbol convertedType)
+        {
+            yield return convertedType;
+        }
     }
 
     private static INamedTypeSymbol? GetOptionsTypeArgument(ITypeSymbol? type)
@@ -1330,15 +1373,13 @@ internal sealed class ApplicationDomainResolver
         return null;
     }
 
-    private static string? FindConfigurationKey(InvocationExpressionSyntax invocation)
+    private static string? FindConfigurationKey(IInvocationOperation invocation)
     {
-        foreach (InvocationExpressionSyntax nested in invocation.DescendantNodesAndSelf().OfType<InvocationExpressionSyntax>())
+        foreach (IInvocationOperation nested in EnumerateInvocationOperations(invocation))
         {
-            if (GetInvocationName(nested) == "GetSection" &&
-                nested.ArgumentList.Arguments.FirstOrDefault()?.Expression is LiteralExpressionSyntax literal &&
-                literal.IsKind(SyntaxKind.StringLiteralExpression))
+            if (GetInvocationName(nested) == "GetSection")
             {
-                return literal.Token.ValueText;
+                return SourceLanguageFacts.GetStringArgument(nested, 0);
             }
         }
 
@@ -1364,64 +1405,105 @@ internal sealed class ApplicationDomainResolver
             .FirstOrDefault();
     }
 
-    private static IReadOnlyList<ITypeSymbol> GetGenericTypeArguments(InvocationExpressionSyntax invocation, SemanticModel semanticModel)
+    private static IReadOnlyList<ITypeSymbol> GetGenericTypeArguments(IInvocationOperation invocation)
     {
-        GenericNameSyntax? genericName = invocation.Expression switch
+        return [.. invocation.TargetMethod.TypeArguments];
+    }
+
+    private static string? GetInvocationName(IInvocationOperation invocation)
+    {
+        return invocation.TargetMethod.Name;
+    }
+
+    private static IEnumerable<IInvocationOperation> EnumerateInvocationOperations(IOperation operation)
+    {
+        if (operation is IInvocationOperation invocation)
         {
-            GenericNameSyntax generic => generic,
-            MemberAccessExpressionSyntax { Name: GenericNameSyntax generic } => generic,
-            _ => null
-        };
+            yield return invocation;
+        }
 
-        return genericName is null
-            ? []
-            : [.. genericName.TypeArgumentList.Arguments.Select(type => semanticModel.GetTypeInfo(type).Type).OfType<ITypeSymbol>()];
-    }
-
-    private static string? GetInvocationName(InvocationExpressionSyntax invocation)
-    {
-        return invocation.Expression switch
+        foreach (IOperation child in operation.ChildOperations)
         {
-            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
-            GenericNameSyntax generic => generic.Identifier.ValueText,
-            MemberAccessExpressionSyntax { Name: IdentifierNameSyntax identifier } => identifier.Identifier.ValueText,
-            MemberAccessExpressionSyntax { Name: GenericNameSyntax generic } => generic.Identifier.ValueText,
-            _ => null
-        };
+            foreach (IInvocationOperation nested in EnumerateInvocationOperations(child))
+            {
+                yield return nested;
+            }
+        }
     }
 
-    private static string? GetFirstStringArgument(AttributeSyntax attribute)
+    private static IEnumerable<IMethodSymbol> EnumerateConstructorSymbols(
+        SyntaxNode root,
+        SemanticModel semanticModel,
+        CancellationToken cancellationToken)
     {
-        return attribute.ArgumentList?.Arguments
-            .Select(argument => argument.Expression as LiteralExpressionSyntax)
-            .Where(literal => literal?.IsKind(SyntaxKind.StringLiteralExpression) == true)
-            .Select(literal => literal!.Token.ValueText)
-            .FirstOrDefault();
+        HashSet<string> seen = new(StringComparer.Ordinal);
+
+        foreach (IMethodSymbol constructor in SourceLanguageFacts.EnumerateMethods(root, semanticModel, cancellationToken)
+            .Where(method => method.MethodKind == MethodKind.Constructor))
+        {
+            if (seen.Add(ConstructorIdentity(constructor)))
+            {
+                yield return constructor;
+            }
+        }
+
+        foreach (INamedTypeSymbol type in SourceLanguageFacts.EnumerateNamedTypes(root, semanticModel, cancellationToken))
+        {
+            foreach (IMethodSymbol constructor in type.InstanceConstructors
+                .Where(constructor => constructor.Parameters.Length > 0)
+                .Where(constructor => constructor.Locations.Any(location => location.IsInSource) ||
+                    constructor.Parameters.Any(parameter => parameter.Locations.Any(location => location.IsInSource)))
+                .OrderBy(constructor => GetSymbolLocation(constructor)?.SourceTree?.FilePath, StringComparer.Ordinal)
+                .ThenBy(constructor => GetSymbolLocation(constructor)?.SourceSpan.Start ?? int.MaxValue))
+            {
+                if (seen.Add(ConstructorIdentity(constructor)))
+                {
+                    yield return constructor;
+                }
+            }
+        }
     }
 
-    private static string? GetNamedString(AttributeSyntax attribute, string name)
+    private static string ConstructorIdentity(IMethodSymbol constructor)
     {
-        return attribute.ArgumentList?.Arguments
-            .Where(argument => argument.NameEquals?.Name.Identifier.ValueText == name)
-            .Select(argument => argument.Expression as LiteralExpressionSyntax)
-            .Where(literal => literal?.IsKind(SyntaxKind.StringLiteralExpression) == true)
-            .Select(literal => literal!.Token.ValueText)
-            .FirstOrDefault();
+        Location? location = GetSymbolLocation(constructor);
+        string parameters = string.Join(",", constructor.Parameters.Select(parameter => parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+        return string.Join(
+            ":",
+            constructor.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            constructor.MethodKind.ToString(),
+            parameters,
+            location?.SourceTree?.FilePath,
+            location?.SourceSpan.Start.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
-    private static bool HasAttribute(SyntaxList<AttributeListSyntax> attributeLists, string expectedShortName)
+    private static Location? GetSymbolLocation(IMethodSymbol symbol)
     {
-        return attributeLists
-            .SelectMany(list => list.Attributes)
-            .Select(attribute => ShortAttributeName(attribute.Name.ToString()))
-            .Any(name => name == expectedShortName || name.EndsWith($".{expectedShortName}", StringComparison.Ordinal));
+        return symbol.Locations.FirstOrDefault(location => location.IsInSource) ??
+            symbol.Parameters.SelectMany(parameter => parameter.Locations).FirstOrDefault(location => location.IsInSource);
     }
 
-    private static string ShortAttributeName(string name)
+    private static bool LooksLikeInvocationName(string expressionText, string expectedName)
     {
-        string shortName = name.EndsWith("Attribute", StringComparison.Ordinal) ? name[..^"Attribute".Length] : name;
-        int dot = shortName.LastIndexOf('.');
-        return dot >= 0 ? shortName[(dot + 1)..] : shortName;
+        string trimmed = expressionText.TrimStart();
+        return trimmed.StartsWith(expectedName + "(", StringComparison.Ordinal) ||
+            trimmed.Contains("." + expectedName + "(", StringComparison.Ordinal);
+    }
+
+    private static bool IsImportNode(SyntaxNode node)
+    {
+        return node.GetType().Name is "UsingDirectiveSyntax" or "SimpleImportsClauseSyntax";
+    }
+
+    private static string? GetImportedNamespace(SyntaxNode node)
+    {
+        object? name = node.GetType().GetProperty("Name")?.GetValue(node);
+        return name?.ToString();
+    }
+
+    private static bool IsSymbolReferenceCandidate(SyntaxNode node)
+    {
+        return node.GetType().Name is "IdentifierNameSyntax" or "QualifiedNameSyntax" or "MemberAccessExpressionSyntax" or "SimpleNameSyntax";
     }
 
     private static bool InheritsTypeNamed(INamedTypeSymbol symbol, string name)
