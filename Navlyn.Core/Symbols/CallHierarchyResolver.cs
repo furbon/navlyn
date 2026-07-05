@@ -335,7 +335,7 @@ internal sealed class CallHierarchyResolver
         IOperation? operation = semanticModel.GetOperation(node, cancellationToken);
         ISymbol? symbol = operation switch
         {
-            IInvocationOperation invocation => invocation.TargetMethod,
+            IInvocationOperation invocation => ResolveInvocationCallee(invocation),
             IObjectCreationOperation creation => creation.Constructor,
             IPropertyReferenceOperation property => property.Property,
             IEventReferenceOperation eventReference => eventReference.Event,
@@ -350,6 +350,32 @@ internal sealed class CallHierarchyResolver
         return symbol is IMethodSymbol { AssociatedSymbol: not null } method
             ? method.AssociatedSymbol
             : symbol?.OriginalDefinition ?? symbol;
+    }
+
+    private static ISymbol ResolveInvocationCallee(IInvocationOperation invocation)
+    {
+        if (invocation.TargetMethod.MethodKind == MethodKind.DelegateInvoke &&
+            TryResolveDelegateInvocationTarget(invocation.Instance) is { } delegateTarget)
+        {
+            return delegateTarget;
+        }
+
+        return invocation.TargetMethod;
+    }
+
+    private static ISymbol? TryResolveDelegateInvocationTarget(IOperation? operation)
+    {
+        return operation switch
+        {
+            ILocalReferenceOperation local => local.Local,
+            IParameterReferenceOperation parameter => parameter.Parameter,
+            IFieldReferenceOperation field => field.Field,
+            IPropertyReferenceOperation property => property.Property,
+            IEventReferenceOperation eventReference => eventReference.Event,
+            IMethodReferenceOperation methodReference => methodReference.Method,
+            IConversionOperation conversion => TryResolveDelegateInvocationTarget(conversion.Operand),
+            _ => null
+        };
     }
 
     private static ISymbol? GetUserDefinedOperator(ISymbol? symbol)
