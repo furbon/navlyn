@@ -6,7 +6,7 @@ This note separates repository work from external publishing. External accounts,
 
 Package IDs:
 
-- `navlyn`: read-only semantic C#/.NET evidence CLI.
+- `navlyn`: read-only C#/.NET semantic evidence CLI.
 - `navlyn-mcp`: read-only MCP server for Navlyn evidence workflows.
 
 Suggested package description:

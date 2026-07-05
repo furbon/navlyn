@@ -1,6 +1,32 @@
 # Navlyn Positioning
 
-Navlyn is semantic evidence before edit for C#/.NET coding agents. It is intentionally narrower than an editor, analyzer platform, hosted index, or review bot.
+Navlyn is read-only C#/.NET semantic evidence for coding agents before they edit the wrong symbol.
+
+It is intentionally narrower than an editor, analyzer platform, hosted index, or review bot. That narrowness is the point: Navlyn gives agents and automation stable local facts, then leaves editing, testing, publishing, and judgment to the surrounding workflow.
+
+## The Practical Difference
+
+Most tools answer one of these questions:
+
+- "Where does this text appear?"
+- "What can my editor navigate to?"
+- "What rule diagnostics should be reported?"
+- "What comment should a bot publish?"
+
+Navlyn answers a different question:
+
+```text
+Before this agent edits, what source-level C# facts prove it is looking at the intended symbol and the relevant nearby relationships?
+```
+
+That is why the core loop is anchor-first:
+
+1. `resolve-target` turns fuzzy intent into a selected Roslyn symbol and a reusable `candidateId`.
+2. File-first and selected-symbol commands return bounded source, references, callers, implementations, tests, DI, route, or impact facts.
+3. The edit happens outside Navlyn.
+4. `post-edit-guard`, `wrong-symbol-guard`, or `review-diff` checks what actually changed.
+
+The value is not a larger checklist. The value is keeping the agent attached to one semantic target until the returned facts justify expanding the scope.
 
 ## Category Fit
 
@@ -9,9 +35,9 @@ Navlyn is semantic evidence before edit for C#/.NET coding agents. It is intenti
 | `rg` and file reads | Comments, strings, docs, config, quick text probes | C# symbol identity, project context, and source-level relationships when text search is ambiguous. |
 | LSP or IDE | Interactive navigation, rename, diagnostics while a human edits | Stable JSON facts for agents, scripts, CI, and MCP clients. |
 | Roslyn APIs and analyzers | Custom compiler tooling and rule diagnostics | Ready-to-run read-only evidence workflows without writing an analyzer. |
-| Generic code-search MCP | Cross-language or text-level repository search | C# MSBuild/Roslyn facts, target frameworks, symbols, references, DI, routes, tests, and review evidence. |
+| Generic code-search MCP | Cross-language or text-level repository search | C# MSBuild/Roslyn facts: target frameworks, symbols, references, DI, routes, tests, and review evidence. |
 | Editing-capable MCP | Inspecting and modifying code from one client | Client-neutral evidence with no edit surface, no shell, and no network listener. |
-| CI review bot | Publishing comments or pass/fail checks | Local review packs a human or agent can inspect before deciding what to say. |
+| CI review bot | Publishing comments or pass/fail checks | Local review facts a human or agent can inspect before deciding what to say. |
 | Hosted code search | Cross-repository hosted indexing | Repository-local analysis without sending source to a hosted service. |
 
 ## What To Say
@@ -19,26 +45,37 @@ Navlyn is semantic evidence before edit for C#/.NET coding agents. It is intenti
 Short:
 
 ```text
-Navlyn gives C# coding agents Roslyn-backed semantic evidence before they edit.
+Read-only C#/.NET semantic evidence for coding agents before they edit the wrong symbol.
 ```
 
 Longer:
 
 ```text
-Navlyn is a read-only CLI and MCP server for C#/.NET repositories. It resolves fuzzy intent into stable symbol anchors, returns bounded source and relationship facts, and helps agents verify changed symbols after an edit without taking an edit or execution dependency.
+Navlyn is a local CLI and stdio MCP server for C#/.NET repositories. It uses Roslyn/MSBuild to resolve fuzzy intent into reusable symbol anchors, return bounded source and relationship facts, and help agents verify changed symbols after an edit without giving Navlyn an edit or execution surface.
+```
+
+For C#/.NET teams:
+
+```text
+Navlyn helps agents reason about overloads, partial declarations, target frameworks, generated or linked files, DI registrations, ASP.NET routes, related tests, and public API changes before they touch code.
+```
+
+For agent-platform or MCP users:
+
+```text
+Navlyn gives an agent narrow, profile-gated semantic tools over stdio. The default reader profile supports setup checks, file outlines, target resolution, bounded source, and selected-symbol edges; edit and review profiles are opt-in.
 ```
 
 ## What Not To Claim
 
-Navlyn does not prove runtime behavior, execute tests, replace an IDE, scan secrets, decide SemVer, or publish review comments. It reports bounded source-level evidence that should guide human or agent judgment.
+Do not describe Navlyn as:
 
-## The Agent Loop
+- a runtime proof engine;
+- a test runner;
+- an editor, refactoring engine, or LSP replacement;
+- a security scanner or secret scanner;
+- a package compatibility oracle;
+- a hosted code-search product;
+- a review bot that publishes final comments.
 
-Use Navlyn where a wrong symbol would matter:
-
-1. Pre-edit: `resolve-target` anchors the intended symbol.
-2. Read: `symbol-source`, `references`, `about`, `impact`, or `context-pack` provide bounded evidence.
-3. Edit outside Navlyn.
-4. Post-edit: `changed-symbols` and `review-diff` show what actually changed and what evidence should be inspected next.
-
-The value is not a larger checklist. The value is keeping the agent anchored to one semantic target until the returned facts justify expanding the scope.
+Navlyn reports bounded source-level evidence. Routes, authorization, dependency injection, EF models, package usage, public API diffs, and impact facts are useful inputs for review, but they are not complete runtime, security, or compatibility proofs.
