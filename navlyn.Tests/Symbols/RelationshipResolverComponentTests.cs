@@ -135,6 +135,37 @@ public sealed class RelationshipResolverComponentTests(ResolverComponentTestFixt
     }
 
     [Fact]
+    public async Task CallHierarchyResolver_Calls_IncludesDelegateLocalInvocation()
+    {
+        SourcePosition query = fixture.SymbolNavigationSource.Position(
+            "public string Exercise()",
+            "Exercise");
+        SourcePosition expectedCall = fixture.SymbolNavigationSource.Position(
+            "string normalized = normalize(\" value \");",
+            "normalize(\" value \")");
+
+        CallsResolutionResult result = await new CallHierarchyResolver().ResolveCallsAsync(
+            fixture.SymbolNavigationWorkspace.Solution,
+            fixture.SymbolNavigationSource.File,
+            query.Line,
+            query.Column,
+            project: null,
+            excludeGenerated: true,
+            includeMetadata: false,
+            CancellationToken.None);
+
+        CallsResolution resolution = ResolverAssert.NoError(result.Resolution, result.Error);
+        CallHierarchyGroup group = Assert.Single(
+            resolution.Calls,
+            group => group.Symbol.Name == "normalize" &&
+                group.Symbol.Kind == "Local" &&
+                group.Symbol.Container == "SymbolNavigationFixture.SemanticEdgeCases.Exercise()");
+
+        CallHierarchyLocation location = Assert.Single(group.Locations);
+        ResolverAssert.Location(expectedCall, location.Line, location.Column, location.EndLine, location.EndColumn);
+    }
+
+    [Fact]
     public async Task ReferencesResolver_MethodInvocation_ReturnsInvokeUsageKind()
     {
         SourcePosition query = fixture.SymbolNavigationSource.Position(
