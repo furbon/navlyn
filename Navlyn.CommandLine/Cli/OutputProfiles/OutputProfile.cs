@@ -147,7 +147,7 @@ internal static class OutputProfile
         object? configuration)
     {
         JsonObject output = CreateMetadata(workspace, command, Evidence, configuration);
-        CopyIdentityFields(root, output);
+        CopyIdentityFields(root, output, itemLimit: 50, evidenceLimit: 5, removeSnippetText: true);
         output["summary"] = CreateSummary(root);
 
         foreach (string section in EvidenceSections)
@@ -169,7 +169,7 @@ internal static class OutputProfile
         object? configuration)
     {
         JsonObject output = CreateMetadata(workspace, command, Compact, configuration);
-        CopyIdentityFields(root, output);
+        CopyIdentityFields(root, output, itemLimit: 10, evidenceLimit: 3, removeSnippetText: true);
         output["summary"] = CreateSummary(root);
 
         JsonObject highlights = [];
@@ -219,13 +219,20 @@ internal static class OutputProfile
         };
     }
 
-    private static void CopyIdentityFields(JsonObject source, JsonObject target)
+    private static void CopyIdentityFields(
+        JsonObject source,
+        JsonObject target,
+        int? itemLimit = null,
+        int? evidenceLimit = null,
+        bool removeSnippetText = false)
     {
         foreach (string property in new[] { "mode", "goal", "changeKind", "scope", "packs", "comparison", "selectionInput", "query", "diff" })
         {
             if (source.TryGetPropertyValue(property, out JsonNode? value) && value is not null && !target.ContainsKey(property))
             {
-                target[property] = Copy(value);
+                target[property] = itemLimit is null || evidenceLimit is null
+                    ? Copy(value)
+                    : TrimForProfile(value, itemLimit.Value, evidenceLimit.Value, removeSnippetText);
             }
         }
     }

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "navlyn.mcp-agent-trace-eval.v1",
+  "description": "Replayable MCP-agent traces for aggregate tool-choice and output-budget gates.",
+  "thresholds": {
+    "minimumScore": 0.97,
+    "maxTextOnlyFalsePositiveRate": 0.05,
+    "maxBroadChecklistRate": 0.10,
+    "maxRiskyEditBeforeAnchor": 0,
+    "minStopConditionRate": 0.95,
+    "maxCanonicalP95StdoutChars": 20000,
+    "maxCanonicalMaxStdoutChars": 40000
+  },
+  "traces": [
+    { "id": "semantic-01", "kind": "semantic-edit", "surface": "canonical", "chosenSequence": [ "navlyn_target", "navlyn_read" ], "stopCondition": "bounded-source-returned", "usedNavlyn": true, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 8200 },
+    { "id": "semantic-02", "kind": "semantic-edit", "surface": "canonical", "chosenSequence": [ "navlyn_prepare_edit" ], "stopCondition": "pre-edit-anchor-or-ambiguity", "usedNavlyn": true, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 14800 },
+    { "id": "semantic-03", "kind": "semantic-edit", "surface": "canonical", "chosenSequence": [ "navlyn_target" ], "stopCondition": "candidate-id-or-ambiguity", "usedNavlyn": true, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 12600 },
+    { "id": "semantic-04", "kind": "semantic-edit", "surface": "canonical", "chosenSequence": [ "navlyn_target", "navlyn_symbol_edges" ], "stopCondition": "callers-answer-or-rerun-hint", "usedNavlyn": true, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 17200 },
+    { "id": "semantic-05", "kind": "semantic-edit", "surface": "canonical", "chosenSequence": [ "navlyn_prepare_edit" ], "stopCondition": "bounded-reading-queue", "usedNavlyn": true, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 19600 },
+    { "id": "semantic-06", "kind": "semantic-edit", "surface": "canonical", "chosenSequence": [ "navlyn_target", "navlyn_read" ], "stopCondition": "overload-anchored", "usedNavlyn": true, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 9100 },
+    { "id": "semantic-07", "kind": "semantic-edit", "surface": "canonical", "chosenSequence": [ "navlyn_target" ], "stopCondition": "project-target-selected", "usedNavlyn": true, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 10300 },
+    { "id": "semantic-08", "kind": "semantic-edit", "surface": "canonical", "chosenSequence": [ "navlyn_verify_edit" ], "stopCondition": "guard-pass-or-fail-closed", "usedNavlyn": true, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 7600 },
+    { "id": "semantic-09", "kind": "semantic-edit", "surface": "canonical", "chosenSequence": [ "navlyn_file_outline", "navlyn_read" ], "stopCondition": "file-outline-or-follow-up", "usedNavlyn": true, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 11300 },
+    { "id": "semantic-10", "kind": "semantic-edit", "surface": "canonical", "chosenSequence": [ "navlyn_target", "navlyn_di_impact" ], "stopCondition": "di-risk-facts-returned", "usedNavlyn": true, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 18400 },
+    { "id": "review-01", "kind": "diff-review", "surface": "canonical", "chosenSequence": [ "navlyn_review" ], "stopCondition": "review-facts-available", "usedNavlyn": true, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 11200 },
+    { "id": "review-02", "kind": "diff-review", "surface": "canonical", "chosenSequence": [ "navlyn_review", "navlyn_tests_for_diff" ], "stopCondition": "review-facts-available", "usedNavlyn": true, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 15600 },
+    { "id": "workspace-01", "kind": "workspace-facts", "surface": "canonical", "chosenSequence": [ "navlyn_workspace_summary" ], "stopCondition": "project-target-facts-returned", "usedNavlyn": true, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 7400 },
+    { "id": "domain-01", "kind": "domain-facts", "surface": "advanced", "chosenSequence": [ "route-map" ], "stopCondition": "route-auth-source-facts", "usedNavlyn": true, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 6800 },
+    { "id": "release-01", "kind": "release-facts", "surface": "advanced", "chosenSequence": [ "navlyn_public_api_diff" ], "stopCondition": "api-diff-facts-returned", "usedNavlyn": true, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 9800 },
+    { "id": "text-01", "kind": "text-only", "surface": "none", "chosenSequence": [ "rg" ], "stopCondition": "markdown-section-found", "usedNavlyn": false, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 0 },
+    { "id": "text-02", "kind": "text-only", "surface": "none", "chosenSequence": [ "file-read" ], "stopCondition": "text-match-found", "usedNavlyn": false, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 0 },
+    { "id": "text-03", "kind": "text-only", "surface": "none", "chosenSequence": [ "rg" ], "stopCondition": "text-match-found", "usedNavlyn": false, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 0 },
+    { "id": "text-04", "kind": "text-only", "surface": "none", "chosenSequence": [ "file-read" ], "stopCondition": "markdown-section-found", "usedNavlyn": false, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 0 },
+    { "id": "stale-01", "kind": "stale-safety", "surface": "canonical", "chosenSequence": [ "navlyn_verify_edit" ], "stopCondition": "stale-or-guard-risk-reported", "usedNavlyn": true, "semanticAnchorBeforeEdit": true, "broadChecklist": false, "stdoutChars": 7200 }
+  ]
+}

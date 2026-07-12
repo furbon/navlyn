@@ -13,6 +13,10 @@ $QuickScript = Join-Path $PSScriptRoot 'test-quick.ps1'
 $CliContractScript = Join-Path $PSScriptRoot 'test-cli-contract.ps1'
 $PackageInstallScript = Join-Path $PSScriptRoot 'test-package-install.ps1'
 $PerformanceScript = Join-Path $PSScriptRoot 'measure-navlyn-performance.ps1'
+$ToolSelectionEvalScript = Join-Path $PSScriptRoot 'test-tool-selection-eval.ps1'
+$AgentEvidenceEvalScript = Join-Path $PSScriptRoot 'test-agent-evidence-eval.ps1'
+$WrongSymbolEvalScript = Join-Path $PSScriptRoot 'test-wrong-symbol-avoidance-eval.ps1'
+$McpAgentTraceEvalScript = Join-Path $PSScriptRoot 'test-mcp-agent-trace-eval.ps1'
 $FocusedScripts = @(
     'test-symbol-navigation.ps1',
     'test-fuzzy-discovery.ps1',
@@ -58,6 +62,10 @@ try {
     & $FormatCheckScript -Quiet
     & $QuickScript -NoBuild -SkipDotnetTest -ShowOutput:$ShowOutput
     & $CliContractScript -NoBuild -Suite all -ShowOutput:$ShowOutput
+    & $ToolSelectionEvalScript -UseBaselineTraces -NoBuild -Output 'artifacts/evals/tool-selection-release-report.json'
+    & $AgentEvidenceEvalScript -NoBuild -SkipMcpLatency -OutputDirectory 'artifacts/evals/release-agent-evidence'
+    & $WrongSymbolEvalScript -NoBuild -Output 'artifacts/evals/wrong-symbol-avoidance-release-report.json'
+    & $McpAgentTraceEvalScript -Output 'artifacts/evals/mcp-agent-trace-release-report.json'
 
     foreach ($scriptName in $FocusedScripts) {
         $scriptPath = Join-Path $PSScriptRoot $scriptName

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "navlyn.wrong-symbol-avoidance-eval.v1",
+  "description": "Executable wrong-symbol avoidance scenarios comparing text-search risk with Navlyn target evidence.",
+  "minimumScore": 1.0,
+  "scenarios": [
+    {
+      "id": "ambiguous-enemy-manager",
+      "workspace": "tests/fixtures/FuzzyDiscoveryFixture/FuzzyDiscoveryFixture.csproj",
+      "file": "tests/fixtures/FuzzyDiscoveryFixture/FixtureCode.cs",
+      "query": "EnemyManager",
+      "intendedFullyQualifiedName": "Beta.EnemyManager",
+      "intendedLine": 48,
+      "intendedColumn": 25,
+      "textSearchExpectedWrongLine": 3,
+      "navlynExpectedFirstConfidence": "ambiguous",
+      "navlynExpectedNarrowedConfidence": "high"
+    },
+    {
+      "id": "inactive-conditional-symbol",
+      "workspace": "tests/fixtures/WorkspaceSemanticsFixture/Conditional/Conditional.csproj",
+      "file": "tests/fixtures/WorkspaceSemanticsFixture/Conditional/ConditionalCode.cs",
+      "query": "InactiveBranchSymbol",
+      "textSearchExpectedWrongLine": 11,
+      "navlynExpectedFirstConfidence": "none"
+    }
+  ]
+}

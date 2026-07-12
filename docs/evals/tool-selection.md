@@ -2,7 +2,7 @@
 
 This eval checks whether an agent chooses the smallest useful Navlyn surface for a request. It is a tool-choice policy eval, not a model benchmark.
 
-For wrong-symbol avoidance, pre-edit anchors, and post-edit changed-symbol verification, see `docs/evals/agent-evidence.md`.
+For executable wrong-symbol avoidance proof, see `docs/evals/wrong-symbol-avoidance.md`. For pre-edit anchors and post-edit changed-symbol verification, see `docs/evals/agent-evidence.md`. For fresh public-repository adoption evidence, see `docs/evals/external-adoption.md`.
 
 The machine-readable scenario file is `docs/evals/tool-selection.scenarios.json`. Run the baseline scorer from the repository root:
 
