@@ -2,14 +2,25 @@
 
 For normal CLI and MCP setup, start with the [README](../README.md). This page covers the two alternatives people commonly need after that first setup.
 
+## Pick A Setup
+
+| Persona | Use | Why |
+| --- | --- | --- |
+| Evaluating alone | Global `navlyn` and `navlyn-mcp` tools | Fastest path to `doctor`, `resolve-target`, and one MCP client. |
+| Team repository | Repository-local .NET tool manifest | Pins the version for contributors, CI, and agent workspaces. |
+| Coding agent client | `navlyn-mcp` stdio server with explicit `--workspace` | Gives one read-only semantic tool surface over the intended solution or project. |
+| CI / release validation | `navlyn` CLI plus JSON artifacts | Keeps stdout deterministic and diagnostics on stderr for automation. |
+
+Use a direct solution or project path for the first setup. Add `navlyn.workspace.json` only when the repository has multiple plausible workspaces and needs one shared policy.
+
 ## Pin Navlyn In A Repository
 
 Use a .NET tool manifest when a team or CI job should use the same Navlyn version:
 
 ```powershell
 dotnet new tool-manifest
-dotnet tool install navlyn --version 0.6.0
-dotnet tool install navlyn-mcp --version 0.6.0
+dotnet tool install navlyn --version 0.7.0
+dotnet tool install navlyn-mcp --version 0.7.0
 dotnet tool restore
 ```
 

@@ -9,16 +9,16 @@ Use one path first. The CLI path is easiest to verify in a shell. The MCP path i
 Global install:
 
 ```powershell
-dotnet tool install --global navlyn --version 0.6.0
-dotnet tool install --global navlyn-mcp --version 0.6.0
+dotnet tool install --global navlyn --version 0.7.0
+dotnet tool install --global navlyn-mcp --version 0.7.0
 ```
 
 Repository-local install:
 
 ```powershell
 dotnet new tool-manifest
-dotnet tool install navlyn --version 0.6.0
-dotnet tool install navlyn-mcp --version 0.6.0
+dotnet tool install navlyn --version 0.7.0
+dotnet tool install navlyn-mcp --version 0.7.0
 dotnet tool restore
 ```
 

@@ -55,4 +55,34 @@ public sealed class ResolveTargetResolverComponentTests(ResolverComponentTestFix
         Assert.Null(result.CandidateId);
         Assert.Contains(result.RecommendedNextActions, action => action.Command == "symbol-info");
     }
+
+    [Fact]
+    public async Task ResolveFuzzyAsync_AmbiguousQuery_ReturnsAmbiguitySummary()
+    {
+        ResolveTargetResult result = await new ResolveTargetResolver().ResolveFuzzyAsync(
+            fixture.FuzzyDiscoveryWorkspace,
+            new FuzzyQueryOptions(
+                Query: "EnemyManager",
+                AssumeKinds: ["NamedType"],
+                Match: "smart",
+                CaseSensitive: null,
+                ExcludeGenerated: true,
+                Limit: 10,
+                CandidateId: null,
+                Selection: new FuzzySelectionOptions("select", "medium", false)),
+            fixture.FuzzyDiscoveryWorkspace.Solution.Projects.ToArray(),
+            projectFilters: null,
+            CancellationToken.None);
+
+        Assert.Equal("ambiguous", result.Confidence);
+        Assert.Null(result.SelectedTarget);
+        Assert.Equal("ambiguous-candidates", result.AmbiguityReason);
+        Assert.NotNull(result.AmbiguitySummary);
+        Assert.True(result.AmbiguitySummary.IsAmbiguous);
+        Assert.Equal("ambiguous-candidates", result.AmbiguitySummary.PrimaryReason);
+        Assert.Contains("ambiguous-candidates", result.AmbiguitySummary.ReasonCodes);
+        Assert.Contains("same-file-duplicates", result.AmbiguitySummary.ReasonCodes);
+        Assert.Contains(result.AmbiguitySummary.Groups, group => group.Reason == "same-file-duplicates");
+        Assert.Contains("--project", result.AmbiguitySummary.RecommendedAction, StringComparison.Ordinal);
+    }
 }

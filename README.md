@@ -15,17 +15,35 @@ choose the intended target -> read only what matters -> change it -> check the d
 
 Generic code search gives an agent a pile of matches. Navlyn keeps each next question attached to one selected target: which symbol the user meant, what code it depends on, what should be read before changing it, and whether the edit landed where intended. The agent reads less unrelated code, makes fewer broad searches, and keeps its context on facts that can change the edit.
 
-`navlyn-mcp` is the primary way to use Navlyn with coding agents. The `navlyn` CLI uses the same engine for shell workflows and CI.
+`navlyn-mcp` is the primary way to use Navlyn with coding agents. The `navlyn` CLI uses the same engine for shell workflows, CI, and first-run verification.
+
+## Three-Minute Path
+
+Install the CLI and MCP server:
+
+```powershell
+dotnet tool install --global navlyn --version 0.7.0
+dotnet tool install --global navlyn-mcp --version 0.7.0
+```
+
+Then verify one workspace and one symbol. Replace `YourRepo.slnx` with the repository's `.slnx`, `.sln`, `.csproj`, or `.vbproj` file:
+
+```powershell
+navlyn doctor --workspace path/to/YourRepo.slnx
+navlyn resolve-target --workspace path/to/YourRepo.slnx --query PaymentService --assume-kind NamedType --limit 10
+navlyn symbol-source --workspace path/to/YourRepo.slnx --candidate-id sym:v1:... --view declaration --max-lines 80
+navlyn edit-preflight --workspace path/to/YourRepo.slnx --candidate-id sym:v1:... --goal modify --change-kind behavior
+```
+
+Use the `candidateId` from `resolve-target` for follow-up calls. After an edit, inspect the real diff:
+
+```powershell
+navlyn review-diff --workspace path/to/YourRepo.slnx --profile evidence
+```
 
 ## Use With MCP
 
-Install the server once:
-
-```powershell
-dotnet tool install --global navlyn-mcp --version 0.6.0
-```
-
-Then point it at the solution or project the agent should inspect. Replace `YourRepo.sln` with the repository's `.slnx`, `.sln`, `.csproj`, or `.vbproj` file.
+Point the server at the same workspace the CLI verified.
 
 ### GitHub Copilot In VS Code
 
@@ -68,7 +86,7 @@ Create `.mcp.json` in the repository root:
 }
 ```
 
-Navlyn MCP exposes one stable read-only semantic tool surface. Configure the workspace once; the agent chooses the smallest relevant tool from tool descriptions and returned evidence.
+Navlyn MCP exposes one stable read-only semantic tool surface. Configure the workspace once; the agent should start with the smallest relevant fact, reuse `candidateId`, and stop when the returned JSON answers the question.
 
 ## What The Agent Gets
 
@@ -82,6 +100,14 @@ Navlyn MCP exposes one stable read-only semantic tool surface. Configure the wor
 | What did this Git diff affect? | `navlyn_review_diff` |
 
 The useful unit is one answerable question, not a repository dump. Navlyn returns bounded JSON facts so an agent can keep an exact `candidateId` through its investigation and only request the next relationship or source slice when it needs it.
+
+## Use / Do Not Use
+
+| Use Navlyn For | Do Not Use Navlyn For |
+| --- | --- |
+| C# or Visual Basic symbol identity, overloads, partial declarations, project context, target frameworks, DI, routes, related tests, and Git diff evidence. | Comments, strings, docs, arbitrary text search, generated artifacts, runtime proof, security scanning, test execution, editing, refactoring, or publishing review comments. |
+
+Use normal file reads and `rg` when text is enough. Use Navlyn when Roslyn/MSBuild facts would change what the agent reads or edits.
 
 ## Workspace Choice
 
@@ -99,12 +125,7 @@ The complete configuration reference, including candidate discovery and root pol
 
 ## CLI And CI
 
-The CLI is optional for MCP use. Install it when you want the same facts in a shell script or CI job:
-
-```powershell
-dotnet tool install --global navlyn --version 0.6.0
-navlyn doctor --workspace path/to/YourRepo.sln
-```
+The CLI is optional after MCP setup, but it is the easiest way to verify installs, script facts, and produce CI evidence.
 
 ## Boundaries
 
@@ -115,6 +136,7 @@ Navlyn is local and read-only. It does not edit files, run arbitrary shell comma
 - [MCP server reference](docs/navlyn-mcp-server.md): stable tool surface, resources, and protocol behavior.
 - [Workspace configuration](docs/navlyn-workspace.md): when and how to use `navlyn.workspace.json`.
 - [First investigation](docs/navlyn-first-10-minutes.md): a short semantic investigation flow after setup.
+- [Demos and case studies](docs/navlyn-demo-walkthroughs.md): reproducible current-repo and fixture-backed evidence.
 - [CLI command reference](docs/navlyn-cli-commands.md): complete command and JSON contract.
 - [Agent recipes](docs/navlyn-agent-recipes.md): focused CLI and MCP workflows.
 

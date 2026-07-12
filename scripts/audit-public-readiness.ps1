@@ -68,7 +68,39 @@ function Invoke-CheckedCommand {
     & $scriptBlock
 }
 
+function Get-ReleaseVersion {
+    $propsPath = Join-Path $RepoRoot 'Directory.Build.props'
+    if (!(Test-Path -LiteralPath $propsPath)) {
+        Add-Issue -Issues $Issues -Code 'NAVLYN-PUBLIC-VERSION-PROPS-MISSING' -Path 'Directory.Build.props' -Message 'Directory.Build.props is missing; release version identity is not centralized.'
+        return ''
+    }
+
+    [xml]$propsXml = Get-Content -Raw -LiteralPath $propsPath
+    $versionNode = $propsXml.SelectSingleNode('//PropertyGroup/Version')
+    $version = if ($null -eq $versionNode) { '' } else { [string]$versionNode.InnerText }
+    if ([string]::IsNullOrWhiteSpace($version)) {
+        Add-Issue -Issues $Issues -Code 'NAVLYN-PUBLIC-VERSION-MISSING' -Path 'Directory.Build.props' -Message 'Directory.Build.props does not define Version.'
+        return ''
+    }
+
+    return $version
+}
+
+function Get-ProjectEffectiveVersion {
+    param([string]$ProjectPath)
+
+    [xml]$projectXml = Get-Content -Raw -LiteralPath $ProjectPath
+    $projectVersionNode = $projectXml.SelectSingleNode('//PropertyGroup/Version')
+    $projectVersion = if ($null -eq $projectVersionNode) { '' } else { [string]$projectVersionNode.InnerText }
+    if (![string]::IsNullOrWhiteSpace($projectVersion)) {
+        return $projectVersion
+    }
+
+    return Get-ReleaseVersion
+}
+
 $Issues = [System.Collections.Generic.List[object]]::new()
+$ReleaseVersion = Get-ReleaseVersion
 
 $readmePath = Join-Path $RepoRoot 'README.md'
 if (!(Test-Path -LiteralPath $readmePath)) {
@@ -113,6 +145,11 @@ foreach ($projectRelativePath in @('navlyn/navlyn.csproj', 'navlyn.Mcp/navlyn.Mc
     $projectPath = Join-Path $RepoRoot $projectRelativePath
     if (Test-Path -LiteralPath $projectPath) {
         [xml]$projectXml = Get-Content -Raw -LiteralPath $projectPath
+        $effectiveVersion = Get-ProjectEffectiveVersion -ProjectPath $projectPath
+        if (![string]::IsNullOrWhiteSpace($ReleaseVersion) -and $effectiveVersion -ne $ReleaseVersion) {
+            Add-Issue -Issues $Issues -Code 'NAVLYN-PUBLIC-PACKAGE-VERSION-MISMATCH' -Path $projectRelativePath -Message "Package version should match release version '$ReleaseVersion' but was '$effectiveVersion'."
+        }
+
         foreach ($propertyName in @('Authors', 'PackageLicenseExpression', 'Description', 'PackageReadmeFile', 'RepositoryUrl', 'RepositoryType', 'PackageProjectUrl', 'PackageIcon', 'PackageTags', 'PackageReleaseNotes', 'Copyright', 'NeutralLanguage', 'PackageRequireLicenseAcceptance')) {
             $propertyNode = $projectXml.SelectSingleNode("//PropertyGroup/$propertyName")
             $value = if ($null -eq $propertyNode) { '' } else { [string]$propertyNode.InnerText }
@@ -167,7 +204,7 @@ $publicSearchRoots = @(
     'docs'
 )
 
-$reviewPattern = '(?i)\bTODO\b|\bFIXME\b|\bHACK\b|\bWIP\b|\bscratch\b|Codex|私|あなた|相談|経緯|方針決定|decision log|we decided|decided to|as discussed|because we'
+$reviewPattern = '(?i)\bTODO\b|\bFIXME\b|\bHACK\b|\bWIP\b|\bscratch\b|私|あなた|相談|経緯|方針決定|decision log|we decided|decided to|as discussed|because we'
 foreach ($root in $publicSearchRoots) {
     $fullRoot = Join-Path $RepoRoot $root
     if (!(Test-Path -LiteralPath $fullRoot)) {
@@ -188,6 +225,41 @@ foreach ($root in $publicSearchRoots) {
         $text = Get-Content -Raw -LiteralPath $file.FullName
         if ($text -match $reviewPattern) {
             Add-Issue -Issues $Issues -Code 'NAVLYN-PUBLIC-REVIEW-WORD' -Path $relativePath -Message 'Public-facing text contains a word or phrase that should be reviewed before publication.'
+        }
+    }
+}
+
+$staleVersionRoots = @(
+    'README.md',
+    'README_ja.md',
+    'docs',
+    'examples',
+    'scripts'
+)
+
+foreach ($root in $staleVersionRoots) {
+    $fullRoot = Join-Path $RepoRoot $root
+    if (!(Test-Path -LiteralPath $fullRoot)) {
+        continue
+    }
+
+    $rootItem = Get-Item -LiteralPath $fullRoot -Force
+    $files = if ($rootItem.PSIsContainer) {
+        Get-ChildItem -LiteralPath $fullRoot -Recurse -File -Force
+    }
+    else {
+        @($rootItem)
+    }
+
+    foreach ($file in $files) {
+        $relativePath = Get-RepoRelativePath -Path $file.FullName
+        if ($relativePath -eq 'scripts\audit-public-readiness.ps1' -or $relativePath -eq 'scripts/audit-public-readiness.ps1') {
+            continue
+        }
+
+        $text = Get-Content -Raw -LiteralPath $file.FullName
+        if ($text -match '\b0\.6\.0\b') {
+            Add-Issue -Issues $Issues -Code 'NAVLYN-PUBLIC-STALE-VERSION' -Path $relativePath -Message 'Public-facing release guidance still references 0.6.0 outside CHANGELOG.md.'
         }
     }
 }

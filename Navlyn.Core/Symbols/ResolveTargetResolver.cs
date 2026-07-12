@@ -1,5 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 using Microsoft.CodeAnalysis;
+using Navlyn.GeneratedCode;
 using Navlyn.Workspaces;
 
 namespace Navlyn.Symbols;
@@ -32,6 +33,7 @@ internal sealed class ResolveTargetResolver
             Selector: selected?.Selector,
             Confidence: find.Confidence,
             AmbiguityReason: selected is null ? GetAmbiguityReason(find) : null,
+            AmbiguitySummary: CreateAmbiguitySummary(find, selected),
             CandidateCount: find.CandidateCount,
             TotalCandidates: find.TotalCandidates,
             Candidates: selected is null ? find.Candidates : null,
@@ -74,6 +76,7 @@ internal sealed class ResolveTargetResolver
             Selector: null,
             Confidence: "high",
             AmbiguityReason: null,
+            AmbiguitySummary: null,
             CandidateCount: 1,
             TotalCandidates: 1,
             Candidates: null,
@@ -94,6 +97,146 @@ internal sealed class ResolveTargetResolver
         }
 
         return "no-selected-target";
+    }
+
+    private static ResolveTargetAmbiguitySummary? CreateAmbiguitySummary(FuzzyFindResult find, FuzzySymbolCandidate? selected)
+    {
+        if (selected is not null && find.TotalCandidates <= 1)
+        {
+            return null;
+        }
+
+        List<string> reasonCodes = [];
+        List<ResolveTargetAmbiguityGroup> groups = [];
+
+        if (find.TotalCandidates == 0)
+        {
+            reasonCodes.Add("no-candidates");
+            return new ResolveTargetAmbiguitySummary(
+                IsAmbiguous: true,
+                PrimaryReason: "no-candidates",
+                ReasonCodes: reasonCodes,
+                Groups: groups,
+                RecommendedAction: "Check the query, source position, workspace, project filter, or assume-kind before retrying.");
+        }
+
+        if (find.Confidence == "ambiguous" || selected is null)
+        {
+            reasonCodes.Add("ambiguous-candidates");
+        }
+
+        AddGroup(
+            groups,
+            reasonCodes,
+            "multiple-projects",
+            find.Candidates
+                .GroupBy(candidate => candidate.Selector?.Project ?? candidate.Facts.Project ?? "")
+                .Where(group => !string.IsNullOrWhiteSpace(group.Key))
+                .Select(group => (Name: group.Key, Count: group.Count()))
+                .ToArray());
+
+        AddGroup(
+            groups,
+            reasonCodes,
+            "multiple-target-frameworks",
+            find.Candidates
+                .GroupBy(candidate => candidate.Selector?.TargetFramework ?? "")
+                .Where(group => !string.IsNullOrWhiteSpace(group.Key))
+                .Select(group => (Name: group.Key, Count: group.Count()))
+                .ToArray());
+
+        AddGroup(
+            groups,
+            reasonCodes,
+            "same-file-duplicates",
+            find.Candidates
+                .GroupBy(candidate => candidate.Path, StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Count() > 1)
+                .Select(group => (Name: group.Key, Count: group.Count()))
+                .ToArray());
+
+        AddGroup(
+            groups,
+            reasonCodes,
+            "test-project-candidates",
+            find.Candidates
+                .Where(IsTestCandidate)
+                .GroupBy(candidate => candidate.Selector?.Project ?? candidate.Facts.Project ?? candidate.Path)
+                .Select(group => (Name: group.Key, Count: group.Count()))
+                .ToArray());
+
+        AddGroup(
+            groups,
+            reasonCodes,
+            "generated-candidates",
+            find.Candidates
+                .Where(candidate => GeneratedCodeFacts.IsGeneratedPath(candidate.Path))
+                .GroupBy(candidate => candidate.Path, StringComparer.OrdinalIgnoreCase)
+                .Select(group => (Name: group.Key, Count: group.Count()))
+                .ToArray());
+
+        AddGroup(
+            groups,
+            reasonCodes,
+            "metadata-candidates",
+            find.Candidates
+                .Where(candidate => candidate.Facts.IsMetadata)
+                .GroupBy(candidate => candidate.Facts.Assembly ?? "metadata")
+                .Select(group => (Name: group.Key, Count: group.Count()))
+                .ToArray());
+
+        if (find.CandidatesTruncated)
+        {
+            reasonCodes.Add("candidate-limit-reached");
+        }
+
+        string primaryReason = reasonCodes.FirstOrDefault() ?? "multiple-candidates";
+        if (reasonCodes.Count == 0 && find.TotalCandidates > 1)
+        {
+            reasonCodes.Add(primaryReason);
+        }
+
+        return new ResolveTargetAmbiguitySummary(
+            IsAmbiguous: selected is null || find.Confidence == "ambiguous",
+            PrimaryReason: primaryReason,
+            ReasonCodes: reasonCodes,
+            Groups: groups,
+            RecommendedAction: "Narrow the target with --project, --assume-kind, a source position, or a returned candidateId before reading or editing source.");
+    }
+
+    private static void AddGroup(
+        List<ResolveTargetAmbiguityGroup> groups,
+        List<string> reasonCodes,
+        string reason,
+        IReadOnlyList<(string Name, int Count)> entries)
+    {
+        if (entries.Count <= 1 && reason is "multiple-projects" or "multiple-target-frameworks")
+        {
+            return;
+        }
+
+        if (entries.Count == 0)
+        {
+            return;
+        }
+
+        reasonCodes.Add(reason);
+        groups.Add(new ResolveTargetAmbiguityGroup(
+            Reason: reason,
+            Count: entries.Sum(entry => entry.Count),
+            Examples: [.. entries
+                .OrderByDescending(entry => entry.Count)
+                .ThenBy(entry => entry.Name, StringComparer.Ordinal)
+                .Take(5)
+                .Select(entry => entry.Name)]));
+    }
+
+    private static bool IsTestCandidate(FuzzySymbolCandidate candidate)
+    {
+        string project = candidate.Selector?.Project ?? candidate.Facts.Project ?? "";
+        return project.Contains("Test", StringComparison.OrdinalIgnoreCase) ||
+            candidate.Path.Contains("/tests/", StringComparison.OrdinalIgnoreCase) ||
+            candidate.Path.Contains("\\tests\\", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IReadOnlyList<FuzzyNextAction> CreateSourcePositionNextActions(string workspace, SymbolAtResolution resolution)
@@ -120,6 +263,8 @@ internal sealed record ResolveTargetResult(
     string Confidence,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? AmbiguityReason,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    ResolveTargetAmbiguitySummary? AmbiguitySummary,
     int CandidateCount,
     int TotalCandidates,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -139,6 +284,12 @@ internal sealed record ResolveTargetResult(
             Selector: null,
             Confidence: "none",
             AmbiguityReason: "source-position-not-resolved",
+            AmbiguitySummary: new ResolveTargetAmbiguitySummary(
+                IsAmbiguous: true,
+                PrimaryReason: "source-position-not-resolved",
+                ReasonCodes: ["source-position-not-resolved"],
+                Groups: [],
+                RecommendedAction: "Check that the file, line, column, generated-code filter, and project filter point at a resolvable source symbol."),
             CandidateCount: 0,
             TotalCandidates: 0,
             Candidates: null,
@@ -159,6 +310,18 @@ internal sealed record ResolveTargetInput(
     int? Line,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     int? Column);
+
+internal sealed record ResolveTargetAmbiguitySummary(
+    bool IsAmbiguous,
+    string PrimaryReason,
+    IReadOnlyList<string> ReasonCodes,
+    IReadOnlyList<ResolveTargetAmbiguityGroup> Groups,
+    string RecommendedAction);
+
+internal sealed record ResolveTargetAmbiguityGroup(
+    string Reason,
+    int Count,
+    IReadOnlyList<string> Examples);
 
 internal sealed record ResolveTargetSymbol(
     string Name,

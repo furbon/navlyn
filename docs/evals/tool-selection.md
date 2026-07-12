@@ -30,6 +30,7 @@ When evaluating MCP, assume the unified read-only tool surface. Broad review, te
 | Prompt | Expected First Step | Stop Condition | Avoid |
 | --- | --- | --- | --- |
 | "What does `CheckCommand` refer to?" | In MCP, `navlyn_resolve_target`; in CLI, `find` or `resolve-target` with `assumeKind: "NamedType"` | One high-confidence `candidateId` or an ambiguity to ask about | Running review, context, test, public API, DI, or batch tools |
+| "There are several `PaymentService` symbols. Which one should be edited?" | `navlyn_resolve_target` with a project/kind hint when available | `candidateId` selected or `ambiguitySummary` explains why the agent must ask/narrow | Opening source or running edit/review tools from the ambiguous name alone |
 | "Open the declaration for this known file position." | `navlyn_symbol_source` or CLI `symbol-source` with file/line/column | Bounded source for one symbol | Workspace summary |
 | "Review this PR." | `navlyn_review_diff` with `profile: "evidence"` | Changed-symbol, diagnostic, impact, and related-test facts are available | Raw file outline as the first step; treating review facts as unavailable |
 | "Find install instructions in README." | Normal file read or `rg` | Relevant Markdown section found | Any Navlyn command |

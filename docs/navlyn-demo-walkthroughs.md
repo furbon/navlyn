@@ -4,7 +4,7 @@ These demos show the moment Navlyn is meant for: an agent is about to reason abo
 
 Each walkthrough is reproducible from this repository or committed fixtures. Each one starts from a realistic failure mode, then shows the smallest Navlyn facts that reduce that failure. Navlyn reports static source-level evidence; it does not prove runtime behavior, write review comments, run tests, or replace human judgment.
 
-## One-Minute Copy/Paste Demo
+## Three-Minute Copy/Paste Demo
 
 Run from this repository after restore:
 
@@ -14,7 +14,13 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- edit-pref
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review-diff --workspace navlyn.slnx --base HEAD --head HEAD --profile compact --symbol-limit 3 --impact-limit 3 --diagnostic-limit 3 --related-test-limit 3
 ```
 
-Check that stdout is JSON for each command and stderr is empty or diagnostic-only. The first two commands demonstrate fuzzy-to-exact symbol anchoring plus an edit preflight envelope. The third command demonstrates a bounded review envelope on an explicit Git range; replace the refs with PR refs or omit them on a dirty branch to inspect a real diff.
+Check that stdout is JSON for each command and stderr is empty or diagnostic-only. The fields to inspect are:
+
+- `resolve-target`: `confidence`, `candidateId`, `selectedTarget.path`, `ambiguitySummary` when no target is selected.
+- `edit-preflight`: anchor fields, source/context/test evidence, known unknowns, and the post-edit guard command.
+- `review-diff`: `diff.mode`, changed-symbol/diagnostic/impact counts, warnings, truncation flags, and `profile`.
+
+Stop after the returned fields answer the question. Do not treat `recommendedNextActions` as a checklist. The third command demonstrates a bounded review envelope on an explicit Git range; replace the refs with PR refs or omit them on a dirty branch to inspect a real diff.
 
 If you are evaluating Navlyn from a package install rather than this repository, run the same shape against your solution:
 
@@ -100,6 +106,27 @@ Useful output excerpt:
 
 Why it matters: `review-diff` is an evidence pack, not a reviewer. It gives the agent and human reviewer scoped facts and explicitly reports bounded limitations.
 
+## Demo 2b: Wrong-Symbol Guard
+
+Failure mode: an agent correctly anchors `CheckCommand`, edits elsewhere, and then keeps going without checking whether the diff still matches the target.
+
+Run:
+
+```powershell
+navlyn resolve-target --workspace navlyn.slnx --project "Navlyn.CommandLine(net10.0)" --query CheckCommand --assume-kind NamedType --limit 5
+navlyn edit-preflight --workspace navlyn.slnx --candidate-id sym:v1:... --goal modify --change-kind behavior
+navlyn wrong-symbol-guard --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --fail-on-risk medium
+```
+
+Useful fields:
+
+- `anchor`: the intended symbol identity.
+- `changedSymbols` or equivalent diff summary: what actually changed.
+- `risk`: whether the diff is empty, outside the target, ambiguous, or aligned.
+- `warnings` / `nextActions`: why the agent should stop, ask, or inspect.
+
+Why it matters: the guard is a fail-closed evidence step. It does not prove the edit is correct; it tells an agent when the actual diff is not yet safe to continue.
+
 ## Demo 3: ASP.NET And Application-Domain Facts
 
 Failure mode: an agent treats a controller, minimal API endpoint, MediatR request, or EF entity as plain text and misses framework links.
@@ -111,6 +138,7 @@ navlyn route-map --workspace tests/fixtures/ApplicationDomainFixture/Application
 navlyn where-handled --workspace tests/fixtures/ApplicationDomainFixture/ApplicationDomainFixture.csproj --query CreateOrderCommand --assume-kind NamedType --profile compact
 navlyn ef-model --workspace tests/fixtures/ApplicationDomainFixture/ApplicationDomainFixture.csproj --entity Order --profile compact
 navlyn package-usage --workspace tests/fixtures/ApplicationDomainFixture/ApplicationDomainFixture.csproj --package Microsoft.EntityFrameworkCore --namespace Microsoft.EntityFrameworkCore --profile compact
+Get-Content examples/batch/application-facts.json | navlyn batch --workspace tests/fixtures/ApplicationDomainFixture/ApplicationDomainFixture.csproj
 ```
 
 Useful output excerpt:
@@ -145,9 +173,11 @@ Useful output excerpt:
 
 Why it matters: route, auth, handler, MediatR, EF, and package usage facts are bounded source-level evidence. They help an agent decide what to read next, but they are not runtime route tables, authorization proof, EF runtime models, or package compatibility scans.
 
-## Case Study Candidates
+## Case Studies
 
-Medium-size OSS case studies should be reproducible and should record commit hash, SDK, workspace path, command timings, stdout size, truncation state, warnings, and whether expected files were present.
+Reproducible current-repo and fixture-backed case studies live in [`navlyn-case-studies.md`](navlyn-case-studies.md). They avoid external clone/build risk and keep public claims tied to committed workspaces.
+
+Medium-size OSS case studies remain useful later, but they should be published only when a clean clone, restore, workspace load, and representative commands are stable within 30 minutes. Record commit hash, SDK, workspace path, command timings, stdout size, truncation state, warnings, and whether expected files were present.
 
 Good candidate shapes:
 

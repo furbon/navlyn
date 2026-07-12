@@ -71,7 +71,7 @@ Profiled workflow output uses `schemaVersion: "navlyn.workflow.v1"`. That schema
 
 The published envelope schemas live under [`docs/schemas`](schemas/). `navlyn-workflow-envelope.schema.json` covers the profiled workflow envelope only; command-specific domain facts remain documented in this file and validated by component, CLI-contract, and representative golden snapshot tests. Snapshot tests scrub nondeterministic fields such as `navlynVersion` and intentionally focus on envelope and important shape, not every semantic detail.
 
-Focused schemas also cover high-risk automation surfaces: `navlyn-resolve-target-result.schema.json` defines the standard target-selection entrypoint, `navlyn-file-outline-result.schema.json` and `navlyn-symbol-source-result.schema.json` define the file-first source-reading path, `navlyn-workspace-status-result.schema.json` defines workspace status/refresh freshness and cache fields, `navlyn-edit-preflight-result.schema.json` and `navlyn-agent-guard-result.schema.json` define the agent preflight and wrong-symbol guardrails, and `navlyn-symbol-search-metadata.schema.json` defines scoped reverse-edge `search` metadata. Candidate IDs and workspace fingerprints remain opaque strings; clients may compare them for equality within the documented freshness boundary, but must not parse their internals. Partial reverse-edge results are successful JSON results with `search.partial: true`, `truncationReason`, and `rerunHints`, not failures.
+Focused schemas also cover high-risk automation surfaces: `navlyn-resolve-target-result.schema.json` defines the standard target-selection entrypoint and optional `ambiguitySummary`, `navlyn-file-outline-result.schema.json` and `navlyn-symbol-source-result.schema.json` define the file-first source-reading path, `navlyn-workspace-status-result.schema.json` defines workspace status/refresh freshness and cache fields, `navlyn-edit-preflight-result.schema.json` and `navlyn-agent-guard-result.schema.json` define the agent preflight and wrong-symbol guardrails, and `navlyn-symbol-search-metadata.schema.json` defines scoped reverse-edge `search` metadata. Candidate IDs and workspace fingerprints remain opaque strings; clients may compare them for equality within the documented freshness boundary, but must not parse their internals. Partial reverse-edge results are successful JSON results with `search.partial: true`, `truncationReason`, and `rerunHints`, not failures.
 
 `nextActions` are conditional follow-up hints, not a required checklist. Consumers should pick at most the fact needed for the current question and may ignore the array entirely when the current result is sufficient. MCP results expose additive `recommendedNextAction` and `optionalFollowUps` wrapper fields when inner CLI JSON contains `nextActions`; those wrappers add `when`, `costClass`, and `runByDefault: false` without changing the inner CLI result.
 
@@ -332,7 +332,31 @@ Result shape:
 }
 ```
 
-When query mode cannot safely select one target, `selectedTarget` and `candidateId` are omitted, `ambiguityReason` is populated, and limited `candidates` are returned. Malformed or stale `candidateId` values use the same candidate-id diagnostics as other fuzzy commands. Source-position mode does not currently mint a `candidateId`; follow its file/line/column next actions or run query mode when a candidate id is needed.
+When query mode cannot safely select one target, `selectedTarget` and `candidateId` are omitted, `ambiguityReason` is populated, limited `candidates` are returned, and `ambiguitySummary` explains why the agent should narrow or ask before reading/editing source. `ambiguitySummary.reasonCodes` can include values such as `ambiguous-candidates`, `multiple-projects`, `multiple-target-frameworks`, `same-file-duplicates`, `test-project-candidates`, `generated-candidates`, `metadata-candidates`, and `candidate-limit-reached`. Treat these as fail-closed hints: add `--project`, use a source position, ask the user, or select an explicit returned `candidateId`.
+
+Ambiguous excerpt:
+
+```json
+{
+  "confidence": "ambiguous",
+  "ambiguityReason": "ambiguous-candidates",
+  "ambiguitySummary": {
+    "isAmbiguous": true,
+    "primaryReason": "ambiguous-candidates",
+    "reasonCodes": ["ambiguous-candidates", "same-file-duplicates"],
+    "groups": [
+      {
+        "reason": "same-file-duplicates",
+        "count": 6,
+        "examples": ["tests/fixtures/FuzzyDiscoveryFixture/FixtureCode.cs"]
+      }
+    ],
+    "recommendedAction": "Narrow the target with --project, --assume-kind, a source position, or a returned candidateId before reading or editing source."
+  }
+}
+```
+
+Malformed or stale `candidateId` values use the same candidate-id diagnostics as other fuzzy commands. Source-position mode does not currently mint a `candidateId`; follow its file/line/column next actions or run query mode when a candidate id is needed.
 
 Future work candidates such as fully qualified name input, XML documentation comment id input, and metadata-name input are intentionally not part of the current contract.
 

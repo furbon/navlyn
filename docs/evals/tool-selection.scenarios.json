@@ -47,6 +47,23 @@
       }
     },
     {
+      "id": "ambiguous-symbol-name",
+      "prompt": "There are several `PaymentService` symbols. Which one should be edited?",
+      "surface": "unified",
+      "expectedFirstSteps": [ "navlyn_resolve_target", "resolve-target" ],
+      "avoidTools": [ "navlyn_symbol_source", "navlyn_edit_preflight", "navlyn_review_diff", "navlyn_batch" ],
+      "acceptedStopConditions": [ "candidate-id-or-ambiguity" ],
+      "maxToolCount": 2,
+      "semanticIdentityRequired": true,
+      "navlynExpected": true,
+      "baselineTrace": {
+        "chosenSequence": [ "navlyn_resolve_target" ],
+        "stopCondition": "candidate-id-or-ambiguity",
+        "stdoutJsonValid": true,
+        "stderrClean": true
+      }
+    },
+    {
       "id": "review-pr",
       "prompt": "Review this PR.",
       "surface": "unified",

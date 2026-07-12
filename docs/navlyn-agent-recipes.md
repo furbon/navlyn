@@ -64,6 +64,13 @@ Run with:
 Get-Content examples/batch/investigation-loop.json | navlyn batch --workspace navlyn.slnx
 ```
 
+Freshness rules for MCP agents:
+
+- Call `navlyn_workspace_status` when a long-running MCP session has made or observed source, project, package, SDK, or generated-file changes.
+- Call `navlyn_workspace_refresh` after edits that should affect direct reader tools such as workspace summary, file outline, inspect file, or selected symbol source.
+- Restart the MCP server when the process itself must pick up a new SDK/MSBuild environment or changed tool installation.
+- Do not assume session-local `candidateId` values survive source edits, project filter changes, generated-code changes, or a Navlyn version change.
+
 ## Symbol Investigation
 
 When the agent has an approximate symbol name, resolve a target first. Reuse `candidateId` for deeper calls so the investigation remains anchored to the same declaration. Use `find` when the agent or human needs a broader candidate list.
@@ -76,6 +83,8 @@ navlyn references --workspace navlyn.slnx --candidate-id sym:v1:... --usage-kind
 navlyn related --workspace navlyn.slnx --candidate-id sym:v1:... --limit 30
 navlyn impact --workspace navlyn.slnx --candidate-id sym:v1:... --depth 2
 ```
+
+If `resolve-target` returns `confidence: "ambiguous"` or no selected target, inspect `ambiguityReason`, `ambiguitySummary.reasonCodes`, and `ambiguitySummary.groups` before doing anything broader. Typical next moves are to add `--project`, switch to a source position, ask the user which candidate they meant, or choose one returned `candidateId` explicitly. Do not open or edit source from an ambiguous name alone.
 
 Use `about` for a compact selected-symbol summary, `references` with `usageKind` and `groupBy` when the agent needs precise read/write/invocation/construction evidence, `related` for a file-first reading map, and `impact` before edits or risk analysis.
 
@@ -122,6 +131,17 @@ navlyn review-diff --workspace navlyn.slnx --profile evidence --symbol-limit 20 
 ```
 
 `post-edit-guard` compares the diff with a saved anchor or `candidateId`; `wrong-symbol-guard` re-resolves the intended target from query, candidate, or source position and then compares changed symbols. Both commands write JSON even when policy fails. A mismatch is a warning to pause and inspect; it is not a proof that the edit is wrong.
+
+Wrong-symbol mini demo:
+
+```powershell
+navlyn resolve-target --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --limit 5
+navlyn edit-preflight --workspace navlyn.slnx --candidate-id sym:v1:... --goal modify --change-kind behavior
+# edit outside Navlyn
+navlyn wrong-symbol-guard --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --fail-on-risk medium
+```
+
+The guard output is useful when it says the diff is empty, touches unrelated files, or changed symbols do not align with the anchor. Treat that as bounded evidence to stop and inspect the actual diff.
 
 ## PR Review Facts
 
@@ -198,6 +218,14 @@ navlyn package-usage --workspace navlyn.slnx --package Microsoft.EntityFramework
 ```
 
 These commands report bounded source-level evidence. They do not claim complete runtime route tables, effective authorization, secret/config values, EF runtime models, or package compatibility.
+
+For first-pass application facts, prefer batch recipes over a new high-level MCP tool. The tool surface stays smaller, and the caller can see exactly which source-level facts were requested:
+
+```powershell
+Get-Content examples/batch/application-facts.json | navlyn batch --workspace tests/fixtures/ApplicationDomainFixture/ApplicationDomainFixture.csproj
+```
+
+Decision record for v0.7.0: do not add a dedicated "application overview" MCP tool yet. The current `navlyn_batch` path is explicit, works through the existing CLI contract, and avoids implying runtime proof. Reconsider a first-class tool only if repeated real traces show agents cannot choose the route/DI/options/EF/package commands with the existing descriptions and recipes.
 
 ## Framework Entrypoints
 

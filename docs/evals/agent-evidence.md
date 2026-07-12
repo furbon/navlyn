@@ -48,7 +48,7 @@ Track these fields for each trace:
 ```json
 {
   "scenarioId": "wrong-symbol-overload",
-  "navlynVersion": "0.6.0",
+  "navlynVersion": "0.7.0",
   "workspace": "path/to/YourRepo.slnx",
   "prompt": "Change PaymentService.Process",
   "preEditAnchor": {

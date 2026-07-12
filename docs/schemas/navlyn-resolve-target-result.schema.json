@@ -80,6 +80,46 @@
       ]
     },
     "ambiguityReason": { "type": "string" },
+    "ambiguitySummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "isAmbiguous",
+        "primaryReason",
+        "reasonCodes",
+        "groups",
+        "recommendedAction"
+      ],
+      "properties": {
+        "isAmbiguous": { "type": "boolean" },
+        "primaryReason": { "type": "string", "minLength": 1 },
+        "reasonCodes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "reason",
+              "count",
+              "examples"
+            ],
+            "properties": {
+              "reason": { "type": "string", "minLength": 1 },
+              "count": { "type": "integer", "minimum": 0 },
+              "examples": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        },
+        "recommendedAction": { "type": "string", "minLength": 1 }
+      }
+    },
     "candidateCount": { "type": "integer", "minimum": 0 },
     "totalCandidates": { "type": "integer", "minimum": 0 },
     "candidates": {

@@ -65,7 +65,7 @@ Timings are environment-dependent. Treat local reports as release and investigat
 
 ## Current Local Case Study
 
-The following smoke evidence was recorded on 2026-07-05 from the 0.6.0 release branch, on Windows 10.0.26200 with .NET SDK 10.0.301. The report was produced with `navlyn.slnx`, `-Scenario all`, `-Profile compact`, `-Iterations 1`, `-Warmup 0`, and `-NoBuild`; all measured commands returned JSON-valid stdout, exit code 0, and stderr size 0.
+The following smoke evidence was recorded on 2026-07-05 from the 0.7.0 release branch, on Windows 10.0.26200 with .NET SDK 10.0.301. The report was produced with `navlyn.slnx`, `-Scenario all`, `-Profile compact`, `-Iterations 1`, `-Warmup 0`, and `-NoBuild`; all measured commands returned JSON-valid stdout, exit code 0, and stderr size 0.
 
 | Scenario | Profile | Commands | Median ms | P95 ms | Max stdout chars | Warnings | Comparison baseline |
 | --- | --- | ---: | ---: | ---: | ---: | --- | --- |

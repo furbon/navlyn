@@ -963,7 +963,7 @@ internal static class AgentEvidenceCommand
         {
             return new TargetResolution(
                 input,
-                new ResolveTargetResult("", "", "resolve-target", new ResolveTargetInput("invalid", input.Query, input.CandidateId, input.File?.ToString(), input.Line, input.Column), SelectedTarget: null, CandidateId: null, Selector: null, Confidence: "none", AmbiguityReason: "invalid-input", CandidateCount: 0, TotalCandidates: 0, Candidates: null, RecommendedNextActions: [], Warnings: ["invalid-target-input"]),
+                new ResolveTargetResult("", "", "resolve-target", new ResolveTargetInput("invalid", input.Query, input.CandidateId, input.File?.ToString(), input.Line, input.Column), SelectedTarget: null, CandidateId: null, Selector: null, Confidence: "none", AmbiguityReason: "invalid-input", AmbiguitySummary: null, CandidateCount: 0, TotalCandidates: 0, Candidates: null, RecommendedNextActions: [], Warnings: ["invalid-target-input"]),
                 Projects: [],
                 ProjectOutputs: null,
                 input.ProjectFilters);

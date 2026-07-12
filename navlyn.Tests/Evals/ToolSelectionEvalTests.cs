@@ -62,7 +62,7 @@ public sealed class ToolSelectionEvalTests
             JsonElement root = report.RootElement;
             Assert.True(root.GetProperty("passed").GetBoolean());
             Assert.Equal(1.0, root.GetProperty("score").GetDouble());
-            Assert.Equal(9, root.GetProperty("scenarioCount").GetInt32());
+            Assert.Equal(10, root.GetProperty("scenarioCount").GetInt32());
         }
         finally
         {

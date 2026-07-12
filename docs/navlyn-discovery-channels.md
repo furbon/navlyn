@@ -40,8 +40,15 @@ csharp, visual-basic, dotnet, roslyn, mcp, mcp-server, ai-agents, code-navigatio
 Suggested release note opening:
 
 ```text
-Navlyn 0.6.0 helps C#-first .NET coding agents avoid wrong-symbol edits, with Visual Basic support through Roslyn/MSBuild. It resolves fuzzy intent into stable Roslyn-backed targets, opens bounded source and relationship facts, builds compact context packs, and collects review evidence without editing files. The `navlyn` CLI and standalone `navlyn-mcp` server share the same Navlyn engine.
+Navlyn 0.7.0 helps C#-first .NET coding agents avoid wrong-symbol edits, with Visual Basic support through Roslyn/MSBuild. It resolves fuzzy intent into stable Roslyn-backed targets, opens bounded source and relationship facts, builds compact context packs, and collects review evidence without editing files. The `navlyn` CLI and standalone `navlyn-mcp` server share the same Navlyn engine.
 ```
+
+Package page distinction:
+
+- `navlyn`: install when a user wants shell/CI JSON facts, release validation, or local scripts.
+- `navlyn-mcp`: install when a coding-agent client should call one read-only stdio MCP server. It does not require a separate `navlyn` install for normal use.
+
+Do not claim runtime correctness, security scanning, refactoring, hosted indexing, source upload, or test execution in package copy.
 
 ## VS Code MCP
 
@@ -53,7 +60,9 @@ VS Code also documents an MCP installation URL shape:
 vscode:mcp/install?{url-encoded-json-server-configuration}
 ```
 
-Add a production install link only after testing it with the packaged `navlyn-mcp` tool and a real workspace path strategy. A safe object shape is:
+Go/no-go for v0.7.0: no public install URL yet. VS Code supports installation URLs, but Navlyn still needs a workspace-specific path. Publishing a one-click link with `--workspace auto` would be too easy to misapply in multi-solution repositories, and publishing an explicit path would be wrong for most users.
+
+Manual setup remains the supported path for v0.7.0. If a future installer is tested, the least risky draft object shape is:
 
 ```json
 {
@@ -66,6 +75,13 @@ Add a production install link only after testing it with the packaged `navlyn-mc
 
 `--workspace auto` is convenient only for repositories with one top-level workspace candidate; it prefers `navlyn.workspace.json`, then `.code-workspace`, then `.slnx`, then `.sln`, then `.csproj` or `.vbproj`. Multi-solution repositories should use an explicit workspace path, preferably repository-local `navlyn.workspace.json` when candidate policy matters.
 
+Manual fallback:
+
+1. Install `navlyn-mcp` as a global or repository-local .NET tool.
+2. Add `.vscode/mcp.json` with an explicit workspace path.
+3. Run `navlyn doctor --workspace ...` before asking an agent to rely on the tools.
+4. Start the MCP server from VS Code and inspect the discovered tools before approving agent use.
+
 ## MCP Registry
 
 Verify the active registry submission format and account requirements immediately before publishing. Registry records should point to the packaged `navlyn-mcp` stdio tool, the current release notes, and workspace setup guidance.
@@ -77,6 +93,22 @@ Autonomous repo work can prepare:
 - a manifest draft once registry format and submission requirements are confirmed;
 - release notes that explain `navlyn_resolve_target`, `navlyn_context_pack`, and `navlyn_batch`.
 
+Draft registry metadata:
+
+```json
+{
+  "name": "navlyn",
+  "displayName": "Navlyn",
+  "description": "Read-only C#-first .NET semantic evidence for coding agents before they edit the wrong symbol.",
+  "package": "navlyn-mcp",
+  "transport": "stdio",
+  "command": "navlyn-mcp",
+  "args": ["--workspace", "<path-to-slnx-sln-csproj-or-vbproj>"],
+  "categories": ["C#", ".NET", "Roslyn", "AI agents", "code navigation"],
+  "security": "Local read-only source-level facts. No editing, shell execution, network calls, source upload, tests, or runtime proof."
+}
+```
+
 Maintainer-owned external work:
 
 - submit or approve registry entries;
@@ -86,7 +118,7 @@ Maintainer-owned external work:
 
 ## Lightweight VS Code Extension Boundary
 
-Navlyn 0.6.0 does not need a full editor extension. If a VS Code extension is justified by user demand, keep it to installer/configurator duties:
+Navlyn 0.7.0 does not need a full editor extension. If a VS Code extension is justified by user demand, keep it to installer/configurator duties:
 
 - detect whether `navlyn` and `navlyn-mcp` are installed;
 - locate likely `.slnx`, `.sln`, `.csproj`, or `.vbproj` workspace files;

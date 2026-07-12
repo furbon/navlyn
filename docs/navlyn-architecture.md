@@ -1,6 +1,6 @@
 # Navlyn Architecture
 
-Navlyn 0.6.0 is split into shared implementation assemblies and two tool frontends. The split is meant to keep the public promise boring and inspectable: one engine, deterministic JSON, read-only facts, and no hidden edit or network surface.
+Navlyn 0.7.0 is split into shared implementation assemblies and two tool frontends. The split is meant to keep the public promise boring and inspectable: one engine, deterministic JSON, read-only facts, and no hidden edit or network surface.
 
 ## Projects
 
@@ -47,3 +47,15 @@ The on-disk cache under `.navlyn/cache` is a lightweight manifest, not a seriali
 Fuzzy symbol discovery uses a workspace-scoped declaration index. The index records syntax declaration names, paths, document IDs, project IDs, generated-file status, and source spans before semantic enrichment. Common fuzzy/resolve queries first narrow syntax declarations, then enrich matching entries with Roslyn semantic facts. Enriched declarations are cached per solution, and emitted `sym:v1:` candidate IDs are recorded in a solution-fingerprint-validated candidate map so same-snapshot candidate-id follow-ups can resolve without broad declaration rediscovery.
 
 Expensive reverse-edge operations use `SymbolNavigationSearchOptions` and `SymbolNavigationSearchPlanner` to build scoped document sets before semantic search. `references` and `callers` can search `file`, `project`, `dependent-projects`, `workspace-set`, or `solution`, apply a lexical document prefilter, and return successful partial metadata when the document budget is reached. `calls` remains a local containing-member analysis path.
+
+## Release Hardening Ledger
+
+These are known architecture pressure points for future releases. They are not required for the v0.7.0 public contract because the current implementation is covered by focused tests, schemas, and CLI/MCP contract checks.
+
+| Area | Current Boundary | Future Split Trigger |
+| --- | --- | --- |
+| Ambiguity classifier | `resolve-target` computes `ambiguitySummary` additively from current candidates. | Extract when more command families need the same reason taxonomy or localized explanations. |
+| Version provider | `Directory.Build.props` centralizes package and assembly version identity; runtime envelopes read assembly informational versions. | Extract when release metadata needs richer build provenance or package manifest validation outside MSBuild. |
+| Next action builder | Fuzzy resolvers and MCP wrappers build next-action hints near command-specific logic. | Extract when recommended actions need shared policy tests across CLI, MCP, and batch. |
+| Source slice budgeter | Source/context commands own their own line/token limits. | Extract when multiple commands need one consistent cross-command source budget policy. |
+| MCP command builder policy tests | `NavlynToolCommandBuilderTests` and evals guard high-risk tool selection and argument mapping. | Broaden when a new first-class MCP tool or batch recipe changes default tool-choice behavior. |

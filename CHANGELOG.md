@@ -2,6 +2,15 @@
 
 All notable public release changes for Navlyn are tracked here.
 
+## 0.7.0 - 2026-07-12
+
+Public release preparation for Navlyn as a read-only semantic evidence layer for C#/.NET coding agents.
+
+- Centralized version identity across the CLI, MCP server, shared assemblies, package metadata, workflow envelopes, and workspace status facts.
+- Updated first-run README and setup guidance around the shortest path from install to `doctor`, `resolve-target`, selected-source evidence, edit preflight, and post-edit diff review.
+- Expanded release-readiness documentation for reproducible demos, fixture-backed case studies, discovery channels, schema/contract policy, freshness handling, and MCP setup boundaries.
+- Kept the public contract source-level, bounded, facts-only, and read-only. Navlyn still does not edit files, run tests, upload source, scan security issues, or prove runtime behavior.
+
 ## 0.6.0 - 2026-07-05
 
 Release candidate for agent preflight onboarding, wrong-symbol edit evidence loops, performance baselines, and release identity.

@@ -8,7 +8,6 @@
     <PackAsTool>true</PackAsTool>
     <PackageId>navlyn-mcp</PackageId>
     <ToolCommandName>navlyn-mcp</ToolCommandName>
-    <Version>0.6.0</Version>
     <Authors>furbon.tech</Authors>
     <Description>Read-only MCP server that gives coding agents C#-first .NET semantic evidence, with Visual Basic support, before they edit.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -18,7 +17,7 @@
     <RepositoryUrl>https://github.com/furbon/navlyn</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/furbon/navlyn</PackageProjectUrl>
-    <PackageReleaseNotes>0.6.0 sharpens MCP-first C# agent workflows, adds Roslyn-backed Visual Basic source support, exposes one read-only tool surface with deprecated profile aliases, expands wrong-symbol edit preflight and post-edit evidence recipes, eval and performance docs, multi-target validation, and package/release identity.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.7.0 prepares the public MCP release by aligning package and runtime version identity, clarifying first-run agent setup, documenting reproducible evidence workflows, and preserving one read-only semantic tool surface.</PackageReleaseNotes>
     <Copyright>Copyright (c) 2026 furbon.tech</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
