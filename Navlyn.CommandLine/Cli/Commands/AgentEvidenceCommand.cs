@@ -20,7 +20,7 @@ internal static class AgentEvidenceCommand
     private const int DefaultContextBudgetTokens = 6000;
     private const int DefaultContextItemLimit = 12;
 
-    public static Command CreateEditPreflight()
+    public static Command CreateEditPreflight(string commandName = "edit-preflight", string? description = null)
     {
         AgentTargetOptions target = CreateTargetOptions();
         Option<string> goalOption = CreateGoalOption("modify");
@@ -31,8 +31,8 @@ internal static class AgentEvidenceCommand
         Option<int?> testLimitOption = new("--test-limit") { Description = $"Related test limit. Defaults to {DefaultTestLimit}." };
 
         return WorkspaceCommand.Create(
-            "edit-preflight",
-            "Create a semantic pre-edit evidence envelope for one intended C# or Visual Basic target.",
+            commandName,
+            description ?? "Create a semantic pre-edit evidence envelope for one intended C# or Visual Basic target.",
             [.. target.Options, goalOption, changeKindOption, budgetTokensOption, itemLimitOption, referenceLimitOption, testLimitOption],
             async (workspace, parseResult, cancellationToken) =>
             {
@@ -52,6 +52,7 @@ internal static class AgentEvidenceCommand
                 }
 
                 AgentPreflightEnvelope envelope = await BuildPreflightAsync(
+                    commandName,
                     workspace,
                     input,
                     goal,
@@ -67,7 +68,7 @@ internal static class AgentEvidenceCommand
             });
     }
 
-    public static Command CreatePostEditGuard()
+    public static Command CreatePostEditGuard(string commandName = "post-edit-guard", string? description = null)
     {
         Option<string?> candidateIdOption = FuzzyCommandSupport.CreateCandidateIdOption();
         Option<FileInfo?> preflightOption = new("--preflight") { Description = "Path to a saved edit-preflight JSON file." };
@@ -81,8 +82,8 @@ internal static class AgentEvidenceCommand
         Option<string> failOnRiskOption = CreateRiskThresholdOption();
 
         return WorkspaceCommand.Create(
-            "post-edit-guard",
-            "Compare a pre-edit anchor with the current diff and report wrong-target risk.",
+            commandName,
+            description ?? "Compare a pre-edit anchor with the current diff and report wrong-target risk.",
             [candidateIdOption, preflightOption, baseOption, headOption, stagedOption, includeUnstagedOption, projectOption, excludeGeneratedOption, symbolLimitOption, failOnRiskOption],
             async (workspace, parseResult, cancellationToken) =>
             {
@@ -105,7 +106,7 @@ internal static class AgentEvidenceCommand
 
                 GuardResult result = await BuildGuardAsync(
                     workspace,
-                    "post-edit-guard",
+                    commandName,
                     anchor,
                     parseResult.GetValue(baseOption),
                     parseResult.GetValue(headOption),
@@ -210,6 +211,7 @@ internal static class AgentEvidenceCommand
             async (workspace, parseResult, cancellationToken) =>
             {
                 AgentPreflightEnvelope preflight = await BuildPreflightAsync(
+                    name,
                     workspace,
                     target.Read(parseResult),
                     parseResult.GetValue(goalOption)!,
@@ -268,6 +270,7 @@ internal static class AgentEvidenceCommand
     }
 
     private static async Task<AgentPreflightEnvelope> BuildPreflightAsync(
+        string commandName,
         LoadedWorkspace workspace,
         AgentTargetInput input,
         string goal,
@@ -287,11 +290,14 @@ internal static class AgentEvidenceCommand
 
         AgentConfidenceLedger confidence = CreateConfidence(target, source, context, tests);
         IReadOnlyList<string> knownUnknowns = CreateKnownUnknowns(target, context, tests);
+        string guardCommand = string.Equals(commandName, "prepare-edit", StringComparison.Ordinal)
+            ? "verify-edit"
+            : "post-edit-guard";
         return new AgentPreflightEnvelope(
             SchemaVersion: "navlyn.edit-preflight.v1",
             Workspace: workspace.DisplayPath,
             Kind: workspace.Kind,
-            Command: "edit-preflight",
+            Command: commandName,
             Intent: new AgentIntent(goal, changeKind),
             Anchor: anchor,
             Confidence: confidence,
@@ -306,12 +312,12 @@ internal static class AgentEvidenceCommand
                 "Reflection, generated runtime routes, custom DI containers, dynamic dispatch, and external packages can be incomplete.",
                 "Run the recommended tests and post-edit guard after editing."
             ],
-            NextCommands: CreateNextCommands(anchor, goal, changeKind),
+            NextCommands: CreateNextCommands(commandName, anchor, goal, changeKind),
             StopConditions:
             [
                 "Stop before editing if selectedTarget is null or confidence is none.",
                 "Stop and ask for disambiguation if ambiguityReason is present.",
-                "After editing, run post-edit-guard against this preflight anchor before widening scope."
+                $"After editing, run {guardCommand} against this preflight anchor before widening scope."
             ],
             CommandsRun: CreateCommandsRun(input, goal, changeKind, budgetTokens, itemLimit, referenceLimit, testLimit));
     }
@@ -733,11 +739,15 @@ internal static class AgentEvidenceCommand
         ];
     }
 
-    private static IReadOnlyList<AgentNextCommand> CreateNextCommands(AnchorSnapshot anchor, string goal, string? changeKind)
+    private static IReadOnlyList<AgentNextCommand> CreateNextCommands(string commandName, AnchorSnapshot anchor, string goal, string? changeKind)
     {
+        string guardCommand = string.Equals(commandName, "prepare-edit", StringComparison.Ordinal)
+            ? "verify-edit"
+            : "post-edit-guard";
+
         return
         [
-            new AgentNextCommand("post-edit-guard", anchor.CandidateId is null ? ["--preflight", "<saved-edit-preflight.json>"] : ["--candidate-id", anchor.CandidateId], "Run after editing to confirm the dirty diff still matches the anchor."),
+            new AgentNextCommand(guardCommand, anchor.CandidateId is null ? ["--preflight", "<saved-edit-preflight.json>"] : ["--candidate-id", anchor.CandidateId], "Run after editing to confirm the dirty diff still matches the anchor."),
             new AgentNextCommand("tests-for-symbol", anchor.CandidateId is null ? ["--query", anchor.Name ?? ""] : ["--candidate-id", anchor.CandidateId], "Inspect related tests before or after the edit."),
             new AgentNextCommand("change-intent-pack", ["--goal", goal, "--change-kind", changeKind ?? ""], "Persist compact intent when handing work to another agent.")
         ];
@@ -963,7 +973,7 @@ internal static class AgentEvidenceCommand
         {
             return new TargetResolution(
                 input,
-                new ResolveTargetResult("", "", "resolve-target", new ResolveTargetInput("invalid", input.Query, input.CandidateId, input.File?.ToString(), input.Line, input.Column), SelectedTarget: null, CandidateId: null, Selector: null, Confidence: "none", AmbiguityReason: "invalid-input", CandidateCount: 0, TotalCandidates: 0, Candidates: null, RecommendedNextActions: [], Warnings: ["invalid-target-input"]),
+                new ResolveTargetResult("", "", "resolve-target", new ResolveTargetInput("invalid", input.Query, input.CandidateId, input.File?.ToString(), input.Line, input.Column), SelectedTarget: null, CandidateId: null, Selector: null, Confidence: "none", AmbiguityReason: "invalid-input", AmbiguitySummary: null, CandidateCount: 0, TotalCandidates: 0, Candidates: null, RecommendedNextActions: [], Warnings: ["invalid-target-input"]),
                 Projects: [],
                 ProjectOutputs: null,
                 input.ProjectFilters);

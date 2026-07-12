@@ -8,7 +8,7 @@ namespace Navlyn.Cli.Commands;
 
 internal static class ResolveTargetCommand
 {
-    public static Command Create()
+    public static Command Create(string commandName = "resolve-target", string? description = null)
     {
         Option<string?> queryOption = new("--query")
         {
@@ -38,10 +38,11 @@ internal static class ResolveTargetCommand
         Option<bool> explainSelectionOption = FuzzyCommandSupport.CreateExplainSelectionOption();
 
         return WorkspaceCommand.Create(
-            "resolve-target",
-            "Resolve an approximate, candidate-id, or source-position input into a small target envelope.",
+            commandName,
+            description ?? "Resolve an approximate, candidate-id, or source-position input into a small target envelope.",
             [queryOption, candidateIdOption, fileOption, lineOption, columnOption, assumeKindOption, matchOption, caseSensitiveOption, projectOption, excludeGeneratedOption, limitOption, candidatePolicyOption, minConfidenceOption, explainSelectionOption],
             (workspace, parseResult, cancellationToken) => ExecuteAsync(
+                commandName,
                 workspace,
                 parseResult.GetValue(queryOption),
                 parseResult.GetValue(candidateIdOption),
@@ -61,6 +62,7 @@ internal static class ResolveTargetCommand
     }
 
     private static async Task<int> ExecuteAsync(
+        string commandName,
         LoadedWorkspace loadedWorkspace,
         string? query,
         string? candidateId,
@@ -133,7 +135,7 @@ internal static class ResolveTargetCommand
                 return ExitCodes.UsageError;
             }
 
-            ConsoleJsonWriter.Write(sourceResult);
+            ConsoleJsonWriter.Write(sourceResult with { Command = commandName });
             return ExitCodes.Success;
         }
 
@@ -172,7 +174,7 @@ internal static class ResolveTargetCommand
             projectOutputs,
             cancellationToken);
 
-        ConsoleJsonWriter.Write(result);
+        ConsoleJsonWriter.Write(result with { Command = commandName });
         return ExitCodes.Success;
     }
 }

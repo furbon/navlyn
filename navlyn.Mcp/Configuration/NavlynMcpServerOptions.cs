@@ -14,12 +14,15 @@ internal sealed record NavlynMcpServerOptions(
     int MaxJsonChars,
     string? DaemonPipe,
     NavlynMcpToolProfile ToolProfile,
-    WorkspaceRootPolicy WorkspaceRootPolicy)
+    WorkspaceRootPolicy WorkspaceRootPolicy,
+    bool DeprecatedToolProfileSpecified = false,
+    string? DeprecatedToolProfileValue = null)
 {
     public const int DefaultTimeoutMilliseconds = 120000;
     public const int DefaultMaxJsonChars = 4000000;
-    public const NavlynMcpToolProfile DefaultToolProfile = NavlynMcpToolProfile.Reader;
+    public const NavlynMcpToolProfile DefaultToolProfile = NavlynMcpToolProfile.Full;
     public const WorkspaceRootPolicy DefaultWorkspaceRootPolicy = WorkspaceRootPolicy.RepoRelative;
+    public const string DefaultWorkspace = "auto";
     public const string ToolProfileEnvironmentVariable = "NAVLYN_MCP_TOOL_PROFILE";
 
     public bool UseExternalCli => !string.IsNullOrWhiteSpace(NavlynExecutable);
@@ -38,6 +41,8 @@ internal sealed record NavlynMcpServerOptions(
         int maxJsonChars = DefaultMaxJsonChars;
         string? daemonPipe = null;
         NavlynMcpToolProfile toolProfile = DefaultToolProfile;
+        bool deprecatedToolProfileSpecified = false;
+        string? deprecatedToolProfileValue = null;
         WorkspaceRootPolicy workspaceRootPolicy = DefaultWorkspaceRootPolicy;
         showHelp = false;
 
@@ -47,6 +52,11 @@ internal sealed record NavlynMcpServerOptions(
             options = CreateEmpty();
             error = $"{ToolProfileEnvironmentVariable} must be one of: reader, review, edit, full.";
             return false;
+        }
+        else if (!string.IsNullOrWhiteSpace(environmentProfile))
+        {
+            deprecatedToolProfileSpecified = true;
+            deprecatedToolProfileValue = environmentProfile.Trim();
         }
 
         for (int index = 0; index < args.Count; index++)
@@ -131,6 +141,8 @@ internal sealed record NavlynMcpServerOptions(
                         return false;
                     }
 
+                    deprecatedToolProfileSpecified = true;
+                    deprecatedToolProfileValue = rawToolProfile.Trim();
                     break;
                 case "--workspace-root-policy":
                     if (!TryReadValue(args, ref index, arg, out string rawWorkspaceRootPolicy, out error))
@@ -154,12 +166,7 @@ internal sealed record NavlynMcpServerOptions(
             }
         }
 
-        if (string.IsNullOrWhiteSpace(workspace))
-        {
-            options = CreateEmpty();
-            error = "--workspace is required.";
-            return false;
-        }
+        string workspaceInput = string.IsNullOrWhiteSpace(workspace) ? DefaultWorkspace : workspace;
 
         if (navlynExecutable is null && navlynArguments.Count > 0)
         {
@@ -168,7 +175,7 @@ internal sealed record NavlynMcpServerOptions(
             return false;
         }
 
-        bool autoWorkspace = string.Equals(workspace.Trim(), "auto", StringComparison.Ordinal);
+        bool autoWorkspace = string.Equals(workspaceInput.Trim(), DefaultWorkspace, StringComparison.Ordinal);
         string effectiveWorkingDirectory;
         string fullWorkspace;
         if (autoWorkspace)
@@ -184,7 +191,7 @@ internal sealed record NavlynMcpServerOptions(
         }
         else
         {
-            fullWorkspace = Path.GetFullPath(workspace);
+            fullWorkspace = Path.GetFullPath(workspaceInput);
             effectiveWorkingDirectory = string.IsNullOrWhiteSpace(workingDirectory)
                 ? FindRepositoryRoot(Path.GetDirectoryName(fullWorkspace) ?? Directory.GetCurrentDirectory()) ?? Directory.GetCurrentDirectory()
                 : Path.GetFullPath(workingDirectory);
@@ -192,7 +199,7 @@ internal sealed record NavlynMcpServerOptions(
 
         string workspaceArgument = File.Exists(fullWorkspace) || Directory.Exists(Path.GetDirectoryName(fullWorkspace))
             ? Path.GetRelativePath(effectiveWorkingDirectory, fullWorkspace)
-            : workspace;
+            : workspaceInput;
 
         options = new NavlynMcpServerOptions(
             Workspace: fullWorkspace,
@@ -204,7 +211,9 @@ internal sealed record NavlynMcpServerOptions(
             MaxJsonChars: maxJsonChars,
             DaemonPipe: daemonPipe,
             ToolProfile: toolProfile,
-            WorkspaceRootPolicy: workspaceRootPolicy);
+            WorkspaceRootPolicy: workspaceRootPolicy,
+            DeprecatedToolProfileSpecified: deprecatedToolProfileSpecified,
+            DeprecatedToolProfileValue: deprecatedToolProfileValue);
         error = null;
         return true;
     }
@@ -212,19 +221,23 @@ internal sealed record NavlynMcpServerOptions(
     public static string GetUsage()
     {
         StringBuilder builder = new();
-        builder.AppendLine("Usage: navlyn-mcp --workspace <path|auto> [options]");
+        builder.AppendLine("Usage: navlyn-mcp [--workspace <path|auto>] [options]");
         builder.AppendLine();
         builder.AppendLine("Options:");
-        builder.AppendLine("  --workspace <path|auto>        Required navlyn.workspace.json, .code-workspace, .slnx, .sln, .csproj, or .vbproj path, or auto to discover one.");
+        builder.AppendLine("  --workspace <path|auto>        Optional navlyn.workspace.json, .code-workspace, .slnx, .sln, .csproj, or .vbproj path.");
+        builder.AppendLine("                                  Defaults to auto discovery from the working directory or repository root.");
         builder.AppendLine("  --navlyn-executable <command>  Legacy external Navlyn CLI command or executable. Omit for standalone in-process execution.");
         builder.AppendLine("  --navlyn-arg <arg>             Prefix argument for the legacy external CLI path, repeatable.");
         builder.AppendLine("  --working-directory <path>     Working directory for in-process execution or the legacy child process.");
         builder.AppendLine("  --timeout-ms <number>          Per-tool timeout. Defaults to 120000.");
         builder.AppendLine("  --max-json-chars <number>      Max command JSON chars. Defaults to 4000000.");
         builder.AppendLine("  --daemon-pipe <name>           Optional local navlyn serve named pipe for workspace status/refresh.");
-        builder.AppendLine("  --tool-profile <profile>       MCP tool surface: reader, review, edit, or full. Defaults to reader.");
-        builder.AppendLine("                                  Can also be set with NAVLYN_MCP_TOOL_PROFILE.");
         builder.AppendLine("  --workspace-root-policy <mode> Workspace root policy: repo-relative, allow-listed, or all. Defaults to repo-relative.");
+        builder.AppendLine();
+        builder.AppendLine("Deprecated compatibility options:");
+        builder.AppendLine("  --tool-profile <profile>       Deprecated no-op alias. Valid values reader, review, edit, and full are accepted");
+        builder.AppendLine("                                  for existing configs, but Navlyn MCP now exposes one read-only tool surface.");
+        builder.AppendLine("                                  Can also be set with NAVLYN_MCP_TOOL_PROFILE.");
         return builder.ToString();
     }
 
@@ -236,7 +249,7 @@ internal sealed record NavlynMcpServerOptions(
             NavlynMcpToolProfile.Review => "review",
             NavlynMcpToolProfile.Edit => "edit",
             NavlynMcpToolProfile.Full => "full",
-            _ => "reader"
+            _ => "full"
         };
     }
 

@@ -13,35 +13,86 @@
   },
   "scenarios": [
     {
-      "id": "resolve-known-symbol",
+      "id": "target-known-symbol",
       "prompt": "What does `CheckCommand` refer to?",
-      "profile": "reader",
-      "expectedFirstSteps": [ "navlyn_resolve_target", "resolve-target", "find" ],
-      "avoidTools": [ "navlyn_review_diff", "navlyn_context_pack", "navlyn_tests_for_symbol", "navlyn_public_api_diff", "navlyn_batch" ],
+      "surface": "canonical",
+      "expectedFirstSteps": [ "navlyn_target", "target" ],
+      "avoidTools": [ "navlyn_review", "navlyn_review_diff", "navlyn_context_pack", "navlyn_tests_for_symbol", "navlyn_public_api_diff", "navlyn_batch" ],
       "acceptedStopConditions": [ "candidate-id-or-ambiguity" ],
       "maxToolCount": 2,
       "semanticIdentityRequired": true,
       "navlynExpected": true,
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_resolve_target" ],
+        "chosenSequence": [ "navlyn_target" ],
         "stopCondition": "candidate-id-or-ambiguity",
         "stdoutJsonValid": true,
         "stderrClean": true
       }
     },
     {
-      "id": "known-source-position",
+      "id": "read-known-source-position",
       "prompt": "Open the declaration for this known file position.",
-      "profile": "reader",
-      "expectedFirstSteps": [ "navlyn_symbol_source", "symbol-source" ],
-      "avoidTools": [ "navlyn_workspace_summary", "repo-graph", "navlyn_review_diff", "navlyn_context_pack" ],
+      "surface": "canonical",
+      "expectedFirstSteps": [ "navlyn_read", "read" ],
+      "avoidTools": [ "navlyn_workspace_summary", "repo-graph", "navlyn_review", "navlyn_review_diff", "navlyn_context_pack" ],
       "acceptedStopConditions": [ "bounded-source-returned" ],
       "maxToolCount": 1,
       "semanticIdentityRequired": true,
       "navlynExpected": true,
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_symbol_source" ],
+        "chosenSequence": [ "navlyn_read" ],
         "stopCondition": "bounded-source-returned",
+        "stdoutJsonValid": true,
+        "stderrClean": true
+      }
+    },
+    {
+      "id": "ambiguous-symbol-name",
+      "prompt": "There are several `PaymentService` symbols. Which one should be edited?",
+      "surface": "canonical",
+      "expectedFirstSteps": [ "navlyn_target", "target" ],
+      "avoidTools": [ "navlyn_read", "navlyn_symbol_source", "navlyn_prepare_edit", "navlyn_edit_preflight", "navlyn_review", "navlyn_batch" ],
+      "acceptedStopConditions": [ "candidate-id-or-ambiguity" ],
+      "maxToolCount": 2,
+      "semanticIdentityRequired": true,
+      "navlynExpected": true,
+      "baselineTrace": {
+        "chosenSequence": [ "navlyn_target" ],
+        "stopCondition": "candidate-id-or-ambiguity",
+        "stdoutJsonValid": true,
+        "stderrClean": true
+      }
+    },
+    {
+      "id": "prepare-edit-one-target",
+      "prompt": "Before changing `PaymentService`, gather the evidence an agent should use.",
+      "surface": "canonical",
+      "expectedFirstSteps": [ "navlyn_prepare_edit", "prepare-edit" ],
+      "avoidTools": [ "navlyn_review", "navlyn_review_diff", "navlyn_batch", "navlyn_public_api_diff" ],
+      "acceptedStopConditions": [ "pre-edit-anchor-or-ambiguity" ],
+      "maxToolCount": 1,
+      "semanticIdentityRequired": true,
+      "navlynExpected": true,
+      "baselineTrace": {
+        "chosenSequence": [ "navlyn_prepare_edit" ],
+        "stopCondition": "pre-edit-anchor-or-ambiguity",
+        "stdoutJsonValid": true,
+        "stderrClean": true
+      }
+    },
+    {
+      "id": "verify-edit-after-change",
+      "prompt": "I edited the file. Check whether the diff still matches the intended target.",
+      "surface": "canonical",
+      "expectedFirstSteps": [ "navlyn_verify_edit", "verify-edit" ],
+      "avoidTools": [ "navlyn_target", "navlyn_read", "navlyn_context_pack", "navlyn_batch" ],
+      "acceptedStopConditions": [ "guard-pass-or-fail-closed" ],
+      "maxToolCount": 1,
+      "semanticIdentityRequired": true,
+      "navlynExpected": true,
+      "baselineTrace": {
+        "chosenSequence": [ "navlyn_verify_edit" ],
+        "stopCondition": "guard-pass-or-fail-closed",
         "stdoutJsonValid": true,
         "stderrClean": true
       }
@@ -49,15 +100,15 @@
     {
       "id": "review-pr",
       "prompt": "Review this PR.",
-      "profile": "review",
-      "expectedFirstSteps": [ "navlyn_review_diff", "review-diff" ],
-      "avoidTools": [ "navlyn_file_outline", "navlyn_batch" ],
+      "surface": "canonical",
+      "expectedFirstSteps": [ "navlyn_review", "review" ],
+      "avoidTools": [ "navlyn_file_outline", "navlyn_read", "navlyn_batch" ],
       "acceptedStopConditions": [ "review-facts-available" ],
       "maxToolCount": 2,
       "semanticIdentityRequired": false,
       "navlynExpected": true,
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_review_diff" ],
+        "chosenSequence": [ "navlyn_review" ],
         "stopCondition": "review-facts-available",
         "stdoutJsonValid": true,
         "stderrClean": true
@@ -66,9 +117,9 @@
     {
       "id": "readme-install-instructions",
       "prompt": "Find install instructions in README.",
-      "profile": "none",
+      "surface": "none",
       "expectedFirstSteps": [ "file-read", "rg" ],
-      "avoidTools": [ "navlyn_workspace_summary", "navlyn_resolve_target", "navlyn_find_symbol", "repo-graph", "find" ],
+      "avoidTools": [ "navlyn_workspace_summary", "navlyn_target", "navlyn_resolve_target", "navlyn_find_symbol", "repo-graph", "find" ],
       "acceptedStopConditions": [ "markdown-section-found" ],
       "maxToolCount": 1,
       "semanticIdentityRequired": false,
@@ -81,35 +132,154 @@
       }
     },
     {
+      "id": "comments-only-task",
+      "prompt": "Find marker comments mentioning retries.",
+      "surface": "none",
+      "expectedFirstSteps": [ "rg", "file-read" ],
+      "avoidTools": [ "navlyn_target", "navlyn_find_symbol", "navlyn_workspace_summary", "navlyn_context_pack" ],
+      "acceptedStopConditions": [ "text-match-found" ],
+      "maxToolCount": 1,
+      "semanticIdentityRequired": false,
+      "navlynExpected": false,
+      "baselineTrace": {
+        "chosenSequence": [ "rg" ],
+        "stopCondition": "text-match-found",
+        "stdoutJsonValid": true,
+        "stderrClean": true
+      }
+    },
+    {
       "id": "callers-question",
       "prompt": "Who calls this method?",
-      "profile": "reader",
-      "expectedFirstSteps": [ "navlyn_resolve_target", "resolve-target" ],
-      "avoidTools": [ "navlyn_context_pack", "navlyn_review_diff", "navlyn_batch" ],
+      "surface": "canonical-plus-edge",
+      "expectedFirstSteps": [ "navlyn_target", "target" ],
+      "avoidTools": [ "navlyn_context_pack", "navlyn_review", "navlyn_batch" ],
       "acceptedStopConditions": [ "callers-answer-or-rerun-hint" ],
       "maxToolCount": 3,
       "semanticIdentityRequired": true,
       "navlynExpected": true,
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_resolve_target", "navlyn_symbol_edges" ],
+        "chosenSequence": [ "navlyn_target", "navlyn_symbol_edges" ],
         "stopCondition": "callers-answer-or-rerun-hint",
         "stdoutJsonValid": true,
         "stderrClean": true
       }
     },
     {
-      "id": "edit-reading-queue",
-      "prompt": "What files should be read before changing this symbol?",
-      "profile": "edit",
-      "expectedFirstSteps": [ "navlyn_resolve_target", "resolve-target" ],
-      "avoidTools": [ "navlyn_batch", "navlyn_review_diff", "navlyn_tests_for_diff" ],
-      "acceptedStopConditions": [ "bounded-reading-queue" ],
-      "maxToolCount": 4,
+      "id": "overload-specific-edit",
+      "prompt": "Change only the `Process(string)` overload, not the `Process(int)` overload.",
+      "surface": "canonical",
+      "expectedFirstSteps": [ "navlyn_target", "target", "navlyn_read", "read" ],
+      "avoidTools": [ "navlyn_find_symbol", "navlyn_context_pack", "navlyn_batch" ],
+      "acceptedStopConditions": [ "overload-anchored" ],
+      "maxToolCount": 3,
       "semanticIdentityRequired": true,
       "navlynExpected": true,
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_resolve_target", "navlyn_impact", "navlyn_context_pack" ],
-        "stopCondition": "bounded-reading-queue",
+        "chosenSequence": [ "navlyn_target", "navlyn_read" ],
+        "stopCondition": "overload-anchored",
+        "stdoutJsonValid": true,
+        "stderrClean": true
+      }
+    },
+    {
+      "id": "partial-class-edit",
+      "prompt": "Before editing a partial class, show the relevant declaration and related partial context.",
+      "surface": "canonical",
+      "expectedFirstSteps": [ "navlyn_prepare_edit", "prepare-edit", "navlyn_target", "target" ],
+      "avoidTools": [ "navlyn_review", "navlyn_batch", "navlyn_public_api_diff" ],
+      "acceptedStopConditions": [ "partial-context-or-ambiguity" ],
+      "maxToolCount": 2,
+      "semanticIdentityRequired": true,
+      "navlynExpected": true,
+      "baselineTrace": {
+        "chosenSequence": [ "navlyn_prepare_edit" ],
+        "stopCondition": "partial-context-or-ambiguity",
+        "stdoutJsonValid": true,
+        "stderrClean": true
+      }
+    },
+    {
+      "id": "multi-target-project",
+      "prompt": "This project targets net8.0 and net10.0; inspect the net10.0 target only.",
+      "surface": "canonical",
+      "expectedFirstSteps": [ "navlyn_target", "target", "navlyn_workspace_summary" ],
+      "avoidTools": [ "navlyn_batch", "navlyn_review" ],
+      "acceptedStopConditions": [ "project-target-selected" ],
+      "maxToolCount": 2,
+      "semanticIdentityRequired": true,
+      "navlynExpected": true,
+      "baselineTrace": {
+        "chosenSequence": [ "navlyn_target" ],
+        "stopCondition": "project-target-selected",
+        "stdoutJsonValid": true,
+        "stderrClean": true
+      }
+    },
+    {
+      "id": "generated-file-avoidance",
+      "prompt": "Find the source declaration, but do not edit generated files.",
+      "surface": "canonical",
+      "expectedFirstSteps": [ "navlyn_target", "target" ],
+      "avoidTools": [ "navlyn_read", "navlyn_context_pack", "navlyn_batch" ],
+      "acceptedStopConditions": [ "generated-candidate-excluded-or-warned" ],
+      "maxToolCount": 2,
+      "semanticIdentityRequired": true,
+      "navlynExpected": true,
+      "baselineTrace": {
+        "chosenSequence": [ "navlyn_target" ],
+        "stopCondition": "generated-candidate-excluded-or-warned",
+        "stdoutJsonValid": true,
+        "stderrClean": true
+      }
+    },
+    {
+      "id": "stale-candidate-after-edit",
+      "prompt": "The file changed after I copied this candidate id. Check whether the id is still safe.",
+      "surface": "canonical",
+      "expectedFirstSteps": [ "navlyn_verify_edit", "verify-edit", "navlyn_workspace_status", "navlyn_workspace_refresh" ],
+      "avoidTools": [ "navlyn_context_pack", "navlyn_batch" ],
+      "acceptedStopConditions": [ "stale-or-guard-risk-reported" ],
+      "maxToolCount": 2,
+      "semanticIdentityRequired": true,
+      "navlynExpected": true,
+      "baselineTrace": {
+        "chosenSequence": [ "navlyn_verify_edit" ],
+        "stopCondition": "stale-or-guard-risk-reported",
+        "stdoutJsonValid": true,
+        "stderrClean": true
+      }
+    },
+    {
+      "id": "route-handler-question",
+      "prompt": "Is this ASP.NET route protected?",
+      "surface": "advanced-domain",
+      "expectedFirstSteps": [ "route-map", "route-impact" ],
+      "avoidTools": [ "navlyn_review", "navlyn_context_pack", "navlyn_tests_for_diff" ],
+      "acceptedStopConditions": [ "route-auth-source-facts" ],
+      "maxToolCount": 2,
+      "semanticIdentityRequired": false,
+      "navlynExpected": true,
+      "baselineTrace": {
+        "chosenSequence": [ "route-map" ],
+        "stopCondition": "route-auth-source-facts",
+        "stdoutJsonValid": true,
+        "stderrClean": true
+      }
+    },
+    {
+      "id": "di-registration-impact",
+      "prompt": "Before changing this service implementation, inspect DI registrations and consumers.",
+      "surface": "advanced-domain",
+      "expectedFirstSteps": [ "navlyn_target", "target", "navlyn_di_impact" ],
+      "avoidTools": [ "navlyn_review", "navlyn_public_api_diff", "navlyn_batch" ],
+      "acceptedStopConditions": [ "di-risk-facts-returned" ],
+      "maxToolCount": 3,
+      "semanticIdentityRequired": true,
+      "navlynExpected": true,
+      "baselineTrace": {
+        "chosenSequence": [ "navlyn_target", "navlyn_di_impact" ],
+        "stopCondition": "di-risk-facts-returned",
         "stdoutJsonValid": true,
         "stderrClean": true
       }
@@ -117,9 +287,9 @@
     {
       "id": "workspace-projects",
       "prompt": "What projects and target frameworks are in this repo?",
-      "profile": "reader",
+      "surface": "workspace",
       "expectedFirstSteps": [ "navlyn_workspace_summary", "repo-graph" ],
-      "avoidTools": [ "navlyn_find_symbol", "navlyn_symbol_source", "navlyn_review_diff", "navlyn_context_pack" ],
+      "avoidTools": [ "navlyn_find_symbol", "navlyn_read", "navlyn_symbol_source", "navlyn_review", "navlyn_context_pack" ],
       "acceptedStopConditions": [ "project-target-facts-returned" ],
       "maxToolCount": 1,
       "semanticIdentityRequired": false,
@@ -134,9 +304,9 @@
     {
       "id": "known-file-inspection",
       "prompt": "Inspect this known C# or Visual Basic file before deciding if more facts are needed.",
-      "profile": "reader",
+      "surface": "file-first",
       "expectedFirstSteps": [ "navlyn_file_outline", "navlyn_inspect_file", "outline" ],
-      "avoidTools": [ "navlyn_batch", "navlyn_review_diff", "navlyn_tests_for_diff", "navlyn_public_api_diff", "navlyn_di_impact" ],
+      "avoidTools": [ "navlyn_batch", "navlyn_review", "navlyn_tests_for_diff", "navlyn_public_api_diff", "navlyn_di_impact" ],
       "acceptedStopConditions": [ "file-outline-or-follow-up" ],
       "maxToolCount": 2,
       "semanticIdentityRequired": true,
@@ -149,18 +319,52 @@
       }
     },
     {
-      "id": "route-protection",
-      "prompt": "Is this route protected?",
-      "profile": "full",
-      "expectedFirstSteps": [ "route-map", "route-impact" ],
-      "avoidTools": [ "navlyn_review_diff", "navlyn_context_pack", "navlyn_tests_for_diff" ],
-      "acceptedStopConditions": [ "route-auth-source-facts" ],
-      "maxToolCount": 2,
+      "id": "output-budget-partial-result",
+      "prompt": "Find references, but keep output small and give a rerun hint if the search is partial.",
+      "surface": "advanced-edge",
+      "expectedFirstSteps": [ "navlyn_target", "target", "navlyn_symbol_edges", "references" ],
+      "avoidTools": [ "navlyn_context_pack", "navlyn_batch" ],
+      "acceptedStopConditions": [ "partial-with-rerun-hint" ],
+      "maxToolCount": 3,
+      "semanticIdentityRequired": true,
+      "navlynExpected": true,
+      "baselineTrace": {
+        "chosenSequence": [ "navlyn_target", "navlyn_symbol_edges" ],
+        "stopCondition": "partial-with-rerun-hint",
+        "stdoutJsonValid": true,
+        "stderrClean": true
+      }
+    },
+    {
+      "id": "broad-reading-queue",
+      "prompt": "What files should be read before changing this selected symbol?",
+      "surface": "escalation",
+      "expectedFirstSteps": [ "navlyn_prepare_edit", "prepare-edit", "navlyn_target", "target" ],
+      "avoidTools": [ "navlyn_batch", "navlyn_review", "navlyn_tests_for_diff" ],
+      "acceptedStopConditions": [ "bounded-reading-queue" ],
+      "maxToolCount": 3,
+      "semanticIdentityRequired": true,
+      "navlynExpected": true,
+      "baselineTrace": {
+        "chosenSequence": [ "navlyn_prepare_edit" ],
+        "stopCondition": "bounded-reading-queue",
+        "stdoutJsonValid": true,
+        "stderrClean": true
+      }
+    },
+    {
+      "id": "public-api-release-check",
+      "prompt": "For release prep, compare public API changes against the previous tag.",
+      "surface": "release",
+      "expectedFirstSteps": [ "navlyn_public_api_diff", "public-api-diff" ],
+      "avoidTools": [ "navlyn_target", "navlyn_read", "navlyn_context_pack", "navlyn_batch" ],
+      "acceptedStopConditions": [ "api-diff-facts-returned" ],
+      "maxToolCount": 1,
       "semanticIdentityRequired": false,
       "navlynExpected": true,
       "baselineTrace": {
-        "chosenSequence": [ "route-map" ],
-        "stopCondition": "route-auth-source-facts",
+        "chosenSequence": [ "navlyn_public_api_diff" ],
+        "stopCondition": "api-diff-facts-returned",
         "stdoutJsonValid": true,
         "stderrClean": true
       }

@@ -1,0 +1,31 @@
+{
+  "requests": [
+    {
+      "id": "routes",
+      "command": "route-map",
+      "profile": "compact"
+    },
+    {
+      "id": "handler",
+      "command": "where-handled",
+      "query": "CreateOrderCommand",
+      "assumeKind": "NamedType",
+      "profile": "compact"
+    },
+    {
+      "id": "ef",
+      "command": "ef-model",
+      "entity": "Order",
+      "profile": "compact"
+    },
+    {
+      "id": "packages",
+      "command": "package-usage",
+      "package": "Microsoft.EntityFrameworkCore",
+      "namespaces": [
+        "Microsoft.EntityFrameworkCore"
+      ],
+      "profile": "compact"
+    }
+  ]
+}

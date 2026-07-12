@@ -4,6 +4,7 @@ This document captures durable local development checks, command implementation 
 
 ## Documentation Map
 
+- `docs/navlyn-workspace.md` and `docs/navlyn-workspace_ja.md`: optional workspace-configuration reference.
 - `docs/navlyn-cli-commands.md`: public CLI contract. Update this when implemented command behavior changes.
 - `docs/navlyn-mcp-server.md`: public MCP server setup, tool surface, result envelope, and boundaries.
 - `docs/navlyn-first-10-minutes.md`: short first-run onboarding path.
@@ -11,6 +12,7 @@ This document captures durable local development checks, command implementation 
 - `docs/navlyn-distribution.md`: package validation and release workflow.
 - `docs/navlyn-performance.md`: local performance measurement, MCP cost model, and release-readiness performance smoke.
 - `docs/navlyn-agent-recipes.md`: batch recipes for agents and automation.
+- `docs/navlyn-excellence-loop.md`: strict planning, execution, skeptical review, and iteration rules for 9.5+ improvement goals.
 - `docs/navlyn-github-actions.md`: PR facts workflow example.
 - `README.md`: project entry point for users. Keep it compact and current.
 - `README_ja.md`: Japanese project entry point for users.
@@ -226,7 +228,7 @@ Recommended command timeouts for automation:
 - `./scripts/test-workspace-semantics.ps1`: at least 180 seconds.
 - `./scripts/test-release.ps1`: at least 900 seconds.
 
-Observed 0.6.0 local baseline on this Windows workstation after build: restore about 1-2 seconds, build about 4 seconds, `dotnet test navlyn.slnx --no-build` about 169 seconds with target frameworks serialized, quick validation without duplicate xUnit about 13 seconds, and CLI contract core about 34 seconds. Use these as a local sanity check, not a universal budget.
+Observed 0.7.0 local baseline on this Windows workstation after build: restore about 1-2 seconds, build about 4 seconds, `dotnet test navlyn.slnx --no-build` about 169 seconds with target frameworks serialized, quick validation without duplicate xUnit about 13 seconds, and CLI contract core about 34 seconds. Use these as a local sanity check, not a universal budget.
 
 When Navlyn has already been built in the same turn, prefer validation scripts with `-NoBuild` to avoid rebuilding and to reduce the chance of `bin`/`obj` file locks.
 

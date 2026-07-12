@@ -1,6 +1,6 @@
 # Navlyn Architecture
 
-Navlyn 0.6.0 is split into shared implementation assemblies and two tool frontends. The split is meant to keep the public promise boring and inspectable: one engine, deterministic JSON, read-only facts, and no hidden edit or network surface.
+Navlyn 0.7.0 is split into shared implementation assemblies and two tool frontends. The split is meant to keep the public promise boring and inspectable: one engine, deterministic JSON, read-only facts, and no hidden edit or network surface.
 
 ## Projects
 
@@ -38,7 +38,7 @@ MCP legacy external CLI:
 
 The MCP server reuses its process, loaded assemblies, command runtime, MSBuildLocator registration, a lazy workspace cache, and a workspace-scoped `DocumentIndex` for direct reader tools. `navlyn_file_outline` seeds an in-memory candidate target map for the current server process, so immediate `navlyn_symbol_source(candidateId: "...")` follow-ups can avoid a broad candidate scan. Tools that still run through the command adapter preserve the existing CLI behavior and may load the workspace independently.
 
-The direct cache is session-local and has no file watcher. Use `navlyn_workspace_refresh` or restart the MCP server after source or project changes when freshness matters. Use `navlyn_batch` from `--tool-profile full` when several batch-supported adapter-backed facts should share one workspace load. Navlyn does not add an editing surface, network access, or arbitrary command execution.
+The direct cache is session-local and has no file watcher. Use `navlyn_workspace_refresh` or restart the MCP server after source or project changes when freshness matters. Use `navlyn_batch` when several batch-supported adapter-backed facts should share one workspace load. Navlyn does not add an editing surface, network access, or arbitrary command execution.
 
 `navlyn serve` is an opt-in local read-only daemon for workspace lifecycle requests. It accepts newline-delimited JSON over stdin/stdout, or a local named pipe when `--pipe` is supplied. CLI `workspace-status` / `workspace-refresh` and MCP `navlyn_workspace_status` / `navlyn_workspace_refresh` can connect to that pipe only when explicitly configured. If a configured daemon is unavailable, callers fall back to the normal stateless or in-process path.
 
@@ -47,3 +47,15 @@ The on-disk cache under `.navlyn/cache` is a lightweight manifest, not a seriali
 Fuzzy symbol discovery uses a workspace-scoped declaration index. The index records syntax declaration names, paths, document IDs, project IDs, generated-file status, and source spans before semantic enrichment. Common fuzzy/resolve queries first narrow syntax declarations, then enrich matching entries with Roslyn semantic facts. Enriched declarations are cached per solution, and emitted `sym:v1:` candidate IDs are recorded in a solution-fingerprint-validated candidate map so same-snapshot candidate-id follow-ups can resolve without broad declaration rediscovery.
 
 Expensive reverse-edge operations use `SymbolNavigationSearchOptions` and `SymbolNavigationSearchPlanner` to build scoped document sets before semantic search. `references` and `callers` can search `file`, `project`, `dependent-projects`, `workspace-set`, or `solution`, apply a lexical document prefilter, and return successful partial metadata when the document budget is reached. `calls` remains a local containing-member analysis path.
+
+## Release Hardening Ledger
+
+These are known architecture pressure points for future releases. They are not required for the v0.7.0 public contract because the current implementation is covered by focused tests, schemas, and CLI/MCP contract checks.
+
+| Area | Current Boundary | Future Split Trigger |
+| --- | --- | --- |
+| Ambiguity classifier | `resolve-target` computes `ambiguitySummary` additively from current candidates. | Extract when more command families need the same reason taxonomy or localized explanations. |
+| Version provider | `Directory.Build.props` centralizes package and assembly version identity; runtime envelopes read assembly informational versions. | Extract when release metadata needs richer build provenance or package manifest validation outside MSBuild. |
+| Next action builder | Fuzzy resolvers and MCP wrappers build next-action hints near command-specific logic. | Extract when recommended actions need shared policy tests across CLI, MCP, and batch. |
+| Source slice budgeter | Source/context commands own their own line/token limits. | Extract when multiple commands need one consistent cross-command source budget policy. |
+| MCP command builder policy tests | `NavlynToolCommandBuilderTests` and evals guard high-risk tool selection and argument mapping. | Broaden when a new first-class MCP tool or batch recipe changes default tool-choice behavior. |

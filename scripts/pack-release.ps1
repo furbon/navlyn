@@ -14,7 +14,33 @@ function Get-ProjectVersion {
     param([string]$ProjectPath)
 
     [xml]$projectXml = Get-Content -Raw -LiteralPath $ProjectPath
-    return [string]$projectXml.Project.PropertyGroup.Version
+    $projectVersionNode = $projectXml.SelectSingleNode('//PropertyGroup/Version')
+    $projectVersion = if ($null -eq $projectVersionNode) { '' } else { [string]$projectVersionNode.InnerText }
+    if (![string]::IsNullOrWhiteSpace($projectVersion)) {
+        return $projectVersion
+    }
+
+    $directory = Split-Path -Parent $ProjectPath
+    while (![string]::IsNullOrWhiteSpace($directory)) {
+        $propsPath = Join-Path $directory 'Directory.Build.props'
+        if (Test-Path -LiteralPath $propsPath) {
+            [xml]$propsXml = Get-Content -Raw -LiteralPath $propsPath
+            $propsVersionNode = $propsXml.SelectSingleNode('//PropertyGroup/Version')
+            $propsVersion = if ($null -eq $propsVersionNode) { '' } else { [string]$propsVersionNode.InnerText }
+            if (![string]::IsNullOrWhiteSpace($propsVersion)) {
+                return $propsVersion
+            }
+        }
+
+        $parent = Split-Path -Parent $directory
+        if ($parent -eq $directory) {
+            break
+        }
+
+        $directory = $parent
+    }
+
+    throw "Could not resolve Version for $ProjectPath."
 }
 
 function Get-FileSha256 {

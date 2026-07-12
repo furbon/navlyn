@@ -6,12 +6,6 @@
           "navlyn": {
             "type": "stdio",
             "command": "navlyn-mcp",
-            "args": [
-              "--workspace",
-              "${workspaceFolder}/navlyn.workspace.json",
-              "--tool-profile",
-              "reader"
-            ],
             "cwd": "${workspaceFolder}"
           }
         }

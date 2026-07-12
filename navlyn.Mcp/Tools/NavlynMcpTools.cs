@@ -9,6 +9,11 @@ namespace Navlyn.Mcp.Tools;
 [McpServerToolType]
 internal static class NavlynMcpTools
 {
+    public const string TargetTool = "navlyn_target";
+    public const string ReadTool = "navlyn_read";
+    public const string PrepareEditTool = "navlyn_prepare_edit";
+    public const string VerifyEditTool = "navlyn_verify_edit";
+    public const string ReviewTool = "navlyn_review";
     public const string WorkspaceSummaryTool = "navlyn_workspace_summary";
     public const string WorkspaceStatusTool = "navlyn_workspace_status";
     public const string WorkspaceRefreshTool = "navlyn_workspace_refresh";
@@ -38,6 +43,21 @@ internal static class NavlynMcpTools
     public const string ConfidenceLedgerTool = "navlyn_confidence_ledger";
     public const string BatchTool = "navlyn_batch";
 
+    private const string TargetDescription =
+        "Canonical first tool for C# or Visual Basic symbol intent. Use when the user names a symbol, gives a candidateId, or gives an exact source position and the agent needs one selected target, ambiguity status, confidence ledger, and safe next tools. Do not use for comments, strings, docs, or arbitrary text search.";
+
+    private const string ReadDescription =
+        "Canonical bounded source reader for one already-selected C# or Visual Basic target by candidateId or exact source position. Use after navlyn_target when source text is needed. Do not use for broad file reading, repository search, diff review, or generated/non-Roslyn text.";
+
+    private const string PrepareEditDescription =
+        "Canonical pre-edit evidence tool for one intended C# or Visual Basic target. It resolves the target, reads bounded source/context/test evidence, reports confidence and known unknowns, and returns the post-edit guard command. Use immediately before editing one semantic target.";
+
+    private const string VerifyEditDescription =
+        "Canonical post-edit guard. Use after editing to compare the actual Git diff with a saved preflight anchor or candidateId, fail closed on wrong-target risk, and return deterministic guard JSON. It does not run tests or edit files.";
+
+    private const string ReviewDescription =
+        "Canonical diff-review evidence tool. Use only for an actual Git diff, PR, staged changes, or working-tree review. Returns changed symbols, impact, diagnostics, related tests, findings, limits, and next actions; do not use for single-symbol reading.";
+
     private const string WorkspaceSummaryDescription =
         "Use only when project structure, target frameworks, package references, test relationships, or MSBuild file facts would change the answer. Do not run as a default first step for single-file review, specific symbol lookup, comments, strings, docs, or non-Roslyn-source files. Returns repo-graph JSON; use profile compact when a small workspace map is enough.";
 
@@ -54,22 +74,22 @@ internal static class NavlynMcpTools
         "Use when you have an approximate C# or Visual Basic symbol name and need deterministic candidates or candidate ids. Do not use for comments, strings, markdown, generated artifacts, or non-Roslyn-source content. Ambiguous results are returned as candidates; do not merge them. Follow with navlyn_about_symbol, navlyn_related_files, or navlyn_impact using candidateId.";
 
     private const string ResolveTargetDescription =
-        "Use as the standard first symbol entry when an agent has an approximate C# or Visual Basic name, a candidateId, or an exact source position and needs one small target envelope with recommended next actions. Prefer navlyn_find_symbol when the user explicitly wants a candidate list. Do not use for comments, strings, docs, non-Roslyn-source files, or arbitrary command execution.";
+        "Advanced compatibility target resolver. Prefer canonical navlyn_target for normal symbol intent. Use this only when an existing integration expects the resolve-target command shape, or when a lower-level compatibility result is explicitly needed. Prefer navlyn_find_symbol when the user explicitly wants a candidate list. Do not use for comments, strings, docs, non-Roslyn-source files, or arbitrary command execution.";
 
     private const string FileOutlineDescription =
         "Use for a semantic outline of one known C# or Visual Basic source file when a file map is useful before deeper symbol inspection. Returns outline entries with reusable candidateId values. Do not use for tests, impact analysis, repository overview, comments, strings, docs, non-Roslyn-source files, or arbitrary command execution.";
 
     private const string SymbolSourceDescription =
-        "Use when one selected C# or Visual Basic symbol needs bounded source text by candidateId or exact file/line/column. Prefer this over navlyn_context_pack for a single declaration, body, members, XML doc, or attributes view. Do not use for broad file reading, impact analysis, tests, or diff review.";
+        "Advanced compatibility source reader for one selected C# or Visual Basic symbol by candidateId or exact file/line/column. Prefer canonical navlyn_read for normal bounded source reading. Use this only when an existing integration expects the symbol-source command shape or a lower-level view is explicitly needed. Do not use for broad file reading, impact analysis, tests, or diff review.";
 
     private const string SymbolEdgesDescription =
-        "Use when one selected C# or Visual Basic symbol needs direct relationship edges: references, callers, calls, or implementations. Prefer candidateId from navlyn_file_outline, navlyn_find_symbol, or navlyn_resolve_target. References and callers are scoped expensive searches; set scope/maxDocuments for broad questions and prefer calls for cheap local outgoing edges. Use filters and limits for noisy symbols. Do not use for definition lookup, source text, test discovery, or static risk analysis.";
+        "Use when one selected C# or Visual Basic symbol needs direct relationship edges: references, callers, calls, or implementations. Prefer candidateId from canonical navlyn_target or navlyn_file_outline. References and callers are scoped expensive searches; set scope/maxDocuments for broad questions and prefer calls for cheap local outgoing edges. Use filters and limits for noisy symbols. Do not use for definition lookup, source text, test discovery, or static risk analysis.";
 
     private const string InspectFileDescription =
         "Use for a compact semantic inspection of one known C# or Visual Basic source file. It returns the same bounded outline facts as navlyn_file_outline and does not include tests, impact, diagnostics, context packs, or raw file text.";
 
     private const string AboutSymbolDescription =
-        "Use when one selected C# or Visual Basic symbol needs a compact summary. Use profile light for first-pass definition/member facts; use full only when reference summary and shallow relations are needed. Prefer candidateId from navlyn_find_symbol or navlyn_resolve_target. Do not use for diff review or as a repository overview; ambiguous queries return candidate information without synthesized combined facts.";
+        "Use when one selected C# or Visual Basic symbol needs a compact summary. Use profile light for first-pass definition/member facts; use full only when reference summary and shallow relations are needed. Prefer candidateId from canonical navlyn_target. Do not use for diff review or as a repository overview; ambiguous queries return candidate information without synthesized combined facts.";
 
     private const string RelatedFilesDescription =
         "Use when you need a file-first map of files related to a selected C# or Visual Basic symbol. Do not use for change-risk analysis; use navlyn_impact. Results are bounded by CLI limits and preserve truncation fields. Follow with navlyn_about_symbol or navlyn_impact.";
@@ -81,7 +101,7 @@ internal static class NavlynMcpTools
         "Use to understand how a symbol can be reached from static callers or to inspect framework-discovered entrypoints. Symbol mode calls entrypoints; framework mode calls framework-entrypoints. Do not use for full impact; use navlyn_impact. Results are heuristic and bounded.";
 
     private const string ExactNavigationDescription =
-        "Use after navlyn_find_symbol or when you already have an exact C# or Visual Basic source position and need precise lower-level Roslyn navigation. Supports allowlist operations: definition, references, callers, calls, implementations, type_hierarchy, and symbol_info. References and callers are scoped expensive searches; calls is local to the containing member. Prefer navlyn_symbol_edges for references/callers/calls/implementations and navlyn_symbol_source for bounded source text. Do not use for broad repository search, diff review, or arbitrary CLI execution.";
+        "Use after canonical navlyn_target or when you already have an exact C# or Visual Basic source position and need precise lower-level Roslyn navigation. Supports allowlist operations: definition, references, callers, calls, implementations, type_hierarchy, and symbol_info. References and callers are scoped expensive searches; calls is local to the containing member. Prefer navlyn_symbol_edges for references/callers/calls/implementations and navlyn_read for bounded source text. Do not use for broad repository search, diff review, or arbitrary CLI execution.";
 
     private const string TestsForSymbolDescription =
         "Use only when planning or reviewing an edit and related test candidates are needed for a selected C# or Visual Basic symbol. Prefer candidateId from navlyn_find_symbol or an exact file/line/column. Do not use for first-pass comprehension, and do not treat this as a test runner; Navlyn reports static facts only.";
@@ -96,16 +116,16 @@ internal static class NavlynMcpTools
         "Use for release or review checks when you need source-level public/protected API changes between Git refs. Requires base. Do not use for runtime binary compatibility proof; this reports Navlyn's source-level public API facts.";
 
     private const string ReviewDiffDescription =
-        "Use only for Git diff, PR, staged, or working-tree change investigation. Returns changed symbols, impact facts, diagnostics, related tests, findings, and next actions. Do not use for single-file review, general code review with no diff, or prose review comments; Navlyn returns facts only. Escalate to navlyn_context_pack diff mode only when bounded reading material is needed.";
+        "Advanced compatibility diff-review evidence tool. Prefer canonical navlyn_review for normal Git diff, PR, staged, or working-tree change investigation. Use this only when an existing integration expects the review-diff command shape. It returns changed symbols, impact facts, diagnostics, related tests, findings, and next actions. Do not use for single-file review, general code review with no diff, or prose review comments; Navlyn returns facts only.";
 
     private const string ContextPackDescription =
-        "Use as an escalation tool when normal file reads or smaller Navlyn facts are not enough and the agent needs a bounded reading queue before review, modification, or explanation. Supports query, candidateId, or diff mode, plus changeKind ranking hints. Do not use just to list candidates or as a default first step; use navlyn_find_symbol, navlyn_resolve_target, or exact navigation first.";
+        "Use as an escalation tool when normal file reads or smaller Navlyn facts are not enough and the agent needs a bounded reading queue before review, modification, or explanation. Supports query, candidateId, or diff mode, plus changeKind ranking hints. Do not use just to list candidates or as a default first step; use canonical navlyn_target, navlyn_read, navlyn_review, or exact navigation first.";
 
     private const string EditPreflightDescription =
-        "Use immediately before editing one intended C# or Visual Basic target. It anchors fuzzy intent, returns bounded source/context/test evidence, risk, known unknowns, and the post-edit guard command. Do not use for broad repository review or after the edit.";
+        "Advanced compatibility pre-edit evidence tool. Prefer canonical navlyn_prepare_edit immediately before editing one intended C# or Visual Basic target. Use this only when an existing integration expects the edit-preflight command shape. Do not use for broad repository review or after the edit.";
 
     private const string PostEditGuardDescription =
-        "Use after an edit to compare a saved preflight anchor or candidateId with the current diff. It returns wrong-target risk, changed symbols, score reasons, and a policy pass/fail result.";
+        "Advanced compatibility post-edit guard. Prefer canonical navlyn_verify_edit after an edit to compare a saved preflight anchor or candidateId with the current diff. Use this only when an existing integration expects the post-edit-guard command shape.";
 
     private const string WrongSymbolGuardDescription =
         "Use when no full preflight file exists and the agent needs to compare intended C# or Visual Basic symbol intent with changed symbols. It is a focused wrong-symbol risk check for CI or agent policy.";
@@ -179,6 +199,144 @@ internal static class NavlynMcpTools
             services,
             DoctorTool,
             NavlynToolCommandBuilder.Doctor(),
+            cancellationToken);
+    }
+
+    [McpServerTool(Name = TargetTool, Title = "Navlyn Target", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(TargetDescription)]
+    public static Task<CallToolResult> Target(
+        IServiceProvider services,
+        [Description("Approximate symbol name query. Mutually exclusive with candidateId and file/line/column.")] string? query = null,
+        [Description("Candidate id returned by a previous Navlyn tool. Mutually exclusive with query and file/line/column.")] string? candidateId = null,
+        [Description("C# or Visual Basic source file target. Must be provided with line and column when query and candidateId are omitted.")] string? file = null,
+        [Description("1-based source line. Must be provided with file and column when source position mode is used.")] int? line = null,
+        [Description("1-based source column. Must be provided with file and line when source position mode is used.")] int? column = null,
+        [Description("Single Roslyn SymbolKind hint for query mode. Mutually exclusive with assumeKinds.")] string? assumeKind = null,
+        [Description("Roslyn SymbolKind hints for query mode. Mutually exclusive with assumeKind.")] string[]? assumeKinds = null,
+        [Description("Query match mode: smart, exact, contains, or regex.")] string? match = null,
+        [Description("Use case-sensitive query matching.")] bool? caseSensitive = null,
+        [Description("Single project filter. Mutually exclusive with projects.")] string? project = null,
+        [Description("Project filters. Mutually exclusive with project.")] string[]? projects = null,
+        [Description("Exclude generated code candidates.")] bool? excludeGenerated = null,
+        [Description("Candidate limit. Must be 1 or greater.")] int? limit = null,
+        [Description("Candidate policy: fail or select.")] string? candidatePolicy = null,
+        [Description("Minimum confidence: high, medium, or low.")] string? minConfidence = null,
+        [Description("Include selection explanation in the CLI result.")] bool? explainSelection = null,
+        CancellationToken cancellationToken = default)
+    {
+        return RunAsync(
+            services,
+            TargetTool,
+            NavlynToolCommandBuilder.Target(query, candidateId, file, line, column, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, limit, candidatePolicy, minConfidence, explainSelection),
+            cancellationToken);
+    }
+
+    [McpServerTool(Name = ReadTool, Title = "Navlyn Read", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(ReadDescription)]
+    public static Task<CallToolResult> Read(
+        IServiceProvider services,
+        [Description("Candidate id from navlyn_target or another Navlyn tool. Mutually exclusive with file/line/column.")] string? candidateId = null,
+        [Description("C# or Visual Basic source file. Must be provided with line and column when candidateId is omitted.")] string? file = null,
+        [Description("1-based source line.")] int? line = null,
+        [Description("1-based source column.")] int? column = null,
+        [Description("Optional project context for candidate/source-position resolution.")] string? project = null,
+        [Description("Exclude generated source locations.")] bool? excludeGenerated = null,
+        [Description("Source view: signature, declaration, body, members, xml-doc, or attributes.")] string? view = null,
+        [Description("Maximum source lines per slice. Must be 1 or greater.")] int? maxLines = null,
+        [Description("Approximate token budget per slice. Must be 1 or greater.")] int? budgetTokens = null,
+        CancellationToken cancellationToken = default)
+    {
+        return RunAsync(
+            services,
+            ReadTool,
+            NavlynToolCommandBuilder.Read(candidateId, file, line, column, project, excludeGenerated, view, maxLines, budgetTokens),
+            cancellationToken);
+    }
+
+    [McpServerTool(Name = PrepareEditTool, Title = "Navlyn Prepare Edit", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(PrepareEditDescription)]
+    public static Task<CallToolResult> PrepareEdit(
+        IServiceProvider services,
+        string? query = null,
+        string? candidateId = null,
+        string? file = null,
+        int? line = null,
+        int? column = null,
+        string? assumeKind = null,
+        string[]? assumeKinds = null,
+        string? match = null,
+        bool? caseSensitive = null,
+        string? project = null,
+        string[]? projects = null,
+        bool? excludeGenerated = null,
+        string? goal = null,
+        string? changeKind = null,
+        int? budgetTokens = null,
+        int? itemLimit = null,
+        int? referenceLimit = null,
+        int? testLimit = null,
+        int? candidateLimit = null,
+        string? candidatePolicy = null,
+        string? minConfidence = null,
+        bool? explainSelection = null,
+        CancellationToken cancellationToken = default)
+    {
+        return RunAsync(
+            services,
+            PrepareEditTool,
+            NavlynToolCommandBuilder.PrepareEdit(query, candidateId, file, line, column, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, goal, changeKind, budgetTokens, itemLimit, referenceLimit, testLimit, candidateLimit, candidatePolicy, minConfidence, explainSelection),
+            cancellationToken);
+    }
+
+    [McpServerTool(Name = VerifyEditTool, Title = "Navlyn Verify Edit", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(VerifyEditDescription)]
+    public static Task<CallToolResult> VerifyEdit(
+        IServiceProvider services,
+        string? candidateId = null,
+        string? preflight = null,
+        string? @base = null,
+        string? head = null,
+        bool? staged = null,
+        bool? includeUnstaged = null,
+        string? project = null,
+        string[]? projects = null,
+        bool? excludeGenerated = null,
+        int? symbolLimit = null,
+        string? failOnRisk = null,
+        CancellationToken cancellationToken = default)
+    {
+        return RunAsync(
+            services,
+            VerifyEditTool,
+            NavlynToolCommandBuilder.VerifyEdit(candidateId, preflight, @base, head, staged, includeUnstaged, project, projects, excludeGenerated, symbolLimit, failOnRisk),
+            cancellationToken);
+    }
+
+    [McpServerTool(Name = ReviewTool, Title = "Navlyn Review", ReadOnly = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true, OutputSchemaType = typeof(NavlynToolResult))]
+    [Description(ReviewDescription)]
+    public static Task<CallToolResult> Review(
+        IServiceProvider services,
+        string? @base = null,
+        string? head = null,
+        bool? staged = null,
+        bool? includeUnstaged = null,
+        string? project = null,
+        string[]? projects = null,
+        bool? excludeGenerated = null,
+        int? symbolLimit = null,
+        int? impactLimit = null,
+        int? diagnosticLimit = null,
+        int? relatedTestLimit = null,
+        int? depth = null,
+        bool? includeSnippets = null,
+        int? snippetLines = null,
+        string? profile = null,
+        CancellationToken cancellationToken = default)
+    {
+        return RunAsync(
+            services,
+            ReviewTool,
+            NavlynToolCommandBuilder.Review(@base, head, staged, includeUnstaged, project, projects, excludeGenerated, symbolLimit, impactLimit, diagnosticLimit, relatedTestLimit, depth, includeSnippets, snippetLines, profile),
             cancellationToken);
     }
 
@@ -256,7 +414,7 @@ internal static class NavlynMcpTools
     [Description(SymbolSourceDescription)]
     public static Task<CallToolResult> SymbolSource(
         IServiceProvider services,
-        [Description("Candidate id returned by navlyn_file_outline, navlyn_find_symbol, or navlyn_resolve_target. Mutually exclusive with file/line/column.")] string? candidateId = null,
+        [Description("Candidate id returned by navlyn_target, navlyn_file_outline, or another Navlyn symbol tool. Mutually exclusive with file/line/column.")] string? candidateId = null,
         [Description("C# or Visual Basic source file target. Must be provided with line and column when candidateId is omitted.")] string? file = null,
         [Description("1-based source line. Must be provided with file and column when candidateId is omitted.")] int? line = null,
         [Description("1-based source column. Must be provided with file and line when candidateId is omitted.")] int? column = null,
@@ -279,7 +437,7 @@ internal static class NavlynMcpTools
     public static Task<CallToolResult> SymbolEdges(
         IServiceProvider services,
         [Description("Relationship operation: references, callers, calls, or implementations.")] string operation,
-        [Description("Candidate id returned by navlyn_file_outline, navlyn_find_symbol, or navlyn_resolve_target. Mutually exclusive with file/line/column.")] string? candidateId = null,
+        [Description("Candidate id returned by navlyn_target, navlyn_file_outline, or another Navlyn symbol tool. Mutually exclusive with file/line/column.")] string? candidateId = null,
         [Description("C# or Visual Basic source file target. Must be provided with line and column when candidateId is omitted.")] string? file = null,
         [Description("1-based source line. Must be provided with file and column when candidateId is omitted.")] int? line = null,
         [Description("1-based source column. Must be provided with file and line when candidateId is omitted.")] int? column = null,

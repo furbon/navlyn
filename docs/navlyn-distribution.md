@@ -37,8 +37,8 @@ Installed command names are:
 First smoke after install:
 
 ```powershell
-navlyn check --workspace path/to/YourRepo.slnx
-navlyn repo-graph --workspace path/to/YourRepo.slnx --profile compact
+navlyn doctor --workspace auto
+navlyn repo-graph --workspace auto --profile compact
 navlyn-mcp --help
 ```
 
@@ -48,10 +48,10 @@ For teams and agent workspaces, prefer a repository-local .NET tool manifest whe
 
 ```powershell
 dotnet new tool-manifest
-dotnet tool install navlyn --version 0.6.0
-dotnet tool install navlyn-mcp --version 0.6.0
+dotnet tool install navlyn --version 0.7.0
+dotnet tool install navlyn-mcp --version 0.7.0
 dotnet tool restore
-dotnet tool run navlyn -- check --workspace path/to/YourRepo.slnx
+dotnet tool run navlyn -- doctor --workspace auto
 ```
 
 Commit `.config/dotnet-tools.json` after reviewing the exact versions. A copyable manifest shape lives in [`../examples/install/dotnet-tools.json`](../examples/install/dotnet-tools.json).
@@ -62,24 +62,26 @@ Local MCP server configuration can still invoke `navlyn-mcp` when the restored l
 
 ## MCP Client Setup Examples
 
-The installed stdio server shape is:
+The installed stdio server shape for a normal repository with one top-level workspace candidate is:
 
 ```json
 {
   "command": "navlyn-mcp",
-  "args": ["--workspace", "path/to/YourRepo.slnx", "--tool-profile", "reader"]
+  "cwd": "."
 }
 ```
+
+Set `cwd` to the repository root, or pass `args: ["--working-directory", "."]` when the MCP client cannot set `cwd`. Add `args: ["--workspace", "path/to/YourRepo.slnx"]` only when automatic workspace discovery is ambiguous or the repository policy requires one explicit workspace.
 
 For VS Code workspace configuration, use `.vscode/mcp.json` with a `servers` object. See [`../examples/install/vscode-mcp.json`](../examples/install/vscode-mcp.json).
 
 For local development from this repository, use [`../examples/mcp/local-development.json`](../examples/mcp/local-development.json). For installed tools, use [`../examples/mcp/dotnet-tool.json`](../examples/mcp/dotnet-tool.json).
 
-When an agent needs several facts from one workspace, prefer CLI `navlyn batch`, or MCP `navlyn_batch` from `--tool-profile full`, with examples from [`../examples/batch`](../examples/batch). This reduces repeated workspace load cost after the needed facts are known.
+When an agent needs several facts from one workspace, prefer CLI `navlyn batch`, or MCP `navlyn_batch`, with examples from [`../examples/batch`](../examples/batch). This reduces repeated workspace load cost after the needed facts are known.
 
 ## Release Identity
 
-The current public release target is `0.6.0`.
+The current public release target is `0.7.0`.
 
 Keep `navlyn` and `navlyn-mcp` versions synchronized for the initial public releases. Both packages should use the same repository URL, license expression, README, package icon, author, and release notes discipline.
 
@@ -117,7 +119,7 @@ Run a local pack/install smoke before publishing:
 The script packs both tools, installs them from a local package source, and verifies three install shapes for each requested target framework: `navlyn` only, `navlyn-mcp` only, and both tools together. It runs:
 
 - `navlyn --help`
-- `navlyn check --workspace navlyn.slnx`
+- `navlyn doctor --workspace navlyn.slnx`
 - `navlyn repo-graph --workspace navlyn.slnx --profile compact`
 - `navlyn-mcp --help`
 - a minimal installed-tool MCP stdio smoke without passing `--navlyn-executable`
@@ -173,7 +175,7 @@ The workflow must run release validation before packing and publishing. Normal `
 
 After packages are published and install smoke passes from NuGet:
 
-1. Create a `v0.6.0` tag.
+1. Create a `v0.7.0` tag.
 2. Create a GitHub Release using the `CHANGELOG.md` entry.
 3. Link to the NuGet install commands.
 4. Optionally attach `navlyn-release-pack.json` and package artifacts for traceability.
@@ -185,11 +187,11 @@ Do not create the public release before package smoke and dry-run publish have s
 After NuGet indexing completes, test installation from the public feed in a clean shell:
 
 ```powershell
-dotnet tool install --global navlyn --version 0.6.0
-dotnet tool install --global navlyn-mcp --version 0.6.0
+dotnet tool install --global navlyn --version 0.7.0
+dotnet tool install --global navlyn-mcp --version 0.7.0
 navlyn --help
 navlyn-mcp --help
-navlyn check --workspace path/to/YourRepo.slnx
+navlyn doctor --workspace auto
 ```
 
 For local machines that already have the tools installed, use a temporary `--tool-path` instead of global install.

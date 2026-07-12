@@ -21,10 +21,10 @@ Before this agent edits, what source-level C# or Visual Basic facts prove it is 
 
 That is why the core loop is anchor-first:
 
-1. `resolve-target` turns fuzzy intent into a selected Roslyn symbol and a reusable `candidateId`.
+1. `target` turns fuzzy intent into a selected Roslyn symbol and a reusable `candidateId`.
 2. File-first and selected-symbol commands return bounded source, references, callers, implementations, tests, DI, route, or impact facts.
 3. The edit happens outside Navlyn.
-4. `post-edit-guard`, `wrong-symbol-guard`, or `review-diff` checks what actually changed.
+4. `verify-edit`, `wrong-symbol-guard`, or `review` checks what actually changed.
 
 The value is not a larger checklist. The value is keeping the agent attached to one semantic target until the returned facts justify expanding the scope.
 
@@ -63,7 +63,7 @@ Navlyn helps agents reason about overloads, partial declarations, target framewo
 For agent-platform or MCP users:
 
 ```text
-Navlyn gives an agent narrow, profile-gated semantic tools over stdio. The default reader profile supports setup checks, file outlines, target resolution, bounded source, and selected-symbol edges; edit and review profiles are opt-in.
+Navlyn gives an agent one stable read-only semantic tool surface over stdio. Setup, file outline, target resolution, bounded source, edit evidence, diff review, DI, related-test, and public API facts are available without restarting into task modes.
 ```
 
 ## What Not To Claim

@@ -5,9 +5,7 @@
       "command": "navlyn-mcp",
       "args": [
         "--workspace",
-        "${workspaceFolder}/YourRepo.code-workspace",
-        "--tool-profile",
-        "reader"
+        "${workspaceFolder}/YourRepo.code-workspace"
       ],
       "cwd": "${workspaceFolder}"
     }

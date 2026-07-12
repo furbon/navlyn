@@ -14,7 +14,7 @@ internal static class ReviewDiffCommand
     private const int DefaultDepth = 2;
     private const int DefaultSnippetLines = 1;
 
-    public static Command Create()
+    public static Command Create(string commandName = "review-diff", string? description = null)
     {
         Option<string?> baseOption = DiffCommandSupport.CreateBaseOption();
         Option<string?> headOption = DiffCommandSupport.CreateHeadOption();
@@ -32,10 +32,11 @@ internal static class ReviewDiffCommand
         Option<string> profileOption = OutputProfile.CreateOption();
 
         return WorkspaceCommand.Create(
-            "review-diff",
-            "Create a deterministic review facts pack for the current diff.",
+            commandName,
+            description ?? "Create a deterministic review facts pack for the current diff.",
             [baseOption, headOption, stagedOption, includeUnstagedOption, projectOption, excludeGeneratedOption, symbolLimitOption, impactLimitOption, diagnosticLimitOption, relatedTestLimitOption, depthOption, includeSnippetsOption, snippetLinesOption, profileOption],
             (workspace, parseResult, cancellationToken) => ExecuteAsync(
+                commandName,
                 workspace,
                 parseResult.GetValue(baseOption),
                 parseResult.GetValue(headOption),
@@ -55,6 +56,7 @@ internal static class ReviewDiffCommand
     }
 
     private static async Task<int> ExecuteAsync(
+        string commandName,
         LoadedWorkspace workspace,
         string? baseRef,
         string? headRef,
@@ -111,7 +113,7 @@ internal static class ReviewDiffCommand
             return DiffCommandSupport.WriteError(result.Error);
         }
 
-        ConsoleJsonWriter.Write(OutputProfile.Format(workspace, "review-diff", profile, result.Result!, new
+        ConsoleJsonWriter.Write(OutputProfile.Format(workspace, commandName, profile, result.Result!, new
         {
             baseRef,
             headRef,

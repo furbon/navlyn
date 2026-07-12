@@ -1,6 +1,7 @@
 ﻿using System.CommandLine;
 using System.CommandLine.Parsing;
 using Navlyn.Diagnostics;
+using Navlyn.Paths;
 using Navlyn.Workspaces;
 
 namespace Navlyn.Cli.Commands;
@@ -81,7 +82,7 @@ internal static class DoctorCommand
                 Name: project.Name,
                 Path: project.Path,
                 TargetFramework: project.TargetFramework,
-                AssetsPresent: ProjectAssetsPresent(project.Path)))];
+                AssetsPresent: ProjectAssetsPresent(project.Path, loadedWorkspace.FullPath)))];
 
         checks.Add(new DoctorCheck(
             Id: "restore-assets",
@@ -126,11 +127,11 @@ internal static class DoctorCommand
             Checks: checks,
             RecommendedFirstCommands: [
                 $"navlyn doctor --workspace {QuoteWorkspace(loadedWorkspace?.DisplayPath ?? workspaceInputText)}",
-                $"navlyn resolve-target --workspace {QuoteWorkspace(loadedWorkspace?.DisplayPath ?? workspaceInputText)} --query <SymbolName>",
-                $"navlyn edit-preflight --workspace {QuoteWorkspace(loadedWorkspace?.DisplayPath ?? workspaceInputText)} --query <SymbolName> --goal \"describe the intended edit\" --change-kind behavior"
+                $"navlyn target --workspace {QuoteWorkspace(loadedWorkspace?.DisplayPath ?? workspaceInputText)} --query <SymbolName>",
+                $"navlyn prepare-edit --workspace {QuoteWorkspace(loadedWorkspace?.DisplayPath ?? workspaceInputText)} --query <SymbolName> --goal \"describe the intended edit\" --change-kind behavior"
             ],
             NextAction: workspaceOk
-                ? "Resolve one intended C# or Visual Basic symbol with navlyn resolve-target, then gather bounded evidence before editing."
+                ? "Resolve one intended C# or Visual Basic symbol with navlyn target, then gather bounded evidence before editing."
                 : GetWorkspaceRepairHint(loadResult.Error!.DiagnosticId, workspaceInputText));
 
         ConsoleJsonWriter.Write(result);
@@ -143,16 +144,15 @@ internal static class DoctorCommand
         return workspace.Contains(' ', StringComparison.Ordinal) ? $"\"{workspace}\"" : workspace;
     }
 
-    private static bool? ProjectAssetsPresent(string? projectPath)
+    private static bool? ProjectAssetsPresent(string? projectPath, string workspaceFullPath)
     {
         if (string.IsNullOrWhiteSpace(projectPath))
         {
             return null;
         }
 
-        string fullPath = Path.IsPathRooted(projectPath)
-            ? projectPath
-            : Path.GetFullPath(projectPath);
+        IReadOnlyList<string> candidates = PathDisplay.GetInputPathCandidates(projectPath, workspaceFullPath);
+        string fullPath = candidates.FirstOrDefault(File.Exists) ?? candidates[0];
         string? directory = Path.GetDirectoryName(fullPath);
         return directory is not null && File.Exists(Path.Combine(directory, "obj", "project.assets.json"));
     }

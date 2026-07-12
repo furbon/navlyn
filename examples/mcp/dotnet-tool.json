@@ -1,9 +1,4 @@
 {
   "command": "navlyn-mcp",
-  "args": [
-    "--workspace",
-    "navlyn.workspace.json",
-    "--tool-profile",
-    "reader"
-  ]
+  "cwd": "."
 }

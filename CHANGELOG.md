@@ -2,6 +2,15 @@
 
 All notable public release changes for Navlyn are tracked here.
 
+## 0.7.0 - 2026-07-12
+
+Public release preparation for Navlyn as a read-only semantic evidence layer for C#/.NET coding agents.
+
+- Centralized version identity across the CLI, MCP server, shared assemblies, package metadata, workflow envelopes, and workspace status facts.
+- Updated first-run README and setup guidance around the shortest path from install to `doctor`, `resolve-target`, selected-source evidence, edit preflight, and post-edit diff review.
+- Expanded release-readiness documentation for reproducible demos, fixture-backed case studies, discovery channels, schema/contract policy, freshness handling, and MCP setup boundaries.
+- Kept the public contract source-level, bounded, facts-only, and read-only. Navlyn still does not edit files, run tests, upload source, scan security issues, or prove runtime behavior.
+
 ## 0.6.0 - 2026-07-05
 
 Release candidate for agent preflight onboarding, wrong-symbol edit evidence loops, performance baselines, and release identity.
@@ -10,6 +19,7 @@ Release candidate for agent preflight onboarding, wrong-symbol edit evidence loo
 - Added positioning guidance that explains Navlyn as read-only C# semantic evidence before edit, distinct from `rg`, LSP, Roslyn analyzers, generic MCP search, editing MCP servers, CI review bots, and hosted code search.
 - Added agent evidence eval guidance for wrong-symbol avoidance, pre-edit anchors, post-edit changed-symbol checks, tool-call count, JSON validity, stderr cleanliness, latency, output size, and expected-file presence.
 - Refreshed README and README_ja around the three practical agent workflows: anchor the intended symbol, build only the needed reading queue, and verify the actual diff after editing.
+- Changed MCP startup to expose one stable read-only tool surface by default. Old `--tool-profile reader|review|edit|full` values remain accepted as deprecated compatibility aliases and no longer hide tools.
 - Stabilized multi-target xUnit execution by disabling target-framework parallelism for the test project, avoiding MSBuild workspace load conflicts during standard `dotnet test navlyn.slnx --no-build` validation.
 - Updated performance documentation with a 0.6.0 local baseline, performance acceptance criteria, and guidance for MCP, direct CLI, diff, batch, daemon, cache, parallel, and multi-workspace smoke checks.
 - Synchronized package versions, install examples, client setup, architecture/distribution/discovery docs, MCP test client metadata, package smoke metadata, and package release notes for `navlyn` and `navlyn-mcp` 0.6.0.

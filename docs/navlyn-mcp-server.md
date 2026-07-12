@@ -1,6 +1,6 @@
 # Navlyn MCP Server
 
-`navlyn-mcp` gives MCP clients a read-only C#-first .NET semantic evidence surface with Roslyn-backed Visual Basic support. It is designed for agents that should inspect code with Roslyn/MSBuild facts before they edit, review, or explain it.
+`navlyn-mcp` gives MCP clients a read-only C#-first .NET semantic evidence surface with Roslyn-backed Visual Basic support. It is designed for agents that should inspect code with Roslyn/MSBuild facts before they edit, review, or explain it. For installation and client-specific copyable files, start with the [README](../README.md#use-with-mcp).
 
 The server is intentionally facts-only:
 
@@ -22,30 +22,42 @@ Use `navlyn-mcp` when an agent needs a semantic C# or Visual Basic fact that tex
 | Need | Start With |
 | --- | --- |
 | "Is this repo ready for Navlyn?" | `navlyn_doctor` |
-| "Which symbol did the user mean?" | `navlyn_resolve_target` |
+| "Which symbol did the user mean?" | `navlyn_target` |
 | "What is in this C# or Visual Basic file?" | `navlyn_file_outline` |
-| "Show the exact source for this symbol." | `navlyn_symbol_source` |
+| "Show the exact source for this symbol." | `navlyn_read` |
 | "Who references or calls this selected symbol?" | `navlyn_symbol_edges` |
 | "What workspace/project context matters?" | `navlyn_workspace_summary` |
-| "What evidence should an agent gather before editing?" | `navlyn_edit_preflight` in `edit` profile |
-| "Did the edit hit the intended symbol?" | `navlyn_post_edit_guard` or `navlyn_wrong_symbol_guard` in `edit` or `review` profile |
-| "What does this actual Git diff affect?" | `navlyn_review_diff` in `review` profile |
+| "What evidence should an agent gather before editing?" | `navlyn_prepare_edit` |
+| "Did the edit hit the intended symbol?" | `navlyn_verify_edit` |
+| "What does this actual Git diff affect?" | `navlyn_review` |
 | "What should the agent read before editing?" | `navlyn_context_pack` only after smaller facts show it is needed |
 
 Use `rg`, normal file reads, or editor tools for comments, prose docs, strings, generated artifacts, and non-Roslyn-source content. Navlyn's MCP server is a semantic C#-first .NET facts provider, not a general repository search server.
 
-The default `reader` profile is deliberately narrow so agents do not treat Navlyn as a checklist. Broader review, edit, and full profiles are opt-in.
+Navlyn MCP exposes one stable read-only semantic tool surface. The server selects one workspace at startup, either by default auto discovery or an explicit `--workspace`; agents should choose the smallest relevant tool from tool descriptions, schemas, and returned evidence instead of asking humans to select a startup mode.
 
 ## Starting The Server
 
-Installed .NET tool command shape:
+Installed .NET tool command shape for a normal repository with one top-level workspace candidate, when the MCP client launches the server from the repository root:
+
+```json
+{
+  "command": "navlyn-mcp"
+}
+```
+
+When `--workspace` is omitted, `navlyn-mcp` behaves as if `--workspace auto` was supplied. It discovers one top-level `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `.vbproj` candidate from the working directory or repository root, and fails instead of guessing if the best candidate is ambiguous. If the MCP client does not preserve a repository-root working directory, pass `--working-directory <repo-root>` while still omitting `--workspace`.
+
+Use an explicit solution/project path only when a repository has several plausible workspaces:
 
 ```json
 {
   "command": "navlyn-mcp",
-  "args": ["--workspace", "path/to/navlyn.workspace.json", "--tool-profile", "reader"]
+  "args": ["--workspace", "path/to/YourRepo.sln"]
 }
 ```
+
+`navlyn.workspace.json` is optional. Add it only when the repository needs a shared candidate-selection policy. Its settings are described in [`navlyn-workspace.md`](navlyn-workspace.md).
 
 MCP defaults `--workspace-root-policy` to `repo-relative`, so `.code-workspace` folders and `navlyn.workspace.json` candidates outside the repository root are rejected unless the server is started with `--workspace-root-policy allow-listed` and matching `allowRoots`, or `--workspace-root-policy all`.
 
@@ -57,7 +69,6 @@ VS Code workspace configuration shape:
     "navlyn": {
       "type": "stdio",
       "command": "navlyn-mcp",
-      "args": ["--workspace", "${workspaceFolder}/navlyn.workspace.json", "--tool-profile", "reader"],
       "cwd": "${workspaceFolder}"
     }
   }
@@ -66,12 +77,12 @@ VS Code workspace configuration shape:
 
 Use workspace `.vscode/mcp.json` when the server should be shared by a repository, and user-level MCP configuration when Navlyn is a personal tool across multiple repositories. The copyable example in this repository is [`../examples/install/vscode-mcp.json`](../examples/install/vscode-mcp.json).
 
-For local repositories with exactly one top-level workspace candidate, `auto` can discover the workspace. Discovery prefers `navlyn.workspace.json`, then `.code-workspace`, then `.slnx`, then `.sln`, then `.csproj` or `.vbproj`:
+If a client or wrapper does not launch from the repository root, pass the repository root as the working directory and still let Navlyn auto-discover the workspace:
 
 ```json
 {
   "command": "navlyn-mcp",
-  "args": ["--workspace", "auto", "--tool-profile", "reader"]
+  "args": ["--working-directory", "path/to/YourRepo"]
 }
 ```
 
@@ -79,7 +90,7 @@ Local development from this repository:
 
 ```powershell
 dotnet build navlyn.slnx
-dotnet run --framework net10.0 --no-launch-profile --project navlyn.Mcp -- --workspace navlyn.workspace.json --tool-profile reader
+dotnet run --framework net10.0 --no-launch-profile --project navlyn.Mcp -- --workspace navlyn.workspace.json
 ```
 
 Equivalent MCP client configuration for local development:
@@ -90,9 +101,7 @@ Equivalent MCP client configuration for local development:
   "args": [
     "navlyn.Mcp/bin/Debug/net10.0/navlyn.Mcp.dll",
     "--workspace",
-    "navlyn.workspace.json",
-    "--tool-profile",
-    "reader"
+    "navlyn.workspace.json"
   ]
 }
 ```
@@ -105,7 +114,7 @@ Local package smoke testing uses the standard .NET tool flow:
 
 ## Server Options
 
-- `--workspace <path|auto>`: required `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `.vbproj` path, or `auto` to discover one top-level candidate from the working directory/repository root. Tool calls are locked to the resolved workspace.
+- `--workspace <path|auto>`: optional `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `.vbproj` path, or `auto` to discover one top-level candidate from the working directory/repository root. Defaults to `auto`. Tool calls are locked to the resolved workspace.
 - `--workspace-root-policy <repo-relative|allow-listed|all>`: workspace folder policy for `navlyn.workspace.json` and `.code-workspace` expansion. Defaults to `repo-relative` for MCP.
 - `--navlyn-executable <command>`: legacy external Navlyn CLI command or executable. Omit for standalone in-process execution. Use only for compatibility, debugging, or development investigations.
 - `--navlyn-arg <arg>`: prefix argument passed before the CLI command on the legacy external path. Repeat for local development with `dotnet navlyn.dll`.
@@ -113,41 +122,44 @@ Local package smoke testing uses the standard .NET tool flow:
 - `--timeout-ms <number>`: per-tool timeout. Defaults to `120000`.
 - `--max-json-chars <number>`: maximum command JSON size accepted by the MCP wrapper. Defaults to `4000000`.
 - `--daemon-pipe <name>`: optional local `navlyn serve --pipe <name>` daemon used for `navlyn_workspace_status` and `navlyn_workspace_refresh`. If the pipe is unavailable, the in-process server falls back to its normal direct workspace path.
-- `--tool-profile <reader|review|edit|full>`: startup-fixed MCP tool surface. Defaults to `reader`, which optimizes first-pass agent correctness by exposing file-first and selected-symbol tools without review, test, public API, DI, or batch tools. Set `NAVLYN_MCP_TOOL_PROFILE` to the same values when an MCP client supports environment variables more naturally than command args.
+- `--tool-profile <reader|review|edit|full>`: deprecated compatibility alias. Valid old values are accepted and ignored; Navlyn MCP now exposes one read-only tool surface. Invalid values still fail so config typos are caught. `NAVLYN_MCP_TOOL_PROFILE` is accepted with the same compatibility behavior.
 
 The server writes MCP protocol messages to stdout. Logs and diagnostics go to stderr.
 
-`--workspace auto` considers top-level `navlyn.workspace.json`, then `.code-workspace`, then `.slnx`, then `.sln`, then `.csproj` or `.vbproj` files. It chooses a single candidate at the best available priority and fails safely if none exist or if multiple best-priority candidates exist. In multi-solution repositories, pass `--workspace` explicitly.
+Default startup and explicit `--workspace auto` consider top-level `navlyn.workspace.json`, then `.code-workspace`, then `.slnx`, then `.sln`, then `.csproj` or `.vbproj` files. Navlyn chooses a single candidate at the best available priority and fails safely if none exist or if multiple best-priority candidates exist. In multi-solution repositories, pass `--workspace` explicitly.
 
 When `navlyn.workspace.json` is passed explicitly or selected by `auto`, Navlyn applies its `primaryWorkspace`, `workspaceCandidates`, exclusion, test inclusion, root policy, allow-list, and cache-hint fields before loading the selected MSBuild workspace. When a `.code-workspace` file is passed explicitly or selected by `auto`, Navlyn reads its `folders` array and looks for `.slnx`, `.sln`, `.csproj`, or `.vbproj` candidates in each folder. It loads the single best candidate and returns `NAVLYN1106` if the VS Code workspace contains multiple best-priority candidates. Under MCP's default `repo-relative` root policy, outside-root folders return `NAVLYN1110`; use `allow-listed` or `all` only when that broader scope is intentional.
 
-## Tool Profiles
+## Stable Tool Surface
 
-The tool profile is fixed when the MCP server starts. Restart the server after changing `--tool-profile` or `NAVLYN_MCP_TOOL_PROFILE`; clients should not expect the tool list to change within one session.
+The tool list is stable for normal MCP startup:
 
-| Profile | Exposed Tools | Use It For |
+| Surface | Exposed Tools | Use It For |
 | --- | --- | --- |
-| `reader` | `navlyn_doctor`, `navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_resolve_target`, `navlyn_find_symbol`, `navlyn_file_outline`, `navlyn_inspect_file`, `navlyn_symbol_source`, `navlyn_symbol_edges`, `navlyn_about_symbol`, `navlyn_related_files`, `navlyn_exact_navigation` | Default setup checks, first-pass reading, symbol investigation, and explicit workspace lifecycle checks. It intentionally hides tests, public API, DI, review diff, context pack, guard, and batch tools. |
-| `review` | Reader tools plus `navlyn_impact`, `navlyn_entrypoints`, `navlyn_tests_for_diff`, `navlyn_public_api_diff`, `navlyn_review_diff`, `navlyn_context_pack`, `navlyn_post_edit_guard`, `navlyn_wrong_symbol_guard` | Actual Git diff, PR, CI, release review, or post-edit guard sessions. |
-| `edit` | Reader tools plus `navlyn_impact`, `navlyn_entrypoints`, `navlyn_tests_for_symbol`, `navlyn_di_impact`, `navlyn_context_pack`, `navlyn_edit_preflight`, `navlyn_post_edit_guard`, `navlyn_wrong_symbol_guard`, `navlyn_change_intent_pack`, `navlyn_agent_handoff_pack`, `navlyn_confidence_ledger` | Edit planning around selected symbols, related tests, DI registrations, bounded reading material, handoff evidence, and post-edit guardrails. |
-| `full` | Every Navlyn MCP tool, including `navlyn_batch` | Power-user and compatibility mode for clients that previously expected the complete tool surface. |
+| Canonical agent workflow | `navlyn_target`, `navlyn_read`, `navlyn_prepare_edit`, `navlyn_verify_edit`, `navlyn_review` | The primary first-run path for target selection, bounded reading, one-edit preparation, post-edit verification, and diff review. |
+| Advanced compatibility surface | Existing specialized Navlyn MCP tools, including workspace, exact navigation, DI, public API, related-test, context, and `navlyn_batch` tools. | Use only when the current question needs that narrower semantic fact or an optimization after the agent already knows the needed facts. |
 
-If a client calls a tool outside the active profile, the server returns a deterministic MCP error envelope with code `NAVLYN_MCP_TOOL_PROFILE`.
+`--tool-profile reader|review|edit|full` and `NAVLYN_MCP_TOOL_PROFILE` are deprecated no-op compatibility aliases during migration. When supplied, the server starts with the same unified tool list and writes a deterministic stderr warning before serving MCP protocol messages on stdout.
 
 ## Tool Selection
 
-The MCP surface is profile-gated and deliberately need-triggered. Prefer the specific high-level tool for the investigation task. Use normal file reads and `rg` for text questions. Use `navlyn_batch` only in `full` profile after deciding that several batch-supported facts are needed from the same workspace.
+The MCP surface is deliberately need-triggered. Prefer the specific high-level tool for the investigation task. Use normal file reads and `rg` for text questions. Use `navlyn_batch` only after deciding that several batch-supported facts are needed from the same workspace.
 
 | Tool | Use It For | Logical Navlyn Command |
 | --- | --- | --- |
+| `navlyn_target` | Canonical first symbol entry from query, `candidateId`, or source position; returns one target envelope and ambiguity/fail-closed guidance | `target` |
+| `navlyn_read` | Canonical bounded source reader for one selected symbol by `candidateId` or exact source position | `read` |
+| `navlyn_prepare_edit` | Canonical one-call pre-edit anchor, source, bounded context, related tests, confidence, and next guard command | `prepare-edit` |
+| `navlyn_verify_edit` | Canonical post-edit guard comparing a saved preflight anchor or `candidateId` with the current diff | `verify-edit` |
+| `navlyn_review` | Canonical changed-symbol, impact, diagnostics, related-test, and review facts for an actual Git diff | `review` |
 | `navlyn_doctor` | Setup readiness, SDK/workspace diagnostics, and copyable first commands | `doctor` |
 | `navlyn_workspace_summary` | Project, target framework, package, test relationship, or MSBuild facts when workspace context matters | `repo-graph` |
 | `navlyn_workspace_status` | Workspace snapshot, freshness, document-index size, and optional `.navlyn/cache` manifest status | `workspace-status` |
 | `navlyn_workspace_refresh` | Explicitly refresh the warm workspace snapshot and optionally clear/write the lightweight cache manifest | `workspace-refresh` |
-| `navlyn_resolve_target` | Standard first symbol entry from query, `candidateId`, or source position; returns one target envelope and next actions | `resolve-target` |
+| `navlyn_resolve_target` | Advanced compatibility target resolver; prefer `navlyn_target` for normal first symbol entry | `resolve-target` |
 | `navlyn_find_symbol` | Broader approximate symbol candidate lists and manual disambiguation | `find` |
 | `navlyn_file_outline` | Semantic outline of one known C# or Visual Basic file, including reusable `candidateId` values | `outline` |
-| `navlyn_symbol_source` | Bounded source slices for one selected symbol by `candidateId` or exact source position | `symbol-source` |
+| `navlyn_symbol_source` | Advanced compatibility source reader; prefer `navlyn_read` for normal bounded source | `symbol-source` |
 | `navlyn_symbol_edges` | Direct relationship edges for one selected symbol: references, callers, calls, or implementations | `references`, `callers`, `calls`, `implementations` |
 | `navlyn_inspect_file` | Compact semantic inspection of one known C# or Visual Basic file without tests, impact, diagnostics, or raw file text | `outline` |
 | `navlyn_about_symbol` | Selected-symbol definition, member outline, reference summary, shallow relations | `about` |
@@ -159,10 +171,10 @@ The MCP surface is profile-gated and deliberately need-triggered. Prefer the spe
 | `navlyn_tests_for_diff` | Static related test candidates for changed symbols in a Git diff when review or CI planning needs them | `tests-for-diff` |
 | `navlyn_di_impact` | Source-level DI registrations, consumers, dependencies, and risk facts for a selected type | `di-impact` |
 | `navlyn_public_api_diff` | Source-level public/protected API changes between Git refs | `public-api-diff` |
-| `navlyn_review_diff` | Changed symbols, impact, diagnostics, related tests, and review facts for an actual Git diff | `review-diff` |
+| `navlyn_review_diff` | Advanced compatibility diff review; prefer `navlyn_review` for normal Git diff facts | `review-diff` |
 | `navlyn_context_pack` | Escalation to bounded reading material for `review`, `modify`, or `understand` workflows | `context-pack` |
-| `navlyn_edit_preflight` | One-call pre-edit anchor, source, bounded context, related tests, confidence, and next guard command | `edit-preflight` |
-| `navlyn_post_edit_guard` | Compare a saved `edit-preflight` anchor or `candidateId` with the current diff | `post-edit-guard` |
+| `navlyn_edit_preflight` | Advanced compatibility pre-edit anchor; prefer `navlyn_prepare_edit` | `edit-preflight` |
+| `navlyn_post_edit_guard` | Advanced compatibility post-edit guard; prefer `navlyn_verify_edit` | `post-edit-guard` |
 | `navlyn_wrong_symbol_guard` | Re-resolve intended target intent and compare it with changed symbols | `wrong-symbol-guard` |
 | `navlyn_change_intent_pack` | Compact intent record for agent memory or CI artifacts | `change-intent-pack` |
 | `navlyn_agent_handoff_pack` | Target anchors, reading queue, trusted evidence, open risks, and next checks for handoff | `agent-handoff-pack` |
@@ -180,11 +192,11 @@ Decision rules for agents:
 1. Use `navlyn_doctor` first when setup, SDK, workspace loading, or first-command guidance is uncertain.
 2. Use `navlyn_workspace_summary(profile: "compact")` only when project, package, target framework, or test relationship context matters.
 3. For a known C# or Visual Basic file, use `navlyn_file_outline` or `navlyn_inspect_file` and reuse entry `candidateId` values.
-4. Resolve symbol intent with `navlyn_resolve_target(query: "...", assumeKind: "...")` and reuse `candidateId`.
-5. Use `navlyn_symbol_source` or `navlyn_symbol_edges` for one precise source or relationship fact before asking for broader context. `calls` is a cheap local outgoing-edge operation; `references` and `callers` are scoped expensive operations and should use `scope`/`maxDocuments` when broad.
-6. Before a concrete edit in `edit` profile, prefer `navlyn_edit_preflight`; after editing, run `navlyn_post_edit_guard` or `navlyn_wrong_symbol_guard` before widening scope.
-7. Use `navlyn_review_diff` only for an actual Git diff, PR, staged changes, or working-tree changes.
-8. Use `navlyn_context_pack` only when the active profile exposes it and a bounded reading queue is needed. Use `navlyn_batch` only in `full` profile after several batch-supported facts are already needed.
+4. Resolve symbol intent with `navlyn_target(query: "...", assumeKind: "...")` and reuse `candidateId`.
+5. Use `navlyn_read` or `navlyn_symbol_edges` for one precise source or relationship fact before asking for broader context. `calls` is a cheap local outgoing-edge operation; `references` and `callers` are scoped expensive operations and should use `scope`/`maxDocuments` when broad.
+6. Before a concrete edit, prefer `navlyn_prepare_edit`; after editing, run `navlyn_verify_edit` before widening scope.
+7. Use `navlyn_review` only for an actual Git diff, PR, staged changes, or working-tree changes.
+8. Use `navlyn_context_pack` only when a bounded reading queue is needed. Use `navlyn_batch` only after several batch-supported facts are already needed.
 
 ## Resources
 
@@ -217,8 +229,8 @@ Prompts are guidance for the MCP client. They do not edit files, generate review
 Start a repository investigation:
 
 ```text
-navlyn_resolve_target(query: "PaymentService", assumeKind: "NamedType")
-navlyn_symbol_source(candidateId: "sym:v1:...", view: "declaration")
+navlyn_target(query: "PaymentService", assumeKind: "NamedType")
+navlyn_read(candidateId: "sym:v1:...", view: "declaration")
 navlyn_about_symbol(candidateId: "sym:v1:...", profile: "light")
 navlyn_related_files(candidateId: "sym:v1:...", limit: 30)
 ```
@@ -228,13 +240,12 @@ Add `navlyn_workspace_summary(profile: "compact")` before that flow only when wo
 Before a non-trivial edit:
 
 ```text
-Start navlyn-mcp with --tool-profile edit.
-navlyn_edit_preflight(query: "PaymentService", assumeKind: "NamedType", goal: "modify", changeKind: "behavior")
+navlyn_prepare_edit(query: "PaymentService", assumeKind: "NamedType", goal: "modify", changeKind: "behavior")
 // edit outside Navlyn
-navlyn_post_edit_guard(candidateId: "sym:v1:...", failOnRisk: "high")
+navlyn_verify_edit(candidateId: "sym:v1:...", failOnRisk: "high")
 ```
 
-`navlyn_edit_preflight` includes source, bounded context, related test evidence, confidence, known unknowns, and next guard commands. Add separate `navlyn_tests_for_symbol`, `navlyn_impact`, or `navlyn_context_pack` calls only when the preflight result shows more detail is needed.
+`navlyn_prepare_edit` includes source, bounded context, related test evidence, confidence, known unknowns, and next guard commands. Add separate `navlyn_tests_for_symbol`, `navlyn_impact`, or `navlyn_context_pack` calls only when the preflight result shows more detail is needed.
 
 ## Warm Cache And Freshness
 
@@ -249,10 +260,10 @@ The warm cache has no file watcher and is not shared across MCP server processes
 Review the current diff:
 
 ```text
-navlyn_review_diff(profile: "evidence")
+navlyn_review(profile: "evidence")
 ```
 
-Escalate from diff facts to `navlyn_tests_for_diff`, `navlyn_public_api_diff`, or `navlyn_context_pack(diff: true, goal: "review")` only when those facts are needed in `review` profile. Use `review-pack` through `navlyn_batch` only after restarting with `--tool-profile full` and deciding several batch-supported facts are needed.
+Escalate from diff facts to `navlyn_tests_for_diff`, `navlyn_public_api_diff`, or `navlyn_context_pack(diff: true, goal: "review")` only when those facts are needed. Use `review-pack` through `navlyn_batch` only after deciding several batch-supported facts are needed.
 
 Gather dedicated public API or DI facts:
 
@@ -361,7 +372,7 @@ MCP wrapper errors use `NAVLYN_MCP_*` codes. Navlyn command errors preserve `NAV
 For `navlyn_batch`, error layering is important:
 
 - `NAVLYN_MCP_INVALID_ARGUMENT` means the MCP wrapper rejected the tool input before running the logical Navlyn command.
-- `NAVLYN_MCP_TOOL_PROFILE` means the selected startup tool profile does not expose the requested tool.
+- `NAVLYN_MCP_TOOL_PROFILE_DEPRECATED` is a startup stderr warning when an old profile option is supplied. It does not appear in MCP stdout tool results.
 - A fatal batch error, such as invalid top-level JSON, returns MCP `ok: false` with a Navlyn diagnostic such as `NAVLYN1008`.
 - A per-request batch failure is a successful MCP tool call whose `result.results[]` item has `ok: false` and its own `error`.
 
@@ -373,13 +384,13 @@ The MCP server is a standalone stdio frontend over the shared Navlyn engine plus
 
 `navlyn_tests_for_symbol`, `navlyn_tests_for_diff`, `navlyn_di_impact`, and `navlyn_public_api_diff` are allowlisted wrappers over their matching logical Navlyn commands. They do not run tests, edit files, publish packages, or execute arbitrary shell commands.
 
-`navlyn_batch` is exposed only in `full` profile and wraps the existing Navlyn `batch` command only. Batch coverage includes `overview`, `diagnostics`, `symbols`, `symbols-in`, `outline`, `symbol-at`, `symbol-info`, `symbol-source`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, `calls`, `find`, `resolve-target`, `where-used`, `about`, `related`, `impact`, `entrypoints`, `review-diff`, `review-pack`, `context-pack`, `repo-graph`, `public-api-diff`, `tests-for-symbol`, `tests-for-diff`, `framework-entrypoints`, `di-graph`, `where-registered`, `di-impact`, `route-map`, `route-impact`, `options-graph`, `config-impact`, `where-handled`, `message-flow`, `ef-model`, `entity-impact`, `package-usage`, and `package-impact`. Batch requests can use `candidateIdFrom` to feed an earlier result's `candidateId` into later supported requests. Direct CLI-only facts such as `changed-symbols`, `impact-diff`, `diagnostics-diff`, `scope-at`, `signature`, `symbol-diagnostics`, `diagnostic-pack`, and agent guard commands are not exposed through `navlyn_batch`; use dedicated MCP tools for high-frequency facts such as `navlyn_file_outline`, `navlyn_symbol_source`, `navlyn_symbol_edges`, and the edit/review guard tools. Prefer `navlyn_batch` only when several batch-supported facts are already needed.
+`navlyn_batch` wraps the existing Navlyn `batch` command only. Batch coverage includes `overview`, `diagnostics`, `symbols`, `symbols-in`, `outline`, `symbol-at`, `symbol-info`, `symbol-source`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, `calls`, `find`, `resolve-target`, `where-used`, `about`, `related`, `impact`, `entrypoints`, `review-diff`, `review-pack`, `context-pack`, `repo-graph`, `public-api-diff`, `tests-for-symbol`, `tests-for-diff`, `framework-entrypoints`, `di-graph`, `where-registered`, `di-impact`, `route-map`, `route-impact`, `options-graph`, `config-impact`, `where-handled`, `message-flow`, `ef-model`, `entity-impact`, `package-usage`, and `package-impact`. Batch requests can use `candidateIdFrom` to feed an earlier result's `candidateId` into later supported requests. Direct CLI-only facts such as `changed-symbols`, `impact-diff`, `diagnostics-diff`, `scope-at`, `signature`, `symbol-diagnostics`, `diagnostic-pack`, and agent guard commands are not exposed through `navlyn_batch`; use dedicated MCP tools for high-frequency facts such as `navlyn_file_outline`, `navlyn_symbol_source`, `navlyn_symbol_edges`, and the edit/review guard tools. Prefer `navlyn_batch` only when several batch-supported facts are already needed.
 
 Static impact, framework entrypoint, DI, application domain, and review-pack results are bounded source-level facts. They are useful evidence for agents and reviewers, but they are not complete runtime proofs, runtime route tables, authorization proofs, secret/config value reads, EF runtime models, package compatibility scans, security scans, or replacement review comments.
 
 ## Performance Notes
 
-The MCP server runs Navlyn commands in-process by default. This removes the external CLI process requirement and avoids CLI process startup overhead, but each standalone adapter-backed tool call still performs a conservative workspace load. Prefer `navlyn_batch` in `full` profile after the agent knows it needs several batch-supported facts from the same workspace, and use `profile: "compact"` or `profile: "evidence"` when output size is the limiting factor.
+The MCP server runs Navlyn commands in-process by default. This removes the external CLI process requirement and avoids CLI process startup overhead, but each standalone adapter-backed tool call still performs a conservative workspace load. Prefer `navlyn_batch` after the agent knows it needs several batch-supported facts from the same workspace, and use `profile: "compact"` or `profile: "evidence"` when output size is the limiting factor.
 
 When `--navlyn-executable` is explicitly supplied, `navlyn-mcp` uses the legacy external CLI adapter. This escape hatch is useful for compatibility and debugging, not normal MCP installation.
 
@@ -389,7 +400,7 @@ Use `./scripts/measure-navlyn-performance.ps1` from the repository root to compa
 ./scripts/measure-navlyn-performance.ps1 -Workspace navlyn.slnx -Scenario mcp -Profile compact -Iterations 1 -Warmup 0 -NoBuild
 ```
 
-The MCP scenario starts `navlyn-mcp`, initializes an MCP stdio session, and measures representative profile-appropriate tool calls such as `navlyn_workspace_summary`, `navlyn_resolve_target`, `navlyn_find_symbol`, and, when the active profile exposes it, `navlyn_context_pack`. Functional MCP behavior is covered by the MCP tests in the solution.
+The MCP scenario starts `navlyn-mcp`, initializes an MCP stdio session, and measures representative tool calls such as `navlyn_workspace_summary`, `navlyn_resolve_target`, `navlyn_find_symbol`, and `navlyn_context_pack`. Functional MCP behavior is covered by the MCP tests in the solution.
 
 See [`navlyn-performance.md`](navlyn-performance.md) for broader performance guidance and release-readiness measurement notes.
 

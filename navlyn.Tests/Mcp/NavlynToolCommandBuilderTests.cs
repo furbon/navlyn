@@ -102,6 +102,32 @@ public sealed class NavlynToolCommandBuilderTests
     }
 
     [Fact]
+    public void CanonicalTarget_MapsToTargetCliCommand()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.Target(
+            query: "CheckCommand",
+            candidateId: null,
+            file: null,
+            line: null,
+            column: null,
+            assumeKind: "NamedType",
+            assumeKinds: null,
+            match: null,
+            caseSensitive: null,
+            project: null,
+            projects: null,
+            excludeGenerated: null,
+            limit: 5,
+            candidatePolicy: null,
+            minConfidence: null,
+            explainSelection: null);
+
+        Assert.True(result.IsValid);
+        Assert.Equal("target", result.Command);
+        Assert.Equal(["--query", "CheckCommand", "--assume-kind", "NamedType", "--limit", "5"], result.Arguments);
+    }
+
+    [Fact]
     public void ResolveTarget_SourcePositionRejectsFuzzyOptions()
     {
         CommandBuildResult result = NavlynToolCommandBuilder.ResolveTarget(
@@ -472,6 +498,25 @@ public sealed class NavlynToolCommandBuilderTests
         Assert.Equal(
             ["--candidate-id", "sym:v1:00000000000000000000000000000000", "--view", "body", "--max-lines", "40", "--budget-tokens", "1200", "--project", "App", "--exclude-generated"],
             result.Arguments);
+    }
+
+    [Fact]
+    public void CanonicalRead_MapsToReadCliCommand()
+    {
+        CommandBuildResult result = NavlynToolCommandBuilder.Read(
+            candidateId: "sym:v1:00000000000000000000000000000000",
+            file: null,
+            line: null,
+            column: null,
+            project: null,
+            excludeGenerated: null,
+            view: "declaration",
+            maxLines: null,
+            budgetTokens: null);
+
+        Assert.True(result.IsValid);
+        Assert.Equal("read", result.Command);
+        Assert.Equal(["--candidate-id", "sym:v1:00000000000000000000000000000000", "--view", "declaration"], result.Arguments);
     }
 
     [Fact]

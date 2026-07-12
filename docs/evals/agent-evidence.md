@@ -16,6 +16,8 @@ For a fast local loop that skips the MCP latency scenario:
 
 The script writes a JSON report under ignored `artifacts/evals/agent-evidence-eval-report.json`. It checks pre-edit anchor presence, post-edit guard fail-closed behavior on an empty diff, wrong-symbol guard behavior, intent/handoff/confidence projections, JSON validity, stderr discipline, and optional MCP warm latency.
 
+The report includes `scoreSummary` with pass rate, total tool-call count, stdout character totals, median elapsed milliseconds, wrong-symbol avoidance count, JSON/stderr discipline counts, and broad-tool-overuse detections. Keep raw reports under `artifacts/`; copy only curated summaries into release evidence.
+
 ## Metrics
 
 Track these fields for each trace:
@@ -37,8 +39,8 @@ Track these fields for each trace:
 | Overloaded method change | Resolve by source position or exact candidate, inspect callers/references | The edited member matches the anchored overload. |
 | Partial class edit | Resolve target and inspect source locations or context pack | The agent sees the relevant partial declaration before editing. |
 | Multi-target project | Use `--project` or inspect target framework facts | The edit is made in the intended target framework context. |
-| Pre-edit evidence envelope | Run `edit-preflight` or `navlyn_edit_preflight` | Anchor, source evidence, context, confidence, known unknowns, and next guard command are present. |
-| Diff review after edit | Run `post-edit-guard`, `wrong-symbol-guard`, or `review-diff` | Changed symbols are compared with the pre-edit anchor. |
+| Pre-edit evidence envelope | Run `prepare-edit`, `edit-preflight`, `navlyn_prepare_edit`, or `navlyn_edit_preflight` | Anchor, source evidence, context, confidence, known unknowns, and next guard command are present. |
+| Diff review after edit | Run `verify-edit`, `post-edit-guard`, `wrong-symbol-guard`, `review`, or `review-diff` | Changed symbols are compared with the pre-edit anchor. |
 | Related tests | Use `tests-for-symbol` or `tests-for-diff` only after an edit plan or diff | Test files are evidence, not a first-pass checklist. |
 | Text-only task | Use file read or `rg` | No Navlyn call is made for Markdown/comments/config text. |
 | MCP warm latency | Run the performance MCP scenario | The report is JSON-valid and records MCP tool timing for the release environment. |
@@ -48,7 +50,7 @@ Track these fields for each trace:
 ```json
 {
   "scenarioId": "wrong-symbol-overload",
-  "navlynVersion": "0.6.0",
+  "navlynVersion": "0.7.0",
   "workspace": "path/to/YourRepo.slnx",
   "prompt": "Change PaymentService.Process",
   "preEditAnchor": {
