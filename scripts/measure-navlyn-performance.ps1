@@ -766,7 +766,7 @@ function Get-ScenarioCommands {
             $commands += New-CliCommand -Name 'batch-file-first' -Arguments @('batch', '--workspace', $workspaceArg) -StandardInput $batchInput
         }
         'agent-loop' {
-            $commands += New-CliCommand -Name 'prepare-edit' -Arguments @('prepare-edit', '--workspace', $workspaceArg, '--query', $Query, '--assume-kind', $AssumeKind, '--project', 'Navlyn.CommandLine(net10.0)', '--goal', 'modify', '--change-kind', 'behavior', '--budget-tokens', '1200', '--item-limit', '2', '--reference-limit', '4', '--test-limit', '3')
+            $commands += New-CliCommand -Name 'prepare-edit' -Arguments @('prepare-edit', '--workspace', $workspaceArg, '--query', $Query, '--assume-kind', $AssumeKind, '--project', 'Navlyn.CommandLine(net10.0)', '--goal', 'modify', '--change-kind', 'behavior', '--budget-tokens', '1800', '--item-limit', '3', '--reference-limit', '4', '--test-limit', '3')
         }
         'diff' {
             $diffArgs = @()
