@@ -48,6 +48,11 @@ public sealed class NavlynMcpStdioTests
 
         IList<McpClientTool> tools = await client.ListToolsAsync(cancellationToken: timeout.Token);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.WorkspaceSummaryTool);
+        Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.TargetTool);
+        Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.ReadTool);
+        Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.PrepareEditTool);
+        Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.VerifyEditTool);
+        Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.ReviewTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.WorkspaceStatusTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.WorkspaceRefreshTool);
         Assert.Contains(tools, tool => tool.Name == NavlynMcpTools.DoctorTool);
@@ -229,6 +234,8 @@ public sealed class NavlynMcpStdioTests
         Assert.Contains("Do not use for tests", fileOutline.Description, StringComparison.Ordinal);
         McpClientTool resolveTarget = Assert.Single(tools, tool => tool.Name == NavlynMcpTools.ResolveTargetTool);
         Assert.Contains("standard first symbol entry", resolveTarget.Description, StringComparison.Ordinal);
+        McpClientTool target = Assert.Single(tools, tool => tool.Name == NavlynMcpTools.TargetTool);
+        Assert.Contains("Canonical first tool", target.Description, StringComparison.Ordinal);
     }
 
     public static IEnumerable<object?[]> ProfileToolData()
@@ -284,6 +291,11 @@ public sealed class NavlynMcpStdioTests
 
     private static readonly string[] ExpectedUnifiedTools =
     [
+        NavlynMcpTools.TargetTool,
+        NavlynMcpTools.ReadTool,
+        NavlynMcpTools.PrepareEditTool,
+        NavlynMcpTools.VerifyEditTool,
+        NavlynMcpTools.ReviewTool,
         NavlynMcpTools.WorkspaceSummaryTool,
         NavlynMcpTools.WorkspaceStatusTool,
         NavlynMcpTools.WorkspaceRefreshTool,

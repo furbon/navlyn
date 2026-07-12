@@ -51,6 +51,11 @@ internal static class NavlynCli
     {
         RootCommand rootCommand = new("Semantic code navigation and investigation for agents and automation.");
         rootCommand.Subcommands.Add(DoctorCommand.Create());
+        rootCommand.Subcommands.Add(ResolveTargetCommand.Create("target", "Canonical agent entrypoint: choose one intended C# or Visual Basic target and return a reusable target envelope."));
+        rootCommand.Subcommands.Add(SymbolSourceCommand.Create("read", "Canonical agent source reader: return bounded source for one selected target by candidate id or source position."));
+        rootCommand.Subcommands.Add(AgentEvidenceCommand.CreateEditPreflight("prepare-edit", "Canonical agent edit-prep entrypoint: gather target, source, context, tests, confidence, and guard instructions before editing."));
+        rootCommand.Subcommands.Add(AgentEvidenceCommand.CreatePostEditGuard("verify-edit", "Canonical agent post-edit guard: compare the actual diff with a pre-edit anchor and fail closed on wrong-target risk."));
+        rootCommand.Subcommands.Add(ReviewDiffCommand.Create("review", "Canonical agent review entrypoint: create deterministic review facts for the current Git diff."));
         rootCommand.Subcommands.Add(CheckCommand.Create());
         rootCommand.Subcommands.Add(OverviewCommand.Create());
         rootCommand.Subcommands.Add(RepoGraphCommand.Create());

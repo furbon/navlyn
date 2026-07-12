@@ -756,28 +756,17 @@ function Get-ScenarioCommands {
             $commands += New-CliCommand -Name 'context-pack' -Arguments (Add-ProfileArgument -Arguments @('context-pack', '--workspace', $workspaceArg, '--query', $Query, '--assume-kind', $AssumeKind, '--budget-tokens', '2000'))
         }
         'file-first' {
-            $commands += New-CliCommand -Name 'outline' -Arguments @('outline', '--workspace', $workspaceArg, '--file', $SourceFile)
-            $commands += New-CliCommand -Name 'symbol-source' -Arguments @('symbol-source', '--workspace', $workspaceArg, '--file', $SourceFile, '--line', $SourceLine.ToString([System.Globalization.CultureInfo]::InvariantCulture), '--column', $SourceColumn.ToString([System.Globalization.CultureInfo]::InvariantCulture), '--view', 'declaration', '--max-lines', '80', '--budget-tokens', '2000')
-            $commands += New-CliCommand -Name 'calls' -Arguments @('calls', '--workspace', $workspaceArg, '--file', $SourceFile, '--line', $SourceLine.ToString([System.Globalization.CultureInfo]::InvariantCulture), '--column', $SourceColumn.ToString([System.Globalization.CultureInfo]::InvariantCulture), '--limit', '30')
-        }
-        'agent-loop' {
-            $commands += New-CliCommand -Name 'repo-graph' -Arguments (Add-ProfileArgument -Arguments @('repo-graph', '--workspace', $workspaceArg))
-            $commands += New-CliCommand -Name 'find' -Arguments @('find', '--workspace', $workspaceArg, '--query', $Query, '--assume-kind', $AssumeKind, '--limit', '20')
-            $commands += New-CliCommand -Name 'about' -Arguments @('about', '--workspace', $workspaceArg, '--query', $Query, '--assume-kind', $AssumeKind)
-            $commands += New-CliCommand -Name 'related' -Arguments @('related', '--workspace', $workspaceArg, '--query', $Query, '--assume-kind', $AssumeKind, '--limit', '50')
-            $commands += New-CliCommand -Name 'impact' -Arguments @('impact', '--workspace', $workspaceArg, '--query', $Query, '--assume-kind', $AssumeKind, '--depth', '2')
-            $commands += New-CliCommand -Name 'entrypoints' -Arguments @('entrypoints', '--workspace', $workspaceArg, '--query', $Query, '--assume-kind', $AssumeKind, '--framework-aware', '--depth', '2')
-            $commands += New-CliCommand -Name 'tests-for-symbol' -Arguments (Add-ProfileArgument -Arguments @('tests-for-symbol', '--workspace', $workspaceArg, '--query', $Query, '--assume-kind', $AssumeKind, '--test-limit', '20'))
             $batchInput = @{
                 requests = @(
-                    @{ id = 'repo'; command = 'repo-graph'; profile = $Profile; relationshipLimit = 50 },
-                    @{ id = 'target'; command = 'resolve-target'; query = $Query; assumeKind = $AssumeKind },
-                    @{ id = 'source'; command = 'symbol-source'; candidateIdFrom = 'target'; view = 'declaration'; maxLines = 80; budgetTokens = 2000 },
-                    @{ id = 'refs'; command = 'references'; candidateIdFrom = 'target'; limit = 50 },
-                    @{ id = 'tests'; command = 'tests-for-symbol'; candidateIdFrom = 'target'; profile = $Profile; testLimit = 20 }
+                    @{ id = 'outline'; command = 'outline'; file = $SourceFile },
+                    @{ id = 'source'; command = 'symbol-source'; file = $SourceFile; line = $SourceLine; column = $SourceColumn; view = 'declaration'; maxLines = 80; budgetTokens = 2000 },
+                    @{ id = 'calls'; command = 'calls'; file = $SourceFile; line = $SourceLine; column = $SourceColumn; limit = 30 }
                 )
             } | ConvertTo-Json -Depth 20 -Compress
-            $commands += New-CliCommand -Name 'batch-agent-loop' -Arguments @('batch', '--workspace', $workspaceArg) -StandardInput $batchInput
+            $commands += New-CliCommand -Name 'batch-file-first' -Arguments @('batch', '--workspace', $workspaceArg) -StandardInput $batchInput
+        }
+        'agent-loop' {
+            $commands += New-CliCommand -Name 'prepare-edit' -Arguments @('prepare-edit', '--workspace', $workspaceArg, '--query', $Query, '--assume-kind', $AssumeKind, '--project', 'Navlyn.CommandLine(net10.0)', '--goal', 'modify', '--change-kind', 'behavior', '--budget-tokens', '1800', '--item-limit', '3')
         }
         'diff' {
             $diffArgs = @()
@@ -788,14 +777,9 @@ function Get-ScenarioCommands {
                 $diffArgs += @('--head', $Head)
             }
 
-            $commands += New-CliCommand -Name 'changed-symbols' -Arguments (Add-ProfileArgument -Arguments (@('changed-symbols', '--workspace', $workspaceArg, '--symbol-limit', '50') + $diffArgs))
-            $commands += New-CliCommand -Name 'impact-diff' -Arguments (Add-ProfileArgument -Arguments (@('impact-diff', '--workspace', $workspaceArg, '--impact-limit', '50', '--depth', '2') + $diffArgs))
-            $commands += New-CliCommand -Name 'diagnostics-diff' -Arguments (Add-ProfileArgument -Arguments (@('diagnostics-diff', '--workspace', $workspaceArg, '--diagnostic-limit', '50') + $diffArgs))
-            $commands += New-CliCommand -Name 'review-diff' -Arguments (Add-ProfileArgument -Arguments (@('review-diff', '--workspace', $workspaceArg, '--symbol-limit', '20', '--impact-limit', '50', '--diagnostic-limit', '50', '--related-test-limit', '20') + $diffArgs))
-            $commands += New-CliCommand -Name 'context-pack-diff' -Arguments (Add-ProfileArgument -Arguments (@('context-pack', '--workspace', $workspaceArg, '--diff', '--budget-tokens', '4000') + $diffArgs))
-            $commands += New-CliCommand -Name 'tests-for-diff' -Arguments (Add-ProfileArgument -Arguments (@('tests-for-diff', '--workspace', $workspaceArg, '--test-limit', '20') + $diffArgs))
+            $commands += New-CliCommand -Name 'review' -Arguments (Add-ProfileArgument -Arguments (@('review', '--workspace', $workspaceArg, '--symbol-limit', '8', '--impact-limit', '20', '--diagnostic-limit', '20', '--related-test-limit', '8') + $diffArgs))
             $publicApiBase = if ([string]::IsNullOrWhiteSpace($Base)) { 'HEAD' } else { $Base }
-            $commands += New-CliCommand -Name 'public-api-diff' -Arguments (Add-ProfileArgument -Arguments @('public-api-diff', '--workspace', $workspaceArg, '--base', $publicApiBase, '--change-limit', '20'))
+            $commands += New-CliCommand -Name 'public-api-diff' -Arguments (Add-ProfileArgument -Arguments @('public-api-diff', '--workspace', $workspaceArg, '--base', $publicApiBase, '--change-limit', '8'))
         }
         'mcp' {
             $commands += New-McpToolCall -Name 'navlyn_workspace_summary' -Arguments @{
@@ -842,7 +826,7 @@ function Get-ScenarioCommands {
             $fixtureWorkspace = ConvertTo-RepositoryPath -Path (Join-Path $repoRoot 'tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj')
             $commands += New-CliCommand -Name 'primary-workspace-check' -Arguments @('check', '--workspace', $workspaceArg)
             $commands += New-CliCommand -Name 'fixture-workspace-check' -Arguments @('check', '--workspace', $fixtureWorkspace)
-            $commands += New-CliCommand -Name 'fixture-outline' -Arguments @('outline', '--workspace', $fixtureWorkspace, '--file', 'tests/fixtures/SymbolNavigationFixture/FixtureCode.cs')
+            $commands += New-CliCommand -Name 'fixture-symbols-in' -Arguments @('symbols-in', '--workspace', $fixtureWorkspace, '--file', 'tests/fixtures/SymbolNavigationFixture/FixtureCode.cs', '--line', '1')
         }
     }
 

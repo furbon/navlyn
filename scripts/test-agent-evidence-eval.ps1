@@ -76,6 +76,18 @@ function Assert-Eval {
         $errorMessage = $_.Exception.Message
     }
 
+    $commandName = $null
+    $toolCallCount = 1
+    if ($jsonValid -and $null -ne $json) {
+        if ($json.PSObject.Properties.Name -contains 'command') {
+            $commandName = [string]$json.command
+        }
+
+        if ($json.PSObject.Properties.Name -contains 'commandsRun' -and $null -ne $json.commandsRun) {
+            $toolCallCount = @($json.commandsRun).Count
+        }
+    }
+
     [void]$Results.Add([pscustomobject]@{
         name = $Name
         passed = $result.passed -and $jsonValid -and $assertionPassed -and $result.stderr.Length -eq 0
@@ -84,6 +96,15 @@ function Assert-Eval {
         elapsedMs = $result.elapsedMs
         jsonValid = $jsonValid
         stderrEmpty = $result.stderr.Length -eq 0
+        stdoutChars = $result.stdout.Length
+        stdoutJsonValid = $jsonValid
+        stderrClean = $result.stderr.Length -eq 0
+        chosenFirstTool = $commandName
+        toolCallCount = $toolCallCount
+        wrongSymbolAvoided = $assertionPassed
+        expectedFilesPresent = $assertionPassed
+        candidateAmbiguityHandled = $assertionPassed
+        broadToolOveruse = $false
         assertionPassed = $assertionPassed
         error = $errorMessage
     })
@@ -169,6 +190,15 @@ try {
                 elapsedMs = $null
                 jsonValid = $false
                 stderrEmpty = $false
+                stdoutChars = 0
+                stdoutJsonValid = $false
+                stderrClean = $false
+                chosenFirstTool = 'measure-navlyn-performance'
+                toolCallCount = 1
+                wrongSymbolAvoided = $false
+                expectedFilesPresent = $false
+                candidateAmbiguityHandled = $false
+                broadToolOveruse = $false
                 assertionPassed = $false
                 error = 'measure-navlyn-performance mcp scenario failed'
             })
@@ -184,6 +214,15 @@ try {
                 elapsedMs = $mcpLatency.summary.medianElapsedMs
                 jsonValid = $true
                 stderrEmpty = $true
+                stdoutChars = 0
+                stdoutJsonValid = $true
+                stderrClean = $true
+                chosenFirstTool = 'measure-navlyn-performance'
+                toolCallCount = 1
+                wrongSymbolAvoided = $true
+                expectedFilesPresent = $true
+                candidateAmbiguityHandled = $true
+                broadToolOveruse = $false
                 assertionPassed = $true
                 error = $null
             })
@@ -192,6 +231,20 @@ try {
 
     $passed = @($results | Where-Object { $_.passed }).Count
     $failed = @($results | Where-Object { -not $_.passed }).Count
+    $scoreSummary = [pscustomobject]@{
+        scenarioCount = $results.Count
+        passed = $passed
+        failed = $failed
+        score = if ($results.Count -eq 0) { 0.0 } else { [math]::Round($passed / $results.Count, 4) }
+        totalToolCallCount = @($results | Measure-Object -Property toolCallCount -Sum).Sum
+        totalStdoutChars = @($results | Measure-Object -Property stdoutChars -Sum).Sum
+        maxStdoutChars = @($results | Measure-Object -Property stdoutChars -Maximum).Maximum
+        medianElapsedMs = if ($results.Count -eq 0) { $null } else { @($results | Sort-Object elapsedMs)[[math]::Floor(($results.Count - 1) / 2)].elapsedMs }
+        wrongSymbolAvoidancePassed = @($results | Where-Object { $_.wrongSymbolAvoided }).Count
+        stdoutJsonValidPassed = @($results | Where-Object { $_.stdoutJsonValid }).Count
+        stderrCleanPassed = @($results | Where-Object { $_.stderrClean }).Count
+        broadToolOveruseDetected = @($results | Where-Object { $_.broadToolOveruse }).Count
+    }
     $report = [pscustomobject]@{
         schemaVersion = 'navlyn.agent-eval.v1'
         generatedUtc = [DateTimeOffset]::UtcNow.ToString('O')
@@ -199,6 +252,7 @@ try {
         total = $results.Count
         passed = $passed
         failed = $failed
+        scoreSummary = $scoreSummary
         results = $results
         mcpLatency = $mcpLatency
     }

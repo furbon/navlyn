@@ -35,20 +35,20 @@ Success means stdout is JSON with `ok: true`, the expected workspace path, SDK f
 Pick one C# type or method that an agent might edit:
 
 ```powershell
-navlyn resolve-target --workspace path/to/YourRepo.sln --query PaymentService --assume-kind NamedType --limit 10
+navlyn target --workspace path/to/YourRepo.sln --query PaymentService --assume-kind NamedType --limit 10
 ```
 
 Stop when there is one high-confidence `candidateId`. If candidates are ambiguous, ask the user or add `--project` / a more precise `--assume-kind`.
 
 ## 4-6 Minutes: Create Pre-Edit Evidence
 
-Use the returned `candidateId` instead of searching the name again. For a concrete edit, `edit-preflight` collects the anchor, bounded source, bounded context, related tests, confidence evidence, and the post-edit guard command in one envelope:
+Use the returned `candidateId` instead of searching the name again. For a concrete edit, `prepare-edit` collects the anchor, bounded source, bounded context, related tests, confidence evidence, and the post-edit guard command in one envelope:
 
 ```powershell
-navlyn edit-preflight --workspace path/to/YourRepo.sln --candidate-id sym:v1:... --goal modify --change-kind behavior
+navlyn prepare-edit --workspace path/to/YourRepo.sln --candidate-id sym:v1:... --goal modify --change-kind behavior
 ```
 
-If the task only needs one fact, use `symbol-source`, `references`, or `about` directly and stop. Use `edit-preflight` when an agent is about to modify code and needs a reusable evidence envelope.
+If the task only needs one fact, use `read`, `references`, or `about` directly and stop. Use `prepare-edit` when an agent is about to modify code and needs a reusable evidence envelope.
 
 ## 6-8 Minutes: Give An Agent MCP Tools
 
@@ -64,13 +64,14 @@ Configure one read-only MCP surface for the workspace:
 The agent should choose the smallest semantic fact that answers the current question:
 
 ```text
-navlyn_resolve_target
+navlyn_target
 navlyn_file_outline
-navlyn_symbol_source
+navlyn_read
 navlyn_symbol_edges
 navlyn_about_symbol
-navlyn_edit_preflight
-navlyn_review_diff
+navlyn_prepare_edit
+navlyn_verify_edit
+navlyn_review
 navlyn_doctor
 ```
 
@@ -81,9 +82,9 @@ Use edit and review tools only when their facts are relevant. They are read-only
 After an edit, check the actual diff:
 
 ```powershell
-navlyn post-edit-guard --workspace path/to/YourRepo.sln --candidate-id sym:v1:... --fail-on-risk high
+navlyn verify-edit --workspace path/to/YourRepo.sln --candidate-id sym:v1:... --fail-on-risk high
 navlyn wrong-symbol-guard --workspace path/to/YourRepo.sln --query PaymentService --assume-kind NamedType --fail-on-risk medium
-navlyn review-diff --workspace path/to/YourRepo.sln --profile evidence --symbol-limit 20 --impact-limit 40 --diagnostic-limit 40 --related-test-limit 20
+navlyn review --workspace path/to/YourRepo.sln --profile evidence --symbol-limit 20 --impact-limit 40 --diagnostic-limit 40 --related-test-limit 20
 ```
 
 The guard commands return deterministic JSON even when policy fails. Exit code `1` means the diff did not satisfy the configured risk threshold, which is the moment to pause before more edits.

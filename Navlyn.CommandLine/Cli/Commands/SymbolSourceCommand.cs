@@ -11,7 +11,7 @@ internal static class SymbolSourceCommand
     private const int DefaultMaxLines = 80;
     private const int DefaultBudgetTokens = 4000;
 
-    public static Command Create()
+    public static Command Create(string commandName = "symbol-source", string? description = null)
     {
         Option<string> viewOption = CreateViewOption();
         Option<int?> maxLinesOption = new("--max-lines")
@@ -24,8 +24,8 @@ internal static class SymbolSourceCommand
         };
 
         return SourcePositionCommand.Create(
-            "symbol-source",
-            "Return bounded source slices for the C# or Visual Basic symbol at a source position.",
+            commandName,
+            description ?? "Return bounded source slices for the C# or Visual Basic symbol at a source position.",
             [viewOption, maxLinesOption, budgetTokensOption],
             (workspace, options, parseResult, cancellationToken) => ExecuteAsync(
                 workspace,

@@ -1,5 +1,10 @@
 {
   "unified": [
+    "navlyn_target",
+    "navlyn_read",
+    "navlyn_prepare_edit",
+    "navlyn_verify_edit",
+    "navlyn_review",
     "navlyn_workspace_summary",
     "navlyn_workspace_status",
     "navlyn_workspace_refresh",

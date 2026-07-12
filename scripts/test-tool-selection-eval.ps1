@@ -98,7 +98,7 @@ foreach ($scenario in @($scenarioDocument.scenarios)) {
     $criteria.correctSmallestUsefulTool = $null -ne $firstStep -and (Test-ContainsAny -Values @($scenario.expectedFirstSteps) -Candidates @($firstStep))
     if ($criteria.correctSmallestUsefulTool) { $points++ }
 
-    $usesNavlyn = @($chosenSequence | Where-Object { ([string]$_).StartsWith('navlyn_', [System.StringComparison]::Ordinal) -or [string]$_ -in @('find', 'resolve-target', 'repo-graph', 'outline', 'symbol-source', 'references', 'callers', 'calls', 'context-pack', 'review-diff', 'route-map', 'route-impact') }).Count -gt 0
+    $usesNavlyn = @($chosenSequence | Where-Object { ([string]$_).StartsWith('navlyn_', [System.StringComparison]::Ordinal) -or [string]$_ -in @('target', 'read', 'prepare-edit', 'verify-edit', 'review', 'find', 'resolve-target', 'repo-graph', 'outline', 'symbol-source', 'references', 'callers', 'calls', 'context-pack', 'review-diff', 'route-map', 'route-impact') }).Count -gt 0
     $criteria.wrongSymbolAvoidance = if ([bool]$scenario.semanticIdentityRequired) {
         $usesNavlyn
     }

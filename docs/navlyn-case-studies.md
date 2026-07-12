@@ -67,6 +67,18 @@ Limits:
 - These commands do not produce runtime route tables, effective authorization proof, EF runtime models, or package compatibility decisions.
 - Use them to decide what source to inspect next, not as a security or runtime validation report.
 
+## External Local Validation: Partial / No-Go Evidence
+
+The 2026-07-12 v0.7.0 run also checked three existing local clones outside this repository. These are not public reproducible fixtures, so they are recorded as adoption-risk evidence rather than release claims.
+
+| Repository shape | Workspace | Result | Friction |
+| --- | --- | --- | --- |
+| Library with tests and benchmarks | `D:\Dev\furbon\SymbolNaming\SymbolNaming.slnx` | `doctor.ok` returned `true`; `target` resolved `RuleBasedSymbolTokenizer`; `prepare-edit` returned anchor, source/context, and 22 related test candidates. | Restore warned about unsupported `net6.0`; large preflight output. |
+| Visual Studio extension | `D:\Dev\furbon\TagGroupJumper\TabGroupJumper.sln` | `target` resolved `Command1Package` with high confidence and attribute facts. | `doctor.ok` false due missing assets and null target framework. |
+| Unity multi-project game | `D:\Dev\furbon\BeltHell\BeltHell.sln` | `target` resolved `ConveyorBelt2D` with high confidence and Unity attribute facts. | `doctor.ok` false due missing assets and unmatched project-reference metadata warning. |
+
+Adoption conclusion: Navlyn has one clean external library adoption path and two useful partial/no-go cases. v0.7.0 should still avoid claiming frictionless adoption for Unity and legacy Visual Studio extension shapes until `doctor` gives more specific remediation.
+
 ## Failure-Mode Comparison
 
 | Failure Mode | Text Search Risk | Navlyn Evidence | Agent Next Action |

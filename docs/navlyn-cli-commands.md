@@ -8,6 +8,7 @@ Navlyn commands are grouped by investigation style:
 
 | Family | Commands | Purpose |
 | --- | --- | --- |
+| Canonical agent workflow | `target`, `read`, `prepare-edit`, `verify-edit`, `review` | Start with one intended target, read bounded source, prepare one edit, verify the actual diff, and review Git changes without choosing from the full advanced surface. |
 | Workspace facts | `doctor`, `check`, `overview`, `repo-graph`, `diagnostics`, `symbol-diagnostics`, `diagnostic-pack` | Diagnose setup, load workspaces, and report deterministic repository, project, package, and compiler facts. |
 | Workspace lifecycle | `workspace-status`, `workspace-refresh`, `serve` | Report workspace freshness, manage the opt-in `.navlyn/cache` manifest, and run a local read-only daemon. |
 | Fuzzy investigations | `find`, `resolve-target`, `where-used`, `about`, `related`, `impact`, `entrypoints` | Resolve approximate symbol intent into candidates, selected target envelopes, selected-symbol summaries, related files, impact, and entrypoint chains. |
@@ -18,6 +19,30 @@ Navlyn commands are grouped by investigation style:
 | Framework and DI | `framework-entrypoints`, `di-graph`, `where-registered`, `di-impact` | Report framework-aware entrypoints and source-level Microsoft.Extensions.DependencyInjection facts. |
 | .NET application domains | `route-map`, `route-impact`, `options-graph`, `config-impact`, `where-handled`, `message-flow`, `ef-model`, `entity-impact`, `package-usage`, `package-impact` | Report source-level ASP.NET Core route/auth, options/configuration, MediatR, EF Core, and package usage facts. |
 | Source navigation primitives | `symbols`, `symbols-in`, `outline`, `symbol-at`, `symbol-info`, `scope-at`, `symbol-source`, `signature`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, `calls` | Return exact Roslyn-backed source-position and symbol navigation facts. |
+
+## Canonical Agent Workflow Commands
+
+The primary agent path is intentionally small:
+
+```powershell
+navlyn target --workspace navlyn.slnx --query PaymentService --assume-kind NamedType --limit 10
+navlyn read --workspace navlyn.slnx --candidate-id sym:v1:... --view declaration
+navlyn prepare-edit --workspace navlyn.slnx --candidate-id sym:v1:... --goal modify --change-kind behavior
+navlyn verify-edit --workspace navlyn.slnx --candidate-id sym:v1:... --fail-on-risk high
+navlyn review --workspace navlyn.slnx --profile evidence
+```
+
+These commands are first-class canonical aliases over the advanced implementation commands:
+
+| Canonical command | Advanced command | Contract note |
+| --- | --- | --- |
+| `target` | `resolve-target` | Same target-selection input modes and JSON shape, with top-level `command: "target"`. |
+| `read` | `symbol-source` | Same `--candidate-id` or `--file --line --column` input modes and bounded source result. |
+| `prepare-edit` | `edit-preflight` | Same `navlyn.edit-preflight.v1` envelope, with `command: "prepare-edit"` and `verify-edit` as the canonical post-edit guard hint. |
+| `verify-edit` | `post-edit-guard` | Same `navlyn.agent-guard.v1` envelope and fail-closed exit behavior, with `command: "verify-edit"`. |
+| `review` | `review-diff` | Same profiled workflow envelope, with top-level workflow `command: "review"`. |
+
+Existing advanced commands remain supported for scripts and specialized workflows. New agent integrations should prefer the canonical names unless they need a narrower advanced primitive such as `references`, `di-impact`, or `public-api-diff`.
 
 ## General Contract
 

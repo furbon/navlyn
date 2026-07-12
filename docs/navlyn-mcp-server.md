@@ -22,14 +22,14 @@ Use `navlyn-mcp` when an agent needs a semantic C# or Visual Basic fact that tex
 | Need | Start With |
 | --- | --- |
 | "Is this repo ready for Navlyn?" | `navlyn_doctor` |
-| "Which symbol did the user mean?" | `navlyn_resolve_target` |
+| "Which symbol did the user mean?" | `navlyn_target` |
 | "What is in this C# or Visual Basic file?" | `navlyn_file_outline` |
-| "Show the exact source for this symbol." | `navlyn_symbol_source` |
+| "Show the exact source for this symbol." | `navlyn_read` |
 | "Who references or calls this selected symbol?" | `navlyn_symbol_edges` |
 | "What workspace/project context matters?" | `navlyn_workspace_summary` |
-| "What evidence should an agent gather before editing?" | `navlyn_edit_preflight` in `edit` profile |
-| "Did the edit hit the intended symbol?" | `navlyn_post_edit_guard` or `navlyn_wrong_symbol_guard` in `edit` or `review` profile |
-| "What does this actual Git diff affect?" | `navlyn_review_diff` in `review` profile |
+| "What evidence should an agent gather before editing?" | `navlyn_prepare_edit` |
+| "Did the edit hit the intended symbol?" | `navlyn_verify_edit` |
+| "What does this actual Git diff affect?" | `navlyn_review` |
 | "What should the agent read before editing?" | `navlyn_context_pack` only after smaller facts show it is needed |
 
 Use `rg`, normal file reads, or editor tools for comments, prose docs, strings, generated artifacts, and non-Roslyn-source content. Navlyn's MCP server is a semantic C#-first .NET facts provider, not a general repository search server.
@@ -127,7 +127,8 @@ The tool list is stable for normal MCP startup:
 
 | Surface | Exposed Tools | Use It For |
 | --- | --- | --- |
-| Unified read-only surface | Every existing Navlyn MCP tool, including edit evidence, review evidence, guard, DI, public API, related-test, context, exact navigation, and `navlyn_batch` tools. | Stable agent setup. The tool descriptions and schemas tell the model when a tool is appropriate; result warnings, partial metadata, and next-action hints guide follow-up calls. |
+| Canonical agent workflow | `navlyn_target`, `navlyn_read`, `navlyn_prepare_edit`, `navlyn_verify_edit`, `navlyn_review` | The primary first-run path for target selection, bounded reading, one-edit preparation, post-edit verification, and diff review. |
+| Advanced compatibility surface | Existing specialized Navlyn MCP tools, including workspace, exact navigation, DI, public API, related-test, context, and `navlyn_batch` tools. | Use only when the current question needs that narrower semantic fact or an optimization after the agent already knows the needed facts. |
 
 `--tool-profile reader|review|edit|full` and `NAVLYN_MCP_TOOL_PROFILE` are deprecated no-op compatibility aliases during migration. When supplied, the server starts with the same unified tool list and writes a deterministic stderr warning before serving MCP protocol messages on stdout.
 
@@ -137,6 +138,11 @@ The MCP surface is deliberately need-triggered. Prefer the specific high-level t
 
 | Tool | Use It For | Logical Navlyn Command |
 | --- | --- | --- |
+| `navlyn_target` | Canonical first symbol entry from query, `candidateId`, or source position; returns one target envelope and ambiguity/fail-closed guidance | `target` |
+| `navlyn_read` | Canonical bounded source reader for one selected symbol by `candidateId` or exact source position | `read` |
+| `navlyn_prepare_edit` | Canonical one-call pre-edit anchor, source, bounded context, related tests, confidence, and next guard command | `prepare-edit` |
+| `navlyn_verify_edit` | Canonical post-edit guard comparing a saved preflight anchor or `candidateId` with the current diff | `verify-edit` |
+| `navlyn_review` | Canonical changed-symbol, impact, diagnostics, related-test, and review facts for an actual Git diff | `review` |
 | `navlyn_doctor` | Setup readiness, SDK/workspace diagnostics, and copyable first commands | `doctor` |
 | `navlyn_workspace_summary` | Project, target framework, package, test relationship, or MSBuild facts when workspace context matters | `repo-graph` |
 | `navlyn_workspace_status` | Workspace snapshot, freshness, document-index size, and optional `.navlyn/cache` manifest status | `workspace-status` |
@@ -177,10 +183,10 @@ Decision rules for agents:
 1. Use `navlyn_doctor` first when setup, SDK, workspace loading, or first-command guidance is uncertain.
 2. Use `navlyn_workspace_summary(profile: "compact")` only when project, package, target framework, or test relationship context matters.
 3. For a known C# or Visual Basic file, use `navlyn_file_outline` or `navlyn_inspect_file` and reuse entry `candidateId` values.
-4. Resolve symbol intent with `navlyn_resolve_target(query: "...", assumeKind: "...")` and reuse `candidateId`.
-5. Use `navlyn_symbol_source` or `navlyn_symbol_edges` for one precise source or relationship fact before asking for broader context. `calls` is a cheap local outgoing-edge operation; `references` and `callers` are scoped expensive operations and should use `scope`/`maxDocuments` when broad.
-6. Before a concrete edit, prefer `navlyn_edit_preflight`; after editing, run `navlyn_post_edit_guard` or `navlyn_wrong_symbol_guard` before widening scope.
-7. Use `navlyn_review_diff` only for an actual Git diff, PR, staged changes, or working-tree changes.
+4. Resolve symbol intent with `navlyn_target(query: "...", assumeKind: "...")` and reuse `candidateId`.
+5. Use `navlyn_read` or `navlyn_symbol_edges` for one precise source or relationship fact before asking for broader context. `calls` is a cheap local outgoing-edge operation; `references` and `callers` are scoped expensive operations and should use `scope`/`maxDocuments` when broad.
+6. Before a concrete edit, prefer `navlyn_prepare_edit`; after editing, run `navlyn_verify_edit` before widening scope.
+7. Use `navlyn_review` only for an actual Git diff, PR, staged changes, or working-tree changes.
 8. Use `navlyn_context_pack` only when a bounded reading queue is needed. Use `navlyn_batch` only after several batch-supported facts are already needed.
 
 ## Resources

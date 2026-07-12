@@ -30,15 +30,15 @@ Then verify one workspace and one symbol. Replace `YourRepo.slnx` with the repos
 
 ```powershell
 navlyn doctor --workspace path/to/YourRepo.slnx
-navlyn resolve-target --workspace path/to/YourRepo.slnx --query PaymentService --assume-kind NamedType --limit 10
-navlyn symbol-source --workspace path/to/YourRepo.slnx --candidate-id sym:v1:... --view declaration --max-lines 80
-navlyn edit-preflight --workspace path/to/YourRepo.slnx --candidate-id sym:v1:... --goal modify --change-kind behavior
+navlyn target --workspace path/to/YourRepo.slnx --query PaymentService --assume-kind NamedType --limit 10
+navlyn read --workspace path/to/YourRepo.slnx --candidate-id sym:v1:... --view declaration --max-lines 80
+navlyn prepare-edit --workspace path/to/YourRepo.slnx --candidate-id sym:v1:... --goal modify --change-kind behavior
 ```
 
 Use the `candidateId` from `resolve-target` for follow-up calls. After an edit, inspect the real diff:
 
 ```powershell
-navlyn review-diff --workspace path/to/YourRepo.slnx --profile evidence
+navlyn review --workspace path/to/YourRepo.slnx --profile evidence
 ```
 
 ## Use With MCP
@@ -92,12 +92,12 @@ Navlyn MCP exposes one stable read-only semantic tool surface. Configure the wor
 
 | Agent question | Navlyn MCP tool |
 | --- | --- |
-| Which symbol did the user mean? | `navlyn_resolve_target` |
-| What is in this file? | `navlyn_file_outline` |
-| Show the declaration for this selected symbol. | `navlyn_symbol_source` |
+| Which symbol did the user mean? | `navlyn_target` |
+| Show the declaration for this selected symbol. | `navlyn_read` |
 | Who calls or references it? | `navlyn_symbol_edges` |
-| What should I know before changing it? | `navlyn_edit_preflight` |
-| What did this Git diff affect? | `navlyn_review_diff` |
+| What should I know before changing it? | `navlyn_prepare_edit` |
+| Did the actual diff stay on target? | `navlyn_verify_edit` |
+| What did this Git diff affect? | `navlyn_review` |
 
 The useful unit is one answerable question, not a repository dump. Navlyn returns bounded JSON facts so an agent can keep an exact `candidateId` through its investigation and only request the next relationship or source slice when it needs it.
 

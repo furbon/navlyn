@@ -266,6 +266,69 @@ function Test-ContractSuite {
     return $Suite -eq 'all' -or $Suite -eq $Name
 }
 
+function Invoke-NavigationContractGate {
+    $navigationBatchInput = @'
+{
+  "defaults": {
+    "project": "Navlyn.CommandLine(net10.0)"
+  },
+  "requests": [
+    { "id": "symbols", "command": "symbols", "query": "Check", "limit": 1 },
+    { "id": "symbols-in", "command": "symbols-in", "file": "Navlyn.CommandLine/Cli/NavlynCli.cs", "line": 59 },
+    { "id": "outline", "command": "outline", "file": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs" },
+    { "id": "symbol-at", "command": "symbol-at", "file": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs", "line": 6, "column": 23 },
+    { "id": "symbol-info", "command": "symbol-info", "file": "Navlyn.CommandLine/Cli/NavlynCli.cs", "line": 59, "column": 37 },
+    { "id": "symbol-source", "command": "symbol-source", "file": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs", "line": 6, "column": 23, "view": "declaration", "maxLines": 1 },
+    { "id": "type-hierarchy", "command": "type-hierarchy", "file": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs", "line": 6, "column": 23 },
+    { "id": "definition", "command": "definition", "file": "Navlyn.CommandLine/Cli/NavlynCli.cs", "line": 59, "column": 37 },
+    { "id": "references", "command": "references", "file": "Navlyn.CommandLine/Cli/NavlynCli.cs", "line": 59, "column": 37 },
+    { "id": "find", "command": "find", "query": "CheckCommand", "assumeKind": "NamedType" },
+    { "id": "where-used", "command": "where-used", "candidateIdFrom": "find", "limit": 1, "includeSnippets": true, "snippetLines": 0 },
+    { "id": "about", "command": "about", "candidateIdFrom": "find", "memberLimit": 2, "referenceLimit": 1 },
+    { "id": "related", "command": "related", "candidateIdFrom": "find", "limit": 2 },
+    { "id": "impact", "command": "impact", "candidateIdFrom": "find", "limit": 2 },
+    { "id": "entrypoints", "command": "entrypoints", "candidateIdFrom": "find", "limit": 2 },
+    { "id": "implementations", "command": "implementations", "file": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs", "line": 6, "column": 23 },
+    { "id": "callers", "command": "callers", "file": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs", "line": 8, "column": 27 },
+    { "id": "calls", "command": "calls", "file": "Navlyn.CommandLine/Cli/NavlynCli.cs", "line": 59, "column": 37 }
+  ]
+}
+'@
+
+    $navigationBatch = Invoke-Navlyn `
+        -Name 'navigation aggregate batch' `
+        -Arguments @('batch', '--workspace', 'navlyn.slnx') `
+        -ExpectedExitCode 0 `
+        -StandardInput $navigationBatchInput
+
+    Assert-Empty -Name 'navigation aggregate batch stderr' -Text $navigationBatch.Stderr
+    $navigationBatchJson = $navigationBatch.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'navigation aggregate batch request count' -Actual $navigationBatchJson.totalRequests -Expected 18
+    Assert-Equal -Name 'navigation aggregate batch succeeded count' -Actual $navigationBatchJson.succeededRequests -Expected 18
+    Assert-Equal -Name 'navigation aggregate symbols command' -Actual @($navigationBatchJson.results)[0].command -Expected 'symbols'
+    Assert-Equal -Name 'navigation aggregate symbol-at name' -Actual @($navigationBatchJson.results)[3].result.symbol.name -Expected 'CheckCommand'
+    Assert-Equal -Name 'navigation aggregate definition path' -Actual @(@($navigationBatchJson.results)[7].result.definitions)[0].path -Expected 'Navlyn.CommandLine/Cli/Commands/CheckCommand.cs'
+    Assert-Equal -Name 'navigation aggregate where-used count' -Actual @($navigationBatchJson.results)[10].result.totalMatches -Expected 1
+    Assert-Equal -Name 'navigation aggregate callers count' -Actual (@(@($navigationBatchJson.results)[16].result.callers).Count -ge 1) -Expected $true
+    Assert-Equal -Name 'navigation aggregate calls count' -Actual (@(@($navigationBatchJson.results)[17].result.calls).Count -ge 1) -Expected $true
+
+    $signature = Invoke-Navlyn `
+        -Name 'signature aggregate gate' `
+        -Arguments @('signature', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/Commands/CheckCommand.cs', '--line', '8', '--column', '27') `
+        -ExpectedExitCode 0
+
+    $signatureJson = $signature.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'signature aggregate symbol name' -Actual $signatureJson.symbol.name -Expected 'Create'
+
+    $scopeAt = Invoke-Navlyn `
+        -Name 'scope-at aggregate gate' `
+        -Arguments @('scope-at', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '59', '--column', '37') `
+        -ExpectedExitCode 0
+
+    $scopeAtJson = $scopeAt.Stdout | ConvertFrom-Json
+    Assert-Equal -Name 'scope-at aggregate containing symbol' -Actual $scopeAtJson.containingSymbol.name -Expected 'CreateRootCommand'
+}
+
 Push-Location $RepoRoot
 try {
     & $NormalizeScript -Quiet
@@ -759,7 +822,7 @@ try {
       "id": "symbol-info",
       "command": "symbol-info",
       "file": "Navlyn.CommandLine/Cli/NavlynCli.cs",
-      "line": 54,
+      "line": 59,
       "column": 37
     },
     {
@@ -780,7 +843,7 @@ try {
       "id": "calls",
       "command": "calls",
       "file": "Navlyn.CommandLine/Cli/NavlynCli.cs",
-      "line": 54,
+      "line": 59,
       "column": 37
     },
     {
@@ -1214,6 +1277,10 @@ try {
     }
 
     if (Test-ContractSuite -Name 'navigation') {
+    if ($Suite -eq 'all') {
+        Invoke-NavigationContractGate
+    }
+    else {
     $symbols = Invoke-Navlyn `
         -Name 'symbols partial query' `
         -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--query', 'Check') `
@@ -1327,25 +1394,25 @@ try {
 
     $symbolsIn = Invoke-Navlyn `
         -Name 'symbols-in source line' `
-        -Arguments @('symbols-in', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '54') `
+        -Arguments @('symbols-in', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '59') `
         -ExpectedExitCode 0
 
     $symbolsInJson = $symbolsIn.Stdout | ConvertFrom-Json
     $symbolsInMatch = @($symbolsInJson.symbols | Where-Object { $_.name -eq 'CheckCommand' })[0]
     Assert-Equal -Name 'symbols-in file' -Actual $symbolsInJson.file -Expected 'Navlyn.CommandLine/Cli/NavlynCli.cs'
-    Assert-Equal -Name 'symbols-in line' -Actual $symbolsInJson.line -Expected 54
+    Assert-Equal -Name 'symbols-in line' -Actual $symbolsInJson.line -Expected 59
     Assert-Equal -Name 'symbols-in start column' -Actual $symbolsInJson.startColumn -Expected 1
     Assert-Equal -Name 'symbols-in end column' -Actual $symbolsInJson.endColumn -Expected 60
     Assert-Equal -Name 'symbols-in contains CheckCommand' -Actual $symbolsInMatch.name -Expected 'CheckCommand'
     Assert-Equal -Name 'symbols-in CheckCommand kind' -Actual $symbolsInMatch.kind -Expected 'NamedType'
-    Assert-Equal -Name 'symbols-in CheckCommand line' -Actual $symbolsInMatch.line -Expected 54
+    Assert-Equal -Name 'symbols-in CheckCommand line' -Actual $symbolsInMatch.line -Expected 59
     Assert-Equal -Name 'symbols-in CheckCommand column' -Actual $symbolsInMatch.column -Expected 37
-    Assert-Equal -Name 'symbols-in CheckCommand end line' -Actual $symbolsInMatch.endLine -Expected 54
+    Assert-Equal -Name 'symbols-in CheckCommand end line' -Actual $symbolsInMatch.endLine -Expected 59
     Assert-Equal -Name 'symbols-in CheckCommand end column' -Actual $symbolsInMatch.endColumn -Expected 49
 
     $symbolsInSpan = Invoke-Navlyn `
         -Name 'symbols-in source span' `
-        -Arguments @('symbols-in', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '54', '--start-column', '37', '--end-column', '49') `
+        -Arguments @('symbols-in', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '59', '--start-column', '37', '--end-column', '49') `
         -ExpectedExitCode 0
 
     $symbolsInSpanJson = $symbolsInSpan.Stdout | ConvertFrom-Json
@@ -1375,7 +1442,7 @@ try {
 
     $symbolsInInvalidSpan = Invoke-Navlyn `
         -Name 'symbols-in invalid span' `
-        -Arguments @('symbols-in', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '54', '--start-column', '37', '--end-column', '37') `
+        -Arguments @('symbols-in', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '59', '--start-column', '37', '--end-column', '37') `
         -ExpectedExitCode 2
     Assert-Empty -Name 'symbols-in invalid span stdout' -Text $symbolsInInvalidSpan.Stdout
     Assert-Contains -Name 'symbols-in invalid span stderr' -Text $symbolsInInvalidSpan.Stderr -Expected 'NAVLYN1303:'
@@ -1401,7 +1468,7 @@ try {
 
     $symbolInfo = Invoke-Navlyn `
         -Name 'symbol-info invocation' `
-        -Arguments @('symbol-info', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '54', '--column', '37') `
+        -Arguments @('symbol-info', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '59', '--column', '37') `
         -ExpectedExitCode 0
 
     $symbolInfoJson = $symbolInfo.Stdout | ConvertFrom-Json
@@ -1410,7 +1477,7 @@ try {
 
     $scopeAt = Invoke-Navlyn `
         -Name 'scope-at source position' `
-        -Arguments @('scope-at', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '54', '--column', '37') `
+        -Arguments @('scope-at', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '59', '--column', '37') `
         -ExpectedExitCode 0
 
     $scopeAtJson = $scopeAt.Stdout | ConvertFrom-Json
@@ -1461,13 +1528,13 @@ try {
 
     $definition = Invoke-Navlyn `
         -Name 'definition type reference' `
-        -Arguments @('definition', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '54', '--column', '37') `
+        -Arguments @('definition', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '59', '--column', '37') `
         -ExpectedExitCode 0
 
     $definitionJson = $definition.Stdout | ConvertFrom-Json
     $definitionLocation = @($definitionJson.definitions)[0]
     Assert-Equal -Name 'definition file' -Actual $definitionJson.file -Expected 'Navlyn.CommandLine/Cli/NavlynCli.cs'
-    Assert-Equal -Name 'definition line' -Actual $definitionJson.line -Expected 54
+    Assert-Equal -Name 'definition line' -Actual $definitionJson.line -Expected 59
     Assert-Equal -Name 'definition column' -Actual $definitionJson.column -Expected 37
     Assert-Equal -Name 'definition symbol name' -Actual $definitionJson.symbol.name -Expected 'CheckCommand'
     Assert-Equal -Name 'definition symbol kind' -Actual $definitionJson.symbol.kind -Expected 'NamedType'
@@ -1497,22 +1564,22 @@ try {
 
     $references = Invoke-Navlyn `
         -Name 'references type reference' `
-        -Arguments @('references', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '54', '--column', '37') `
+        -Arguments @('references', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '59', '--column', '37') `
         -ExpectedExitCode 0
 
     $referencesJson = $references.Stdout | ConvertFrom-Json
     $referenceLocation = @($referencesJson.references)[0]
     Assert-Equal -Name 'references file' -Actual $referencesJson.file -Expected 'Navlyn.CommandLine/Cli/NavlynCli.cs'
-    Assert-Equal -Name 'references line' -Actual $referencesJson.line -Expected 54
+    Assert-Equal -Name 'references line' -Actual $referencesJson.line -Expected 59
     Assert-Equal -Name 'references column' -Actual $referencesJson.column -Expected 37
     Assert-Equal -Name 'references symbol name' -Actual $referencesJson.symbol.name -Expected 'CheckCommand'
     Assert-Equal -Name 'references symbol kind' -Actual $referencesJson.symbol.kind -Expected 'NamedType'
     Assert-Equal -Name 'references symbol container' -Actual $referencesJson.symbol.container -Expected 'Navlyn.Cli.Commands'
     Assert-Equal -Name 'references count' -Actual @($referencesJson.references).Count -Expected 1
     Assert-Equal -Name 'references path' -Actual $referenceLocation.path -Expected 'Navlyn.CommandLine/Cli/NavlynCli.cs'
-    Assert-Equal -Name 'references reference line' -Actual $referenceLocation.line -Expected 54
+    Assert-Equal -Name 'references reference line' -Actual $referenceLocation.line -Expected 59
     Assert-Equal -Name 'references reference column' -Actual $referenceLocation.column -Expected 37
-    Assert-Equal -Name 'references reference end line' -Actual $referenceLocation.endLine -Expected 54
+    Assert-Equal -Name 'references reference end line' -Actual $referenceLocation.endLine -Expected 59
     Assert-Equal -Name 'references reference end column' -Actual $referenceLocation.endColumn -Expected 49
     Assert-Equal -Name 'references containing symbol name' -Actual $referenceLocation.containingSymbol.name -Expected 'CreateRootCommand'
     Assert-Equal -Name 'references containing symbol kind' -Actual $referenceLocation.containingSymbol.kind -Expected 'Method'
@@ -1626,12 +1693,12 @@ try {
     Assert-Equal -Name 'callers symbol name' -Actual $callersJson.symbol.name -Expected 'Create'
     Assert-Equal -Name 'callers symbol kind' -Actual $callersJson.symbol.kind -Expected 'Method'
     Assert-Equal -Name 'callers contains CreateRootCommand' -Actual $callerGroup.symbol.name -Expected 'CreateRootCommand'
-    Assert-Equal -Name 'callers location line' -Actual @($callerGroup.locations)[0].line -Expected 54
+    Assert-Equal -Name 'callers location line' -Actual @($callerGroup.locations)[0].line -Expected 59
     Assert-Equal -Name 'callers location has span' -Actual (@($callerGroup.locations)[0].endColumn -gt @($callerGroup.locations)[0].column) -Expected $true
 
     $calls = Invoke-Navlyn `
         -Name 'calls containing member' `
-        -Arguments @('calls', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '54', '--column', '37') `
+        -Arguments @('calls', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '59', '--column', '37') `
         -ExpectedExitCode 0
 
     $callsJson = $calls.Stdout | ConvertFrom-Json
@@ -1639,16 +1706,17 @@ try {
     Assert-Equal -Name 'calls file' -Actual $callsJson.file -Expected 'Navlyn.CommandLine/Cli/NavlynCli.cs'
     Assert-Equal -Name 'calls caller name' -Actual $callsJson.caller.name -Expected 'CreateRootCommand'
     Assert-Equal -Name 'calls contains CheckCommand.Create' -Actual $checkCreateCall.symbol.name -Expected 'Create'
-    Assert-Equal -Name 'calls CheckCommand.Create location line' -Actual @($checkCreateCall.locations)[0].line -Expected 54
+    Assert-Equal -Name 'calls CheckCommand.Create location line' -Actual @($checkCreateCall.locations)[0].line -Expected 59
     Assert-Equal -Name 'calls CheckCommand.Create location has span' -Actual (@($checkCreateCall.locations)[0].endColumn -gt @($checkCreateCall.locations)[0].column) -Expected $true
 
     $callsMetadata = Invoke-Navlyn `
         -Name 'calls include metadata' `
-        -Arguments @('calls', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '54', '--column', '37', '--include-metadata', '--result-kind', 'Method', '--limit', '1') `
+        -Arguments @('calls', '--workspace', 'navlyn.slnx', '--file', 'Navlyn.CommandLine/Cli/NavlynCli.cs', '--line', '59', '--column', '37', '--include-metadata', '--result-kind', 'Method', '--limit', '1') `
         -ExpectedExitCode 0
     $callsMetadataJson = $callsMetadata.Stdout | ConvertFrom-Json
     Assert-Equal -Name 'calls include metadata flag' -Actual $callsMetadataJson.includeMetadata -Expected $true
     Assert-Equal -Name 'calls include metadata limit' -Actual $callsMetadataJson.limit -Expected 1
+    }
     }
 
     Invoke-CoreErrorChecks

@@ -89,6 +89,108 @@ internal static class NavlynToolCommandBuilder
         return CommandBuildResult.Valid("doctor", []);
     }
 
+    public static CommandBuildResult Target(
+        string? query,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        string? assumeKind,
+        string[]? assumeKinds,
+        string? match,
+        bool? caseSensitive,
+        string? project,
+        string[]? projects,
+        bool? excludeGenerated,
+        int? limit,
+        string? candidatePolicy,
+        string? minConfidence,
+        bool? explainSelection)
+    {
+        CommandBuildResult result = ResolveTarget(query, candidateId, file, line, column, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, limit, candidatePolicy, minConfidence, explainSelection);
+        return result.IsValid ? result with { Command = "target" } : result;
+    }
+
+    public static CommandBuildResult Read(
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        string? project,
+        bool? excludeGenerated,
+        string? view,
+        int? maxLines,
+        int? budgetTokens)
+    {
+        CommandBuildResult result = SymbolSource(candidateId, file, line, column, project, excludeGenerated, view, maxLines, budgetTokens);
+        return result.IsValid ? result with { Command = "read" } : result;
+    }
+
+    public static CommandBuildResult PrepareEdit(
+        string? query,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        string? assumeKind,
+        string[]? assumeKinds,
+        string? match,
+        bool? caseSensitive,
+        string? project,
+        string[]? projects,
+        bool? excludeGenerated,
+        string? goal,
+        string? changeKind,
+        int? budgetTokens,
+        int? itemLimit,
+        int? referenceLimit,
+        int? testLimit,
+        int? candidateLimit,
+        string? candidatePolicy,
+        string? minConfidence,
+        bool? explainSelection)
+    {
+        return AgentTargetPack("prepare-edit", query, candidateId, file, line, column, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, goal, changeKind, budgetTokens, itemLimit, referenceLimit, testLimit, candidateLimit, candidatePolicy, minConfidence, explainSelection);
+    }
+
+    public static CommandBuildResult VerifyEdit(
+        string? candidateId,
+        string? preflight,
+        string? baseRef,
+        string? head,
+        bool? staged,
+        bool? includeUnstaged,
+        string? project,
+        string[]? projects,
+        bool? excludeGenerated,
+        int? symbolLimit,
+        string? failOnRisk)
+    {
+        CommandBuildResult result = PostEditGuard(candidateId, preflight, baseRef, head, staged, includeUnstaged, project, projects, excludeGenerated, symbolLimit, failOnRisk);
+        return result.IsValid ? result with { Command = "verify-edit" } : result;
+    }
+
+    public static CommandBuildResult Review(
+        string? baseRef,
+        string? head,
+        bool? staged,
+        bool? includeUnstaged,
+        string? project,
+        string[]? projects,
+        bool? excludeGenerated,
+        int? symbolLimit,
+        int? impactLimit,
+        int? diagnosticLimit,
+        int? relatedTestLimit,
+        int? depth,
+        bool? includeSnippets,
+        int? snippetLines,
+        string? profile)
+    {
+        CommandBuildResult result = ReviewDiff(baseRef, head, staged, includeUnstaged, project, projects, excludeGenerated, symbolLimit, impactLimit, diagnosticLimit, relatedTestLimit, depth, includeSnippets, snippetLines, profile);
+        return result.IsValid ? result with { Command = "review" } : result;
+    }
+
     public static CommandBuildResult FindSymbol(
         string query,
         string? assumeKind,

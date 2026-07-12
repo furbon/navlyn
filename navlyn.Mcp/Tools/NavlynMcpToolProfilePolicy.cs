@@ -6,6 +6,11 @@ internal static class NavlynMcpToolProfilePolicy
 {
     private static readonly string[] UnifiedTools =
     [
+        NavlynMcpTools.TargetTool,
+        NavlynMcpTools.ReadTool,
+        NavlynMcpTools.PrepareEditTool,
+        NavlynMcpTools.VerifyEditTool,
+        NavlynMcpTools.ReviewTool,
         NavlynMcpTools.WorkspaceSummaryTool,
         NavlynMcpTools.WorkspaceStatusTool,
         NavlynMcpTools.WorkspaceRefreshTool,

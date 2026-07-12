@@ -16,7 +16,7 @@ public sealed class ToolSelectionEvalTests
 
         Assert.Equal("navlyn.tool-selection-eval.v1", root.GetProperty("schemaVersion").GetString());
         JsonElement scenarios = root.GetProperty("scenarios");
-        Assert.True(scenarios.GetArrayLength() >= 9);
+        Assert.True(scenarios.GetArrayLength() >= 20);
         foreach (JsonElement scenario in scenarios.EnumerateArray())
         {
             Assert.False(string.IsNullOrWhiteSpace(scenario.GetProperty("id").GetString()));
@@ -62,7 +62,7 @@ public sealed class ToolSelectionEvalTests
             JsonElement root = report.RootElement;
             Assert.True(root.GetProperty("passed").GetBoolean());
             Assert.Equal(1.0, root.GetProperty("score").GetDouble());
-            Assert.Equal(10, root.GetProperty("scenarioCount").GetInt32());
+            Assert.True(root.GetProperty("scenarioCount").GetInt32() >= 20);
         }
         finally
         {
