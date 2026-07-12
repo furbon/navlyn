@@ -9,16 +9,16 @@ Each walkthrough is reproducible from this repository or committed fixtures. Eac
 Run from this repository after restore:
 
 ```powershell
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- resolve-target --workspace navlyn.slnx --project "Navlyn.CommandLine(net10.0)" --query CheckCommand --assume-kind NamedType --limit 5
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- edit-preflight --workspace navlyn.slnx --project "Navlyn.CommandLine(net10.0)" --query CheckCommand --assume-kind NamedType --goal modify --change-kind behavior
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review-diff --workspace navlyn.slnx --base HEAD --head HEAD --profile compact --symbol-limit 3 --impact-limit 3 --diagnostic-limit 3 --related-test-limit 3
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- target --workspace navlyn.slnx --project "Navlyn.CommandLine(net10.0)" --query CheckCommand --assume-kind NamedType --limit 5
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- prepare-edit --workspace navlyn.slnx --project "Navlyn.CommandLine(net10.0)" --query CheckCommand --assume-kind NamedType --goal modify --change-kind behavior
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review --workspace navlyn.slnx --base HEAD --head HEAD --profile compact --symbol-limit 3 --impact-limit 3 --diagnostic-limit 3 --related-test-limit 3
 ```
 
 Check that stdout is JSON for each command and stderr is empty or diagnostic-only. The fields to inspect are:
 
-- `resolve-target`: `confidence`, `candidateId`, `selectedTarget.path`, `ambiguitySummary` when no target is selected.
-- `edit-preflight`: anchor fields, source/context/test evidence, known unknowns, and the post-edit guard command.
-- `review-diff`: `diff.mode`, changed-symbol/diagnostic/impact counts, warnings, truncation flags, and `profile`.
+- `target`: `confidence`, `candidateId`, `selectedTarget.path`, `ambiguitySummary` when no target is selected.
+- `prepare-edit`: anchor fields, source/context/test evidence, known unknowns, and the post-edit guard command.
+- `review`: `diff.mode`, changed-symbol/diagnostic/impact counts, warnings, truncation flags, and `profile`.
 
 Stop after the returned fields answer the question. Do not treat `recommendedNextActions` as a checklist. The third command demonstrates a bounded review envelope on an explicit Git range; replace the refs with PR refs or omit them on a dirty branch to inspect a real diff.
 
@@ -40,8 +40,8 @@ Run:
 
 ```powershell
 navlyn repo-graph --workspace navlyn.slnx --profile compact
-navlyn resolve-target --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --limit 5
-navlyn edit-preflight --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --goal modify --change-kind behavior --budget-tokens 2000
+navlyn target --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --limit 5
+navlyn prepare-edit --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --goal modify --change-kind behavior --budget-tokens 2000
 ```
 
 Useful output excerpt:
@@ -70,7 +70,7 @@ Useful output excerpt:
 }
 ```
 
-Why it matters: the `candidateId` gives the agent a stable declaration anchor for follow-up commands. The `edit-preflight` output then gives bounded source, context, related test evidence, known unknowns, and a post-edit guard command instead of a raw source dump.
+Why it matters: the `candidateId` gives the agent a stable declaration anchor for follow-up commands. The `prepare-edit` output then gives bounded source, context, related test evidence, known unknowns, and a post-edit guard command instead of a raw source dump.
 
 ## Demo 2: PR Review Facts
 
@@ -79,7 +79,7 @@ Failure mode: an agent reviews a diff from raw patches only and misses diagnosti
 Run from a dirty branch or with explicit refs:
 
 ```powershell
-navlyn review-diff --workspace navlyn.slnx --profile evidence --symbol-limit 3 --impact-limit 5 --diagnostic-limit 5 --related-test-limit 5 --depth 1
+navlyn review --workspace navlyn.slnx --profile evidence --symbol-limit 3 --impact-limit 5 --diagnostic-limit 5 --related-test-limit 5 --depth 1
 navlyn tests-for-diff --workspace navlyn.slnx --profile compact --test-limit 10
 navlyn context-pack --workspace navlyn.slnx --diff --goal review --profile compact --budget-tokens 8000
 ```
@@ -88,7 +88,7 @@ Useful output excerpt:
 
 ```json
 {
-  "command": "review-diff",
+  "command": "review",
   "profile": "evidence",
   "diff": {
     "mode": "workingTree",
@@ -100,13 +100,13 @@ Useful output excerpt:
     "relatedTests": { "totalCandidates": 0, "truncated": false }
   },
   "warnings": [
-    "Public contract changes are current-workspace heuristics; this review-diff pack does not include before/after public API diff.",
+    "Public contract changes are current-workspace heuristics; this review pack does not include before/after public API diff.",
     "Diagnostics are current scoped diagnostics, not before/after diagnostic deltas."
   ]
 }
 ```
 
-Why it matters: `review-diff` is an evidence pack, not a reviewer. It gives the agent and human reviewer scoped facts and explicitly reports bounded limitations.
+Why it matters: `review` is an evidence pack, not a reviewer. It gives the agent and human reviewer scoped facts and explicitly reports bounded limitations.
 
 ## Demo 2b: Wrong-Symbol Guard
 
@@ -115,8 +115,8 @@ Failure mode: an agent correctly anchors `CheckCommand`, edits elsewhere, and th
 Run:
 
 ```powershell
-navlyn resolve-target --workspace navlyn.slnx --project "Navlyn.CommandLine(net10.0)" --query CheckCommand --assume-kind NamedType --limit 5
-navlyn edit-preflight --workspace navlyn.slnx --candidate-id sym:v1:... --goal modify --change-kind behavior
+navlyn target --workspace navlyn.slnx --project "Navlyn.CommandLine(net10.0)" --query CheckCommand --assume-kind NamedType --limit 5
+navlyn prepare-edit --workspace navlyn.slnx --candidate-id sym:v1:... --goal modify --change-kind behavior
 navlyn wrong-symbol-guard --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --fail-on-risk medium
 ```
 

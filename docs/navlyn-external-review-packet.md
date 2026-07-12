@@ -34,14 +34,16 @@ navlyn_review
 - Agent evidence eval: 6/6 passed with score summary and output/tool metrics.
 - MCP/Workspace/Contract/Generated/Symbol stress tests: 176/176 passed on net8.0 and net10.0.
 - Package install smoke passed on net8.0 and net10.0.
-- External local repos: SymbolNaming, TagGroupJumper, BeltHell all resolved targets; all retained setup/restore warnings.
+- External local repos: SymbolNaming resolved a target with clean `doctor.ok: true` after setup; TagGroupJumper and BeltHell resolved targets but retained degraded restore/workspace warnings.
+- Fresh Phase 0 baseline on 2026-07-12: restore, build, xUnit on net8.0/net10.0, quick checks, CLI contract all suite, and public readiness audit passed. The CLI contract all suite completed in about 399 seconds on this machine.
 
 ## Limitations
 
 - Navlyn does not edit files, run tests, call the network, or prove runtime behavior.
 - Candidate IDs are opaque and not guaranteed stable across edits or workspace changes.
-- External validation did not produce a clean `doctor.ok: true` adoption case in this run.
-- Full performance scenario timed out at 300 seconds in this environment.
+- External validation is still local-clone evidence, not a clean-room third-party adoption corpus.
+- The public packet does not yet include fresh live-agent MCP traces.
+- Full performance `Scenario all` must be rerun for any new 9.7+ release claim; do not infer that result from this packet alone.
 
 ## Breaking / Migration
 

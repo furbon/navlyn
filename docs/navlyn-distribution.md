@@ -37,7 +37,7 @@ Installed command names are:
 First smoke after install:
 
 ```powershell
-navlyn check --workspace auto
+navlyn doctor --workspace auto
 navlyn repo-graph --workspace auto --profile compact
 navlyn-mcp --help
 ```
@@ -51,7 +51,7 @@ dotnet new tool-manifest
 dotnet tool install navlyn --version 0.7.0
 dotnet tool install navlyn-mcp --version 0.7.0
 dotnet tool restore
-dotnet tool run navlyn -- check --workspace auto
+dotnet tool run navlyn -- doctor --workspace auto
 ```
 
 Commit `.config/dotnet-tools.json` after reviewing the exact versions. A copyable manifest shape lives in [`../examples/install/dotnet-tools.json`](../examples/install/dotnet-tools.json).
@@ -119,7 +119,7 @@ Run a local pack/install smoke before publishing:
 The script packs both tools, installs them from a local package source, and verifies three install shapes for each requested target framework: `navlyn` only, `navlyn-mcp` only, and both tools together. It runs:
 
 - `navlyn --help`
-- `navlyn check --workspace navlyn.slnx`
+- `navlyn doctor --workspace navlyn.slnx`
 - `navlyn repo-graph --workspace navlyn.slnx --profile compact`
 - `navlyn-mcp --help`
 - a minimal installed-tool MCP stdio smoke without passing `--navlyn-executable`
@@ -191,7 +191,7 @@ dotnet tool install --global navlyn --version 0.7.0
 dotnet tool install --global navlyn-mcp --version 0.7.0
 navlyn --help
 navlyn-mcp --help
-navlyn check --workspace auto
+navlyn doctor --workspace auto
 ```
 
 For local machines that already have the tools installed, use a temporary `--tool-path` instead of global install.

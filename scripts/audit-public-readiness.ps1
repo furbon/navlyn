@@ -264,6 +264,30 @@ foreach ($root in $staleVersionRoots) {
     }
 }
 
+$canonicalPathFiles = @(
+    'README.md',
+    'README_ja.md',
+    'docs/navlyn-demo-walkthroughs.md',
+    'docs/navlyn-case-studies.md',
+    'docs/navlyn-positioning.md',
+    'docs/navlyn-first-10-minutes.md',
+    'docs/navlyn-distribution.md',
+    'docs/navlyn-external-review-packet.md'
+)
+
+$advancedAliasPattern = '(?i)\b(resolve-target|edit-preflight|review-diff|symbol-source|post-edit-guard)\b|check\s+--workspace'
+foreach ($canonicalPathFile in $canonicalPathFiles) {
+    $canonicalPath = Join-Path $RepoRoot $canonicalPathFile
+    if (!(Test-Path -LiteralPath $canonicalPath)) {
+        continue
+    }
+
+    $text = Get-Content -Raw -LiteralPath $canonicalPath
+    if ($text -match $advancedAliasPattern) {
+        Add-Issue -Issues $Issues -Code 'NAVLYN-PUBLIC-CANONICAL-PATH-DRIFT' -Path $canonicalPathFile -Message 'Primary first-run public docs should use canonical target/read/prepare-edit/verify-edit/review wording; advanced aliases belong in CLI/MCP compatibility docs.'
+    }
+}
+
 if ($RunValidation) {
     Invoke-CheckedCommand -Name 'dotnet restore' -Command 'dotnet restore navlyn.slnx'
     Invoke-CheckedCommand -Name 'dotnet build' -Command 'dotnet build navlyn.slnx'

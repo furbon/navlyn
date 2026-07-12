@@ -60,6 +60,10 @@ The skeptical review must answer:
 
 Do not let the implementer declare success solely from intent. Success requires the skeptical review to identify no dimension below 9.5.
 
+Self-scored all-green is not sufficient. If the final claim depends on external adoption, MCP agent behavior, package install, performance, or public documentation consistency, the evidence must be independently reproducible from committed docs, scripts, command output, eval traces, or a clean-room validation packet. Persona reviews and private planning notes can explain decisions, but they do not remove a score ceiling by themselves.
+
+Public truth must stay single. README files, demos, case studies, external review packets, MCP setup docs, and eval docs should agree on the canonical command path, current validation status, known limitations, and any degraded/no-go results. A stale success or stale failure claim in public docs is a release-blocking review finding, not a harmless documentation detail.
+
 ## Iteration Rule
 
 Run up to five improvement rounds for a 9.5+ objective:
