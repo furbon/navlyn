@@ -9,12 +9,12 @@ Start with `docs/navlyn-first-15-minutes.md`.
 Canonical CLI:
 
 ```powershell
-navlyn doctor --workspace path/to/YourRepo.sln
-navlyn target --workspace path/to/YourRepo.sln --query PaymentService --assume-kind NamedType
-navlyn read --workspace path/to/YourRepo.sln --candidate-id sym:v1:...
-navlyn prepare-edit --workspace path/to/YourRepo.sln --candidate-id sym:v1:... --goal modify --change-kind behavior
-navlyn verify-edit --workspace path/to/YourRepo.sln --candidate-id sym:v1:... --fail-on-risk high
-navlyn review --workspace path/to/YourRepo.sln --profile evidence
+navlyn doctor --workspace auto
+navlyn target --workspace auto --query PaymentService --assume-kind NamedType
+navlyn read --workspace auto --candidate-id sym:v1:...
+navlyn prepare-edit --workspace auto --candidate-id sym:v1:... --goal modify --change-kind behavior
+navlyn verify-edit --workspace auto --candidate-id sym:v1:... --fail-on-risk high
+navlyn review --workspace auto --profile evidence
 ```
 
 Canonical MCP tools:

@@ -57,4 +57,4 @@ JSON schema は [navlyn-workspace.schema.json](schemas/navlyn-workspace.schema.j
 
 ## `auto`
 
-`--workspace auto` は、設定ファイルを置かない場合の選択肢です。リポジトリのルートから、`navlyn.workspace.json`、`.code-workspace`、`.slnx`、`.sln`、`.csproj`、`.vbproj` の順でトップレベルの候補を見ます。選択が一意なときだけ使ってください。
+`--workspace auto` は、CLI で設定ファイルを置かない場合の選択肢です。MCP server は `--workspace` を省略すると同じ挙動になります。リポジトリのルートから、`navlyn.workspace.json`、`.code-workspace`、`.slnx`、`.sln`、`.csproj`、`.vbproj` の順でトップレベルの候補を見ます。選択が一意なときに使い、同じ優先度の候補が複数ある場合は推測せずに失敗します。

@@ -37,8 +37,8 @@ Installed command names are:
 First smoke after install:
 
 ```powershell
-navlyn check --workspace path/to/YourRepo.slnx
-navlyn repo-graph --workspace path/to/YourRepo.slnx --profile compact
+navlyn check --workspace auto
+navlyn repo-graph --workspace auto --profile compact
 navlyn-mcp --help
 ```
 
@@ -51,7 +51,7 @@ dotnet new tool-manifest
 dotnet tool install navlyn --version 0.7.0
 dotnet tool install navlyn-mcp --version 0.7.0
 dotnet tool restore
-dotnet tool run navlyn -- check --workspace path/to/YourRepo.slnx
+dotnet tool run navlyn -- check --workspace auto
 ```
 
 Commit `.config/dotnet-tools.json` after reviewing the exact versions. A copyable manifest shape lives in [`../examples/install/dotnet-tools.json`](../examples/install/dotnet-tools.json).
@@ -62,14 +62,16 @@ Local MCP server configuration can still invoke `navlyn-mcp` when the restored l
 
 ## MCP Client Setup Examples
 
-The installed stdio server shape is:
+The installed stdio server shape for a normal repository with one top-level workspace candidate is:
 
 ```json
 {
   "command": "navlyn-mcp",
-  "args": ["--workspace", "path/to/YourRepo.slnx"]
+  "cwd": "."
 }
 ```
+
+Set `cwd` to the repository root, or pass `args: ["--working-directory", "."]` when the MCP client cannot set `cwd`. Add `args: ["--workspace", "path/to/YourRepo.slnx"]` only when automatic workspace discovery is ambiguous or the repository policy requires one explicit workspace.
 
 For VS Code workspace configuration, use `.vscode/mcp.json` with a `servers` object. See [`../examples/install/vscode-mcp.json`](../examples/install/vscode-mcp.json).
 
@@ -189,7 +191,7 @@ dotnet tool install --global navlyn --version 0.7.0
 dotnet tool install --global navlyn-mcp --version 0.7.0
 navlyn --help
 navlyn-mcp --help
-navlyn check --workspace path/to/YourRepo.slnx
+navlyn check --workspace auto
 ```
 
 For local machines that already have the tools installed, use a temporary `--tool-path` instead of global install.

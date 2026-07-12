@@ -1,7 +1,4 @@
 {
   "command": "navlyn-mcp",
-  "args": [
-    "--workspace",
-    "YourRepo.sln"
-  ]
+  "cwd": "."
 }

@@ -60,7 +60,7 @@ VS Code also documents an MCP installation URL shape:
 vscode:mcp/install?{url-encoded-json-server-configuration}
 ```
 
-Go/no-go for v0.7.0: no public install URL yet. VS Code supports installation URLs, but Navlyn still needs a workspace-specific path. Publishing a one-click link with `--workspace auto` would be too easy to misapply in multi-solution repositories, and publishing an explicit path would be wrong for most users.
+Go/no-go for v0.7.0: no public install URL yet. VS Code supports installation URLs, and Navlyn can start without explicit args by using repository-local auto discovery. A public one-click link still needs validation across client behavior, multi-root workspaces, and multi-solution repositories before it becomes the recommended path.
 
 Manual setup remains the supported path for v0.7.0. If a future installer is tested, the least risky draft object shape is:
 
@@ -69,17 +69,17 @@ Manual setup remains the supported path for v0.7.0. If a future installer is tes
   "name": "navlyn",
   "type": "stdio",
   "command": "navlyn-mcp",
-  "args": ["--workspace", "auto"]
+  "cwd": "${workspaceFolder}"
 }
 ```
 
-`--workspace auto` is convenient only for repositories with one top-level workspace candidate; it prefers `navlyn.workspace.json`, then `.code-workspace`, then `.slnx`, then `.sln`, then `.csproj` or `.vbproj`. Multi-solution repositories should use an explicit workspace path, preferably repository-local `navlyn.workspace.json` when candidate policy matters.
+Omitting `--workspace` is equivalent to auto discovery from the server working directory. It is convenient for repositories with one top-level workspace candidate; it prefers `navlyn.workspace.json`, then `.code-workspace`, then `.slnx`, then `.sln`, then `.csproj` or `.vbproj`. Multi-solution repositories should use an explicit workspace path, preferably repository-local `navlyn.workspace.json` when candidate policy matters.
 
 Manual fallback:
 
 1. Install `navlyn-mcp` as a global or repository-local .NET tool.
-2. Add `.vscode/mcp.json` with an explicit workspace path.
-3. Run `navlyn doctor --workspace ...` before asking an agent to rely on the tools.
+2. Add `.vscode/mcp.json` with `command: "navlyn-mcp"` and repository-root `cwd`.
+3. Run `navlyn doctor --workspace auto` before asking an agent to rely on the tools.
 4. Start the MCP server from VS Code and inspect the discovered tools before approving agent use.
 
 ## MCP Registry
@@ -91,7 +91,7 @@ Autonomous repo work can prepare:
 - stable package metadata;
 - a tested `.vscode/mcp.json` example;
 - a manifest draft once registry format and submission requirements are confirmed;
-- release notes that explain `navlyn_resolve_target`, `navlyn_context_pack`, and `navlyn_batch`.
+- release notes that explain `navlyn_target`, `navlyn_prepare_edit`, `navlyn_review`, and advanced escalation through `navlyn_context_pack` and `navlyn_batch`.
 
 Draft registry metadata:
 
@@ -103,7 +103,8 @@ Draft registry metadata:
   "package": "navlyn-mcp",
   "transport": "stdio",
   "command": "navlyn-mcp",
-  "args": ["--workspace", "<path-to-slnx-sln-csproj-or-vbproj>"],
+  "args": [],
+  "cwd": "<repository-root>",
   "categories": ["C#", ".NET", "Roslyn", "AI agents", "code navigation"],
   "security": "Local read-only source-level facts. No editing, shell execution, network calls, source upload, tests, or runtime proof."
 }
@@ -114,7 +115,7 @@ Maintainer-owned external work:
 - submit or approve registry entries;
 - configure organization allowlists or policies;
 - publish to any Marketplace or Open VSX surface;
-- decide whether `--workspace auto` is acceptable for public install links.
+- decide when the no-args auto-discovery startup is acceptable for public install links.
 
 ## Lightweight VS Code Extension Boundary
 

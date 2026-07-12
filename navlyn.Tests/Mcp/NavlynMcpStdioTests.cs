@@ -233,7 +233,8 @@ public sealed class NavlynMcpStdioTests
         McpClientTool fileOutline = Assert.Single(tools, tool => tool.Name == NavlynMcpTools.FileOutlineTool);
         Assert.Contains("Do not use for tests", fileOutline.Description, StringComparison.Ordinal);
         McpClientTool resolveTarget = Assert.Single(tools, tool => tool.Name == NavlynMcpTools.ResolveTargetTool);
-        Assert.Contains("standard first symbol entry", resolveTarget.Description, StringComparison.Ordinal);
+        Assert.Contains("Advanced compatibility target resolver", resolveTarget.Description, StringComparison.Ordinal);
+        Assert.Contains("Prefer canonical navlyn_target", resolveTarget.Description, StringComparison.Ordinal);
         McpClientTool target = Assert.Single(tools, tool => tool.Name == NavlynMcpTools.TargetTool);
         Assert.Contains("Canonical first tool", target.Description, StringComparison.Ordinal);
     }

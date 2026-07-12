@@ -13,7 +13,7 @@ dotnet test navlyn.slnx --no-build --filter ToolSelection
 
 To score an actual agent trace, write a JSON file with `traces` entries containing `scenarioId`, `chosenSequence`, `stopCondition`, `stdoutJsonValid`, and `stderrClean`, then pass `-TraceFile`.
 
-The v0.7.0 set has 20 executable scenarios covering the canonical agent workflow, text-only no-Navlyn prompts, overloads, partial classes, multi-target context, generated-file avoidance, stale candidate handling, route and DI advanced facts, output-budget partial results, and public API release checks.
+The v0.7.0 set has 21 executable scenarios covering the canonical agent workflow, text-only no-Navlyn prompts, overloads, partial classes, multi-target context, generated-file avoidance, stale candidate handling, route and DI advanced facts, output-budget partial results, and public API release checks.
 
 ## Scoring
 
@@ -26,6 +26,8 @@ Mark each scenario:
 Record the prompt, chosen tool sequence, stop condition, and any stdout/stderr issues.
 
 When evaluating MCP, assume the unified read-only tool surface with canonical tools first. `navlyn_target`, `navlyn_read`, `navlyn_prepare_edit`, `navlyn_verify_edit`, and `navlyn_review` are the primary workflow tools. Broad review, tests, public API, DI, context-pack, and batch tools are available but should not be chosen unless the prompt and returned evidence make them relevant.
+
+Canonical scenarios score the canonical names as the correct first step. Older advanced aliases such as `navlyn_resolve_target`, `navlyn_symbol_source`, `navlyn_edit_preflight`, `navlyn_post_edit_guard`, and `navlyn_review_diff` remain supported compatibility tools, but a new agent trace should not receive full tool-selection credit for choosing them when the canonical tool answers the same question.
 
 ## Scenarios
 

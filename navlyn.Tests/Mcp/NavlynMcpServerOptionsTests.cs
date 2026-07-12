@@ -7,7 +7,7 @@ namespace Navlyn.Tests.Mcp;
 public sealed class NavlynMcpServerOptionsTests
 {
     [Fact]
-    public void TryParse_RequiredWorkspace_UsesRepositoryRootAsWorkingDirectoryAndInProcessByDefault()
+    public void TryParse_ExplicitWorkspace_UsesRepositoryRootAsWorkingDirectoryAndInProcessByDefault()
     {
         string repoRoot = FindRepositoryRoot();
         string workspace = Path.Combine(repoRoot, "navlyn.slnx");
@@ -30,6 +30,27 @@ public sealed class NavlynMcpServerOptionsTests
         Assert.False(options.DeprecatedToolProfileSpecified);
         Assert.Null(options.DeprecatedToolProfileValue);
         Assert.Equal(WorkspaceRootPolicy.RepoRelative, options.WorkspaceRootPolicy);
+    }
+
+    [Fact]
+    public void TryParse_MissingWorkspace_DefaultsToAutoDiscovery()
+    {
+        using TemporaryDirectory temp = TemporaryDirectory.Create();
+        string workspace = Path.Combine(temp.Path, "sample.slnx");
+        File.WriteAllText(workspace, "");
+
+        bool valid = NavlynMcpServerOptions.TryParse(
+            ["--working-directory", temp.Path],
+            out NavlynMcpServerOptions options,
+            out string? error,
+            out bool showHelp);
+
+        Assert.True(valid);
+        Assert.Null(error);
+        Assert.False(showHelp);
+        Assert.Equal(workspace, options.Workspace);
+        Assert.Equal("sample.slnx", options.WorkspaceArgument);
+        Assert.Equal(temp.Path, options.WorkingDirectory);
     }
 
     [Fact]
@@ -324,16 +345,18 @@ public sealed class NavlynMcpServerOptionsTests
     }
 
     [Fact]
-    public void TryParse_MissingWorkspace_ReturnsUsageError()
+    public void TryParse_MissingWorkspaceWithoutAutoCandidatesReturnsUsageError()
     {
+        using TemporaryDirectory temp = TemporaryDirectory.Create();
+
         bool valid = NavlynMcpServerOptions.TryParse(
-            [],
+            ["--working-directory", temp.Path],
             out _,
             out string? error,
             out bool showHelp);
 
         Assert.False(valid);
-        Assert.Equal("--workspace is required.", error);
+        Assert.Contains("--workspace auto could not find", error);
         Assert.False(showHelp);
     }
 

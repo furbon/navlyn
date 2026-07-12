@@ -12,6 +12,7 @@ This document captures durable local development checks, command implementation 
 - `docs/navlyn-distribution.md`: package validation and release workflow.
 - `docs/navlyn-performance.md`: local performance measurement, MCP cost model, and release-readiness performance smoke.
 - `docs/navlyn-agent-recipes.md`: batch recipes for agents and automation.
+- `docs/navlyn-excellence-loop.md`: strict planning, execution, skeptical review, and iteration rules for 9.5+ improvement goals.
 - `docs/navlyn-github-actions.md`: PR facts workflow example.
 - `README.md`: project entry point for users. Keep it compact and current.
 - `README_ja.md`: Japanese project entry point for users.

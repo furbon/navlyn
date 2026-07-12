@@ -29,12 +29,12 @@ Stop once the returned facts answer the question. Escalate only when the next fa
 
 | Situation | Minimal Navlyn Call | Escalate To |
 | --- | --- | --- |
-| Approximate symbol name | `resolve-target` | `find` if candidates are ambiguous or the user needs alternatives |
-| Known symbol identity | `definition`, `references`, or `symbol-source` via CLI; `navlyn_symbol_source` or `navlyn_symbol_edges` via MCP | `impact` for edit risk, `context-pack` for a reading queue |
+| Approximate symbol name | `target` via CLI or `navlyn_target` via MCP | `find` if candidates are ambiguous or the user needs alternatives |
+| Known symbol identity | `read` via CLI or `navlyn_read` via MCP; `navlyn_symbol_edges` when relationships are needed | `impact` for edit risk, `context-pack` for a reading queue |
 | Single-file review | `outline` via CLI or `navlyn_file_outline` / `navlyn_inspect_file` via MCP when semantic structure matters | `context-pack` only if the file does not contain enough context |
-| Agent edit preflight | `edit-preflight` via CLI or MCP `navlyn_edit_preflight` | `change-intent-pack`, `agent-handoff-pack`, or `confidence-ledger` when the work is handed off or audited |
-| Post-edit wrong-symbol check | `post-edit-guard` with the pre-edit `candidateId` or saved preflight | `wrong-symbol-guard` when the intended target should be re-resolved from query/source position |
-| Real Git diff review | `review-diff` | `tests-for-diff`, `public-api-diff`, `review-pack`, or `context-pack --diff` only when relevant |
+| Agent edit preflight | `prepare-edit` via CLI or MCP `navlyn_prepare_edit` | `change-intent-pack`, `agent-handoff-pack`, or `confidence-ledger` when the work is handed off or audited |
+| Post-edit wrong-symbol check | `verify-edit` with the pre-edit `candidateId` or saved preflight | `wrong-symbol-guard` when the intended target should be re-resolved from query/source position |
+| Real Git diff review | `review` via CLI or `navlyn_review` via MCP | `tests-for-diff`, `public-api-diff`, `review-pack`, or `context-pack --diff` only when relevant |
 | Multiple known facts from one workspace | Individual tools first | CLI `batch` or MCP `navlyn_batch` after the needed facts are known |
 
 ## Workspace Context
@@ -76,7 +76,7 @@ Freshness rules for MCP agents:
 When the agent has an approximate symbol name, resolve a target first. Reuse `candidateId` for deeper calls so the investigation remains anchored to the same declaration. Use `find` when the agent or human needs a broader candidate list.
 
 ```powershell
-navlyn resolve-target --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --limit 10
+navlyn target --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --limit 10
 navlyn find --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --limit 10
 navlyn about --workspace navlyn.slnx --candidate-id sym:v1:...
 navlyn references --workspace navlyn.slnx --candidate-id sym:v1:... --usage-kind invoke --usage-kind construct --group-by file --group-by usage-kind --limit 50
@@ -84,7 +84,7 @@ navlyn related --workspace navlyn.slnx --candidate-id sym:v1:... --limit 30
 navlyn impact --workspace navlyn.slnx --candidate-id sym:v1:... --depth 2
 ```
 
-If `resolve-target` returns `confidence: "ambiguous"` or no selected target, inspect `ambiguityReason`, `ambiguitySummary.reasonCodes`, and `ambiguitySummary.groups` before doing anything broader. Typical next moves are to add `--project`, switch to a source position, ask the user which candidate they meant, or choose one returned `candidateId` explicitly. Do not open or edit source from an ambiguous name alone.
+If `target` returns `confidence: "ambiguous"` or no selected target, inspect `ambiguityReason`, `ambiguitySummary.reasonCodes`, and `ambiguitySummary.groups` before doing anything broader. Typical next moves are to add `--project`, switch to a source position, ask the user which candidate they meant, or choose one returned `candidateId` explicitly. Do not open or edit source from an ambiguous name alone.
 
 Use `about` for a compact selected-symbol summary, `references` with `usageKind` and `groupBy` when the agent needs precise read/write/invocation/construction evidence, `related` for a file-first reading map, and `impact` before edits or risk analysis.
 
@@ -92,7 +92,7 @@ MCP clients can use the same stop rules with dedicated file-first tools:
 
 ```text
 navlyn_file_outline(file: "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs")
-navlyn_symbol_source(candidateId: "sym:v1:...", view: "declaration")
+navlyn_read(candidateId: "sym:v1:...", view: "declaration")
 navlyn_symbol_edges(operation: "references", candidateId: "sym:v1:...", usageKinds: ["invoke"], groupBy: ["file"], limit: 50)
 ```
 
@@ -118,25 +118,25 @@ Use Navlyn as an evidence loop around the edit, not as the editor.
 Before editing:
 
 ```powershell
-navlyn edit-preflight --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --goal modify --change-kind behavior
+navlyn prepare-edit --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --goal modify --change-kind behavior
 navlyn change-intent-pack --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --goal modify --change-kind behavior
 ```
 
 After editing:
 
 ```powershell
-navlyn post-edit-guard --workspace navlyn.slnx --candidate-id sym:v1:... --fail-on-risk high
+navlyn verify-edit --workspace navlyn.slnx --candidate-id sym:v1:... --fail-on-risk high
 navlyn wrong-symbol-guard --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --fail-on-risk medium
-navlyn review-diff --workspace navlyn.slnx --profile evidence --symbol-limit 20 --impact-limit 40 --diagnostic-limit 40 --related-test-limit 20
+navlyn review --workspace navlyn.slnx --profile evidence --symbol-limit 20 --impact-limit 40 --diagnostic-limit 40 --related-test-limit 20
 ```
 
-`post-edit-guard` compares the diff with a saved anchor or `candidateId`; `wrong-symbol-guard` re-resolves the intended target from query, candidate, or source position and then compares changed symbols. Both commands write JSON even when policy fails. A mismatch is a warning to pause and inspect; it is not a proof that the edit is wrong.
+`verify-edit` compares the diff with a saved anchor or `candidateId`; `wrong-symbol-guard` re-resolves the intended target from query, candidate, or source position and then compares changed symbols. Both commands write JSON even when policy fails. A mismatch is a warning to pause and inspect; it is not a proof that the edit is wrong.
 
 Wrong-symbol mini demo:
 
 ```powershell
-navlyn resolve-target --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --limit 5
-navlyn edit-preflight --workspace navlyn.slnx --candidate-id sym:v1:... --goal modify --change-kind behavior
+navlyn target --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --limit 5
+navlyn prepare-edit --workspace navlyn.slnx --candidate-id sym:v1:... --goal modify --change-kind behavior
 # edit outside Navlyn
 navlyn wrong-symbol-guard --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --fail-on-risk medium
 ```
@@ -148,7 +148,7 @@ The guard output is useful when it says the diff is empty, touches unrelated fil
 For an actual Git diff, begin with diff facts rather than broad symbol search. For a single-file review with no diff, read the file first and use symbol/source-position tools only when semantic identity or relationships matter.
 
 ```powershell
-navlyn review-diff --workspace navlyn.slnx --profile evidence
+navlyn review --workspace navlyn.slnx --profile evidence
 navlyn tests-for-diff --workspace navlyn.slnx --profile compact
 navlyn public-api-diff --workspace navlyn.slnx --base main --profile evidence
 navlyn review-pack --workspace navlyn.slnx --profile evidence
@@ -244,8 +244,9 @@ Minimal MCP flow for a symbol investigation:
 
 ```text
 navlyn_doctor()
-navlyn_resolve_target(query: "CheckCommand", assumeKind: "NamedType")
-navlyn_exact_navigation(operation: "references", candidateId: "sym:v1:...", usageKinds: ["invoke", "construct"], groupBy: ["file", "usage-kind"], limit: 50)
+navlyn_target(query: "CheckCommand", assumeKind: "NamedType")
+navlyn_read(candidateId: "sym:v1:...", view: "declaration")
+navlyn_symbol_edges(operation: "references", candidateId: "sym:v1:...", usageKinds: ["invoke", "construct"], groupBy: ["file", "usage-kind"], limit: 50)
 navlyn_about_symbol(candidateId: "sym:v1:...")
 ```
 
@@ -260,15 +261,15 @@ navlyn_context_pack(candidateId: "sym:v1:...", goal: "modify", changeKind: "sign
 MCP flow for a non-trivial edit:
 
 ```text
-navlyn_edit_preflight(query: "CheckCommand", assumeKind: "NamedType", goal: "modify", changeKind: "behavior")
+navlyn_prepare_edit(query: "CheckCommand", assumeKind: "NamedType", goal: "modify", changeKind: "behavior")
 // edit outside Navlyn
-navlyn_post_edit_guard(candidateId: "sym:v1:...", failOnRisk: "high")
+navlyn_verify_edit(candidateId: "sym:v1:...", failOnRisk: "high")
 ```
 
 MCP flow for a real diff review:
 
 ```text
-navlyn_review_diff(profile: "evidence")
+navlyn_review(profile: "evidence")
 ```
 
 If several review follow-ups are already needed, use `navlyn_batch` as an advanced optimization:
@@ -281,7 +282,7 @@ navlyn_batch(requests: [
 ])
 ```
 
-Use `navlyn_batch` in the review flow only when those follow-up facts are already needed. Otherwise call the one relevant follow-up tool or stop after `navlyn_review_diff`.
+Use `navlyn_batch` in the review flow only when those follow-up facts are already needed. Otherwise call the one relevant follow-up tool or stop after `navlyn_review`.
 
 ## GitHub Actions
 

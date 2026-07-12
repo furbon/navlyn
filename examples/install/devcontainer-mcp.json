@@ -6,10 +6,6 @@
           "navlyn": {
             "type": "stdio",
             "command": "navlyn-mcp",
-            "args": [
-              "--workspace",
-              "${workspaceFolder}/YourRepo.sln"
-            ],
             "cwd": "${workspaceFolder}"
           }
         }

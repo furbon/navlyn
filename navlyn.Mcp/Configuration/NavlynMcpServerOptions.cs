@@ -22,6 +22,7 @@ internal sealed record NavlynMcpServerOptions(
     public const int DefaultMaxJsonChars = 4000000;
     public const NavlynMcpToolProfile DefaultToolProfile = NavlynMcpToolProfile.Full;
     public const WorkspaceRootPolicy DefaultWorkspaceRootPolicy = WorkspaceRootPolicy.RepoRelative;
+    public const string DefaultWorkspace = "auto";
     public const string ToolProfileEnvironmentVariable = "NAVLYN_MCP_TOOL_PROFILE";
 
     public bool UseExternalCli => !string.IsNullOrWhiteSpace(NavlynExecutable);
@@ -165,12 +166,7 @@ internal sealed record NavlynMcpServerOptions(
             }
         }
 
-        if (string.IsNullOrWhiteSpace(workspace))
-        {
-            options = CreateEmpty();
-            error = "--workspace is required.";
-            return false;
-        }
+        string workspaceInput = string.IsNullOrWhiteSpace(workspace) ? DefaultWorkspace : workspace;
 
         if (navlynExecutable is null && navlynArguments.Count > 0)
         {
@@ -179,7 +175,7 @@ internal sealed record NavlynMcpServerOptions(
             return false;
         }
 
-        bool autoWorkspace = string.Equals(workspace.Trim(), "auto", StringComparison.Ordinal);
+        bool autoWorkspace = string.Equals(workspaceInput.Trim(), DefaultWorkspace, StringComparison.Ordinal);
         string effectiveWorkingDirectory;
         string fullWorkspace;
         if (autoWorkspace)
@@ -195,7 +191,7 @@ internal sealed record NavlynMcpServerOptions(
         }
         else
         {
-            fullWorkspace = Path.GetFullPath(workspace);
+            fullWorkspace = Path.GetFullPath(workspaceInput);
             effectiveWorkingDirectory = string.IsNullOrWhiteSpace(workingDirectory)
                 ? FindRepositoryRoot(Path.GetDirectoryName(fullWorkspace) ?? Directory.GetCurrentDirectory()) ?? Directory.GetCurrentDirectory()
                 : Path.GetFullPath(workingDirectory);
@@ -203,7 +199,7 @@ internal sealed record NavlynMcpServerOptions(
 
         string workspaceArgument = File.Exists(fullWorkspace) || Directory.Exists(Path.GetDirectoryName(fullWorkspace))
             ? Path.GetRelativePath(effectiveWorkingDirectory, fullWorkspace)
-            : workspace;
+            : workspaceInput;
 
         options = new NavlynMcpServerOptions(
             Workspace: fullWorkspace,
@@ -225,10 +221,11 @@ internal sealed record NavlynMcpServerOptions(
     public static string GetUsage()
     {
         StringBuilder builder = new();
-        builder.AppendLine("Usage: navlyn-mcp --workspace <path|auto> [options]");
+        builder.AppendLine("Usage: navlyn-mcp [--workspace <path|auto>] [options]");
         builder.AppendLine();
         builder.AppendLine("Options:");
-        builder.AppendLine("  --workspace <path|auto>        Required navlyn.workspace.json, .code-workspace, .slnx, .sln, .csproj, or .vbproj path, or auto to discover one.");
+        builder.AppendLine("  --workspace <path|auto>        Optional navlyn.workspace.json, .code-workspace, .slnx, .sln, .csproj, or .vbproj path.");
+        builder.AppendLine("                                  Defaults to auto discovery from the working directory or repository root.");
         builder.AppendLine("  --navlyn-executable <command>  Legacy external Navlyn CLI command or executable. Omit for standalone in-process execution.");
         builder.AppendLine("  --navlyn-arg <arg>             Prefix argument for the legacy external CLI path, repeatable.");
         builder.AppendLine("  --working-directory <path>     Working directory for in-process execution or the legacy child process.");

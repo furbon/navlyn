@@ -25,10 +25,12 @@ Stop after the returned fields answer the question. Do not treat `recommendedNex
 If you are evaluating Navlyn from a package install rather than this repository, run the same shape against your solution:
 
 ```powershell
-navlyn doctor --workspace path/to/YourRepo.slnx
-navlyn resolve-target --workspace path/to/YourRepo.slnx --query PaymentService --assume-kind NamedType
-navlyn edit-preflight --workspace path/to/YourRepo.slnx --candidate-id sym:v1:... --goal modify --change-kind behavior
+navlyn doctor --workspace auto
+navlyn target --workspace auto --query PaymentService --assume-kind NamedType
+navlyn prepare-edit --workspace auto --candidate-id sym:v1:... --goal modify --change-kind behavior
 ```
+
+Use an explicit workspace path only when `auto` is ambiguous.
 
 ## Demo 1: Symbol Investigation
 

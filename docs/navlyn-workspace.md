@@ -57,4 +57,4 @@ The JSON schema is [navlyn-workspace.schema.json](schemas/navlyn-workspace.schem
 
 ## `auto`
 
-`--workspace auto` is the no-file alternative. From the repository root, Navlyn considers one top-level candidate in this order: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, then `.vbproj`. Use it only when that choice is unambiguous.
+`--workspace auto` is the no-file alternative for CLI commands. MCP startup uses this behavior by default when `--workspace` is omitted. From the repository root, Navlyn considers one top-level candidate in this order: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, then `.vbproj`. Use it when that choice is unambiguous; Navlyn fails instead of guessing when multiple best-priority candidates exist.

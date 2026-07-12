@@ -19,31 +19,38 @@ Generic code search gives an agent a pile of matches. Navlyn keeps each next que
 
 ## Three-Minute Path
 
-Install the CLI and MCP server:
+For coding agents, install the MCP server:
 
 ```powershell
-dotnet tool install --global navlyn --version 0.7.0
 dotnet tool install --global navlyn-mcp --version 0.7.0
 ```
 
-Then verify one workspace and one symbol. Replace `YourRepo.slnx` with the repository's `.slnx`, `.sln`, `.csproj`, or `.vbproj` file:
+Install the CLI too when you want shell or CI JSON facts:
 
 ```powershell
-navlyn doctor --workspace path/to/YourRepo.slnx
-navlyn target --workspace path/to/YourRepo.slnx --query PaymentService --assume-kind NamedType --limit 10
-navlyn read --workspace path/to/YourRepo.slnx --candidate-id sym:v1:... --view declaration --max-lines 80
-navlyn prepare-edit --workspace path/to/YourRepo.slnx --candidate-id sym:v1:... --goal modify --change-kind behavior
+dotnet tool install --global navlyn --version 0.7.0
 ```
 
-Use the `candidateId` from `resolve-target` for follow-up calls. After an edit, inspect the real diff:
+Then verify one workspace and one symbol. In a normal repository with one top-level `.slnx`, `.sln`, `.csproj`, or `.vbproj`, use `auto`:
 
 ```powershell
-navlyn review --workspace path/to/YourRepo.slnx --profile evidence
+navlyn doctor --workspace auto
+navlyn target --workspace auto --query PaymentService --assume-kind NamedType --limit 10
+navlyn read --workspace auto --candidate-id sym:v1:... --view declaration --max-lines 80
+navlyn prepare-edit --workspace auto --candidate-id sym:v1:... --goal modify --change-kind behavior
 ```
+
+Use the `candidateId` from `target` for follow-up calls. After an edit, inspect the real diff:
+
+```powershell
+navlyn review --workspace auto --profile evidence
+```
+
+If `auto` finds no workspace or more than one best candidate, pass the intended `.slnx`, `.sln`, `.csproj`, or `.vbproj` path explicitly, or add `navlyn.workspace.json` to make the repository choice shared.
 
 ## Use With MCP
 
-Point the server at the same workspace the CLI verified.
+For a repository with one top-level workspace candidate, the MCP server can use the repository root working directory and discover the workspace automatically. Use an explicit `--workspace` only when the repository has multiple plausible solutions or projects. If an MCP client does not launch servers from the repository root, pass `--working-directory <repo-root>` instead of `--workspace`.
 
 ### GitHub Copilot In VS Code
 
@@ -55,7 +62,6 @@ Create `.vscode/mcp.json` in the repository root:
     "navlyn": {
       "type": "stdio",
       "command": "navlyn-mcp",
-      "args": ["--workspace", "${workspaceFolder}/YourRepo.sln"],
       "cwd": "${workspaceFolder}"
     }
   }
@@ -67,7 +73,7 @@ Create `.vscode/mcp.json` in the repository root:
 Run this from the repository root:
 
 ```powershell
-codex mcp add navlyn -- navlyn-mcp --workspace path/to/YourRepo.sln
+codex mcp add navlyn -- navlyn-mcp
 ```
 
 ### Claude Code
@@ -80,13 +86,13 @@ Create `.mcp.json` in the repository root:
     "navlyn": {
       "type": "stdio",
       "command": "navlyn-mcp",
-      "args": ["--workspace", "${CLAUDE_PROJECT_DIR:-.}/YourRepo.sln"]
+      "args": ["--working-directory", "${CLAUDE_PROJECT_DIR:-.}"]
     }
   }
 }
 ```
 
-Navlyn MCP exposes one stable read-only semantic tool surface. Configure the workspace once; the agent should start with the smallest relevant fact, reuse `candidateId`, and stop when the returned JSON answers the question.
+Navlyn MCP exposes one stable read-only semantic tool surface. The default startup discovers a single repository-local workspace candidate and fails closed when that choice is ambiguous. The agent should start with the smallest relevant fact, reuse `candidateId`, and stop when the returned JSON answers the question.
 
 ## What The Agent Gets
 
@@ -111,7 +117,7 @@ Use normal file reads and `rg` when text is enough. Use Navlyn when Roslyn/MSBui
 
 ## Workspace Choice
 
-Most repositories do not need `navlyn.workspace.json`: pass the solution or project file directly, as in the MCP examples above.
+Most repositories do not need `navlyn.workspace.json`. For the MCP server, omit `--workspace` in the repository root; for CLI commands, use `--workspace auto`. Both forms select a single top-level `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `.vbproj` candidate and fail instead of guessing when the best candidate is ambiguous.
 
 Add `navlyn.workspace.json` only when a repository has several possible solutions/projects and needs one shared choice. Its smallest useful form is:
 
