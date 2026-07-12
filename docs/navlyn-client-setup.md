@@ -24,19 +24,21 @@ For an MCP client, use this command shape:
 ```json
 {
   "command": "dotnet",
-  "args": ["tool", "run", "navlyn-mcp", "--", "--workspace", "path/to/YourRepo.sln", "--tool-profile", "reader"]
+  "args": ["tool", "run", "navlyn-mcp", "--", "--workspace", "path/to/YourRepo.sln"]
 }
 ```
 
-## Choose An MCP Profile
+## MCP Tool Surface
 
-Start with `reader`. The profile is fixed while the MCP server runs, so restart the server when a task needs a broader profile.
+Navlyn MCP exposes one stable read-only semantic tool surface. Configure the workspace once; the agent chooses the smallest relevant tool from tool descriptions, schemas, and returned evidence.
 
-| Profile | Use it for |
+| Need | Start with |
 | --- | --- |
-| `reader` | Setup checks, source reading, and symbol investigation. |
-| `edit` | Pre-edit evidence and post-edit guard checks. |
-| `review` | Actual Git-diff and review evidence. |
-| `full` | Every MCP tool, including `navlyn_batch`. |
+| Setup and workspace health | `navlyn_doctor` |
+| First symbol anchor | `navlyn_resolve_target` |
+| Known file outline | `navlyn_file_outline` |
+| One selected source or relationship fact | `navlyn_symbol_source` or `navlyn_symbol_edges` |
+| Pre-edit evidence | `navlyn_edit_preflight` |
+| Actual Git diff evidence | `navlyn_review_diff` |
 
 Use [navlyn-mcp-server.md](navlyn-mcp-server.md) for the complete MCP tool surface. Agent instruction snippets for Copilot, Claude, Codex, and other clients live in `examples/agents`.

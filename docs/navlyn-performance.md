@@ -7,7 +7,7 @@ Practical rule: use one precise fact first, reuse returned `candidateId` values,
 | Workflow | Best For | Cost Shape |
 | --- | --- | --- |
 | Direct CLI command | Human asks for one fact. | One process and one workspace load per command. |
-| MCP reader tools | Agent repeatedly inspects files or selected symbols. | Session-local warm workspace and document index for selected direct tools. |
+| MCP semantic tools | Agent repeatedly inspects files, selected symbols, edit evidence, or review facts. | Session-local warm workspace and document index for selected direct tools. |
 | CLI `batch` / MCP `navlyn_batch` | Several known facts from one workspace. | One command envelope for multiple supported facts. |
 | `compact` profile | First scans and LLM context. | Smaller JSON and less downstream token pressure. |
 | `evidence` profile | Review/CI facts. | Enough detail for inspection without full output size. |
@@ -17,12 +17,12 @@ Practical rule: use one precise fact first, reuse returned `candidateId` values,
 - CLI commands load the configured workspace for each process invocation.
 - `navlyn-mcp` is a read-only stdio server that runs Navlyn commands in-process by default through the shared engine.
 - MCP reader-path tools (`navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, `navlyn_inspect_file`, and `navlyn_symbol_source`) use a direct Core resolver path with a lazy per-server workspace cache and workspace-scoped `DocumentIndex`.
-- `navlyn_batch` in `--tool-profile full` can reduce repeated workspace loads when several batch-supported facts should be collected together.
+- `navlyn_batch` can reduce repeated workspace loads when several batch-supported facts should be collected together.
 - `navlyn serve` is an opt-in local read-only daemon for workspace status/refresh requests over stdio JSON lines or a local named pipe.
 - `.navlyn/cache/workspace-index.json` is an opt-in lightweight manifest for freshness and index facts, not a serialized Roslyn workspace.
 - `compact` and `evidence` profiles can reduce output size and downstream token pressure.
 
-Navlyn does not include a file watcher, telemetry pipeline, hosted service, network listener, or write surface. The MCP direct workspace cache, `DocumentIndex`, and declaration/candidate indexes are session-local and should be refreshed with `navlyn_workspace_refresh` or by restarting the MCP server after source or project changes when freshness matters. Adapter-backed tools still preserve the CLI execution path and may load the workspace independently. Use `navlyn_batch` from `--tool-profile full` when several batch-supported adapter-backed facts should share one workspace load.
+Navlyn does not include a file watcher, telemetry pipeline, hosted service, network listener, or write surface. The MCP direct workspace cache, `DocumentIndex`, and declaration/candidate indexes are session-local and should be refreshed with `navlyn_workspace_refresh` or by restarting the MCP server after source or project changes when freshness matters. Adapter-backed tools still preserve the CLI execution path and may load the workspace independently. Use `navlyn_batch` when several batch-supported adapter-backed facts should share one workspace load.
 
 The on-disk cache is privacy-conscious and freshness-oriented. It stores workspace/version fingerprints, project graph facts, document-index facts, declaration syntax facts when written by `workspace-refresh --write-cache`, tracked file hashes/mtimes, and `candidateRecordsStored: false`. It does not store source text or semantic models. `workspace-status --cache on` reports `fresh`, `missing`, `stale`, `invalid`, or `disabled`; stale manifests are rejected rather than reused.
 
@@ -115,7 +115,7 @@ Use direct CLI commands when:
 - the result is small;
 - process startup is not the bottleneck.
 
-Use CLI `batch` or MCP `navlyn_batch` in `--tool-profile full` when:
+Use CLI `batch` or MCP `navlyn_batch` when:
 
 - an agent needs several facts from the same workspace;
 - repeated workspace loads are expensive;
@@ -169,7 +169,7 @@ Prefer batch when the agent already knows it needs several facts:
 Get-Content examples/batch/investigation-loop.json | navlyn batch --workspace navlyn.slnx
 ```
 
-For MCP clients, `navlyn_batch` remains useful in `full` profile after the agent already knows it needs several batch-supported facts. Prefer the direct reader tools for workspace summary, a single known file, or a selected symbol because they reuse the MCP workspace cache and `DocumentIndex` without encouraging broad fact collection.
+For MCP clients, `navlyn_batch` remains useful after the agent already knows it needs several batch-supported facts. Prefer direct focused tools for workspace summary, a single known file, or a selected symbol because they reuse the MCP workspace cache and `DocumentIndex` without encouraging broad fact collection.
 
 For fuzzy symbol workflows, prefer reusing `candidateId` values returned by `find`, `resolve-target`, and MCP outline/source tools. Candidate records are validated against the current solution fingerprint, so same-snapshot follow-ups can skip broad declaration rediscovery while stale or unknown IDs still fall back to deterministic validation and diagnostics. Use `about --profile light` and `impact --profile light` for first-pass agent calls; expand to `full`, a broader `--scope`, or a larger `--max-documents` only when the returned facts show that the broader search is needed.
 

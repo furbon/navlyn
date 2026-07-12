@@ -4,6 +4,7 @@ param(
     [string]$TraceFile = $null,
     [string]$Output = $null,
     [switch]$UseBaselineTraces,
+    [switch]$NoBuild,
     [double]$MinimumScore = 0.95
 )
 
@@ -19,6 +20,10 @@ if (!(Test-Path -LiteralPath $ScenarioPath)) {
 $scenarioDocument = Get-Content -Raw -LiteralPath $ScenarioPath | ConvertFrom-Json -Depth 100
 if ($scenarioDocument.schemaVersion -ne 'navlyn.tool-selection-eval.v1') {
     throw "Unsupported tool-selection eval schemaVersion: $($scenarioDocument.schemaVersion)"
+}
+
+if ($NoBuild -and !$UseBaselineTraces -and [string]::IsNullOrWhiteSpace($TraceFile)) {
+    $UseBaselineTraces = $true
 }
 
 if (!$UseBaselineTraces -and [string]::IsNullOrWhiteSpace($TraceFile)) {
@@ -84,6 +89,7 @@ $maxPoints = 0
 
 foreach ($scenario in @($scenarioDocument.scenarios)) {
     $trace = $traceByScenario[$scenario.id]
+    $surface = if ($scenario.PSObject.Properties.Name -contains 'surface') { [string]$scenario.surface } else { 'unified' }
     [object[]]$chosenSequence = if ($null -eq $trace -or $null -eq $trace.chosenSequence) { @() } else { @($trace.chosenSequence) }
     $firstStep = if ($chosenSequence.Count -eq 0) { $null } else { [string]$chosenSequence[0] }
     $points = 0
@@ -120,7 +126,7 @@ foreach ($scenario in @($scenarioDocument.scenarios)) {
     $results.Add([pscustomobject]@{
         id = $scenario.id
         prompt = $scenario.prompt
-        profile = $scenario.profile
+        surface = $surface
         points = $points
         maxPoints = 5
         passed = $points -eq 5

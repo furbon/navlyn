@@ -3,8 +3,6 @@
   "args": [
     "navlyn.Mcp/bin/Debug/net10.0/navlyn.Mcp.dll",
     "--workspace",
-    "navlyn.workspace.json",
-    "--tool-profile",
-    "reader"
+    "navlyn.workspace.json"
   ]
 }

@@ -173,17 +173,20 @@ public sealed class GoldenOutputSnapshotTests
     }
 
     [Fact]
-    public void McpToolProfiles_MatchGoldenSnapshot()
+    public void McpToolSurface_MatchesGoldenSnapshot()
     {
-        var profiles = new
+        IReadOnlyList<string> unifiedTools = NavlynMcpToolProfilePolicy.GetToolNames(NavlynMcpToolProfile.Full);
+        Assert.Equal(unifiedTools, NavlynMcpToolProfilePolicy.GetToolNames(NavlynMcpToolProfile.Reader));
+        Assert.Equal(unifiedTools, NavlynMcpToolProfilePolicy.GetToolNames(NavlynMcpToolProfile.Review));
+        Assert.Equal(unifiedTools, NavlynMcpToolProfilePolicy.GetToolNames(NavlynMcpToolProfile.Edit));
+
+        var surface = new
         {
-            reader = NavlynMcpToolProfilePolicy.GetToolNames(NavlynMcpToolProfile.Reader),
-            review = NavlynMcpToolProfilePolicy.GetToolNames(NavlynMcpToolProfile.Review),
-            edit = NavlynMcpToolProfilePolicy.GetToolNames(NavlynMcpToolProfile.Edit),
-            full = NavlynMcpToolProfilePolicy.GetToolNames(NavlynMcpToolProfile.Full)
+            unified = unifiedTools,
+            deprecatedProfileAliases = new[] { "reader", "review", "edit", "full" }
         };
 
-        Assert.Equal(ReadSnapshot("mcp-tool-profiles.json"), NormalizeJson(JsonSerializer.SerializeToElement(profiles, JsonOptions)));
+        Assert.Equal(ReadSnapshot("mcp-tool-surface.json"), NormalizeJson(JsonSerializer.SerializeToElement(surface, JsonOptions)));
     }
 
     [Fact]

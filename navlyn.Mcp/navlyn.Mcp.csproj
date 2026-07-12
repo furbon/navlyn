@@ -18,7 +18,7 @@
     <RepositoryUrl>https://github.com/furbon/navlyn</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/furbon/navlyn</PackageProjectUrl>
-    <PackageReleaseNotes>0.6.0 sharpens MCP-first C# agent workflows, adds Roslyn-backed Visual Basic source support, expands reader/review/edit guidance, wrong-symbol edit preflight and post-edit evidence recipes, eval and performance docs, multi-target validation, and package/release identity.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.6.0 sharpens MCP-first C# agent workflows, adds Roslyn-backed Visual Basic source support, exposes one read-only tool surface with deprecated profile aliases, expands wrong-symbol edit preflight and post-edit evidence recipes, eval and performance docs, multi-target validation, and package/release identity.</PackageReleaseNotes>
     <Copyright>Copyright (c) 2026 furbon.tech</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>

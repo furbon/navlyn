@@ -15,6 +15,6 @@ This directory contains envelope-first schemas plus focused schemas for high-ris
 
 The schemas intentionally focus on automation-critical envelopes and high-risk command results rather than every command-specific domain object. Those facts are documented in `docs/navlyn-cli-commands.md` and guarded by focused resolver tests, CLI contract tests, and representative golden snapshots. When a command adds automation-critical top-level fields or freshness/cost metadata, add or update a focused schema here and cover it from `navlyn.Tests/Contracts`.
 
-Run `./scripts/test-contract-schemas.ps1 -NoBuild` after editing schema files, golden snapshots, MCP tool profile membership, or public automation-facing result shapes.
+Run `./scripts/test-contract-schemas.ps1 -NoBuild` after editing schema files, golden snapshots, MCP tool surface membership, or public automation-facing result shapes.
 
 Compatibility is additive within the same major envelope schema: clients should parse named fields and ignore unknown properties.

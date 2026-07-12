@@ -37,7 +37,7 @@ Create `.vscode/mcp.json` in the repository root:
     "navlyn": {
       "type": "stdio",
       "command": "navlyn-mcp",
-      "args": ["--workspace", "${workspaceFolder}/YourRepo.sln", "--tool-profile", "reader"],
+      "args": ["--workspace", "${workspaceFolder}/YourRepo.sln"],
       "cwd": "${workspaceFolder}"
     }
   }
@@ -49,7 +49,7 @@ Create `.vscode/mcp.json` in the repository root:
 Run this from the repository root:
 
 ```powershell
-codex mcp add navlyn -- navlyn-mcp --workspace path/to/YourRepo.sln --tool-profile reader
+codex mcp add navlyn -- navlyn-mcp --workspace path/to/YourRepo.sln
 ```
 
 ### Claude Code
@@ -62,13 +62,13 @@ Create `.mcp.json` in the repository root:
     "navlyn": {
       "type": "stdio",
       "command": "navlyn-mcp",
-      "args": ["--workspace", "${CLAUDE_PROJECT_DIR:-.}/YourRepo.sln", "--tool-profile", "reader"]
+      "args": ["--workspace", "${CLAUDE_PROJECT_DIR:-.}/YourRepo.sln"]
     }
   }
 }
 ```
 
-Start with the `reader` profile. Restart with `edit` when the agent needs edit preflight and post-edit guards, or `review` for an actual Git diff. `full` exists for clients that need every tool.
+Navlyn MCP exposes one stable read-only semantic tool surface. Configure the workspace once; the agent chooses the smallest relevant tool from tool descriptions and returned evidence.
 
 ## What The Agent Gets
 
@@ -78,8 +78,8 @@ Start with the `reader` profile. Restart with `edit` when the agent needs edit p
 | What is in this file? | `navlyn_file_outline` |
 | Show the declaration for this selected symbol. | `navlyn_symbol_source` |
 | Who calls or references it? | `navlyn_symbol_edges` |
-| What should I know before changing it? | `navlyn_edit_preflight` in `edit` profile |
-| What did this Git diff affect? | `navlyn_review_diff` in `review` profile |
+| What should I know before changing it? | `navlyn_edit_preflight` |
+| What did this Git diff affect? | `navlyn_review_diff` |
 
 The useful unit is one answerable question, not a repository dump. Navlyn returns bounded JSON facts so an agent can keep an exact `candidateId` through its investigation and only request the next relationship or source slice when it needs it.
 
@@ -112,7 +112,7 @@ Navlyn is local and read-only. It does not edit files, run arbitrary shell comma
 
 ## Documentation
 
-- [MCP server reference](docs/navlyn-mcp-server.md): profiles, tools, resources, and protocol behavior.
+- [MCP server reference](docs/navlyn-mcp-server.md): stable tool surface, resources, and protocol behavior.
 - [Workspace configuration](docs/navlyn-workspace.md): when and how to use `navlyn.workspace.json`.
 - [First investigation](docs/navlyn-first-10-minutes.md): a short semantic investigation flow after setup.
 - [CLI command reference](docs/navlyn-cli-commands.md): complete command and JSON contract.

@@ -23,20 +23,20 @@ Mark each scenario:
 
 Record the prompt, chosen tool sequence, stop condition, and any stdout/stderr issues.
 
-When evaluating MCP, record the active startup tool profile. Default `reader` profile should make broad review, tests, public API, DI, context-pack, and batch tools unavailable as first-pass choices. Use `review`, `edit`, or `full` only when the prompt requires that surface.
+When evaluating MCP, assume the unified read-only tool surface. Broad review, tests, public API, DI, context-pack, and batch tools are available but should not be chosen unless the prompt and returned evidence make them relevant.
 
 ## Scenarios
 
 | Prompt | Expected First Step | Stop Condition | Avoid |
 | --- | --- | --- | --- |
-| "What does `CheckCommand` refer to?" | In MCP `reader` profile, `navlyn_resolve_target`; in CLI, `find` or `resolve-target` with `assumeKind: "NamedType"` | One high-confidence `candidateId` or an ambiguity to ask about | Running review, context, test, public API, DI, or batch tools |
+| "What does `CheckCommand` refer to?" | In MCP, `navlyn_resolve_target`; in CLI, `find` or `resolve-target` with `assumeKind: "NamedType"` | One high-confidence `candidateId` or an ambiguity to ask about | Running review, context, test, public API, DI, or batch tools |
 | "Open the declaration for this known file position." | `navlyn_symbol_source` or CLI `symbol-source` with file/line/column | Bounded source for one symbol | Workspace summary |
-| "Review this PR." | Start MCP with `--tool-profile review`, then `navlyn_review_diff` with `profile: "evidence"` | Changed-symbol, diagnostic, impact, and related-test facts are available | Raw file outline as the first step; forcing review tools into `reader` |
+| "Review this PR." | `navlyn_review_diff` with `profile: "evidence"` | Changed-symbol, diagnostic, impact, and related-test facts are available | Raw file outline as the first step; treating review facts as unavailable |
 | "Find install instructions in README." | Normal file read or `rg` | Relevant Markdown section found | Any Navlyn command |
 | "Who calls this method?" | Resolve the target, then `navlyn_symbol_edges(operation: "callers")` or CLI `callers` | Callers answer the question or limits indicate rerun | `context-pack` before callers |
-| "What files should be read before changing this symbol?" | Start MCP with `--tool-profile edit`, resolve the target, inspect references or impact, then `navlyn_context_pack` if needed | Bounded reading queue is present | Treating `nextActions` as a checklist; running every exposed edit tool |
+| "What files should be read before changing this symbol?" | Resolve the target, inspect references or impact, then `navlyn_context_pack` or `navlyn_edit_preflight` if needed | Bounded reading queue is present | Treating `nextActions` as a checklist; running every exposed edit tool |
 | "What projects and target frameworks are in this repo?" | `navlyn_workspace_summary(profile: "compact")` or CLI `repo-graph --profile compact` | Project/target facts are returned | Symbol navigation |
-| "Inspect this known C# or Visual Basic file before deciding if more facts are needed." | In MCP `reader` profile, `navlyn_file_outline` or `navlyn_inspect_file` | File outline answers or yields one selected follow-up | `navlyn_batch`, `navlyn_review_diff`, `navlyn_tests_for_diff`, `navlyn_public_api_diff`, `navlyn_di_impact` |
+| "Inspect this known C# or Visual Basic file before deciding if more facts are needed." | `navlyn_file_outline` or `navlyn_inspect_file` | File outline answers or yields one selected follow-up | `navlyn_batch`, `navlyn_review_diff`, `navlyn_tests_for_diff`, `navlyn_public_api_diff`, `navlyn_di_impact` |
 | "Is this route protected?" | `route-map` or `route-impact` for ASP.NET facts | Route/auth source facts are returned with limitations understood | Runtime security claims |
 
 ## Manual Trace Template
@@ -45,7 +45,7 @@ When evaluating MCP, record the active startup tool profile. Default `reader` pr
 Date:
 Navlyn version:
 Repository/workspace:
-MCP tool profile, if any:
+MCP surface, if any:
 Prompt:
 Chosen sequence:
 Expected sequence:

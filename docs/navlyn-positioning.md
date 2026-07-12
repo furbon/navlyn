@@ -63,7 +63,7 @@ Navlyn helps agents reason about overloads, partial declarations, target framewo
 For agent-platform or MCP users:
 
 ```text
-Navlyn gives an agent narrow, profile-gated semantic tools over stdio. The default reader profile supports setup checks, file outlines, target resolution, bounded source, and selected-symbol edges; edit and review profiles are opt-in.
+Navlyn gives an agent one stable read-only semantic tool surface over stdio. Setup, file outline, target resolution, bounded source, edit evidence, diff review, DI, related-test, and public API facts are available without restarting into task modes.
 ```
 
 ## What Not To Claim

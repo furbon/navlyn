@@ -60,7 +60,7 @@ Add a production install link only after testing it with the packaged `navlyn-mc
   "name": "navlyn",
   "type": "stdio",
   "command": "navlyn-mcp",
-  "args": ["--workspace", "auto", "--tool-profile", "reader"]
+  "args": ["--workspace", "auto"]
 }
 ```
 

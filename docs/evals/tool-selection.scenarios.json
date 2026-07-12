@@ -15,7 +15,7 @@
     {
       "id": "resolve-known-symbol",
       "prompt": "What does `CheckCommand` refer to?",
-      "profile": "reader",
+      "surface": "unified",
       "expectedFirstSteps": [ "navlyn_resolve_target", "resolve-target", "find" ],
       "avoidTools": [ "navlyn_review_diff", "navlyn_context_pack", "navlyn_tests_for_symbol", "navlyn_public_api_diff", "navlyn_batch" ],
       "acceptedStopConditions": [ "candidate-id-or-ambiguity" ],
@@ -32,7 +32,7 @@
     {
       "id": "known-source-position",
       "prompt": "Open the declaration for this known file position.",
-      "profile": "reader",
+      "surface": "unified",
       "expectedFirstSteps": [ "navlyn_symbol_source", "symbol-source" ],
       "avoidTools": [ "navlyn_workspace_summary", "repo-graph", "navlyn_review_diff", "navlyn_context_pack" ],
       "acceptedStopConditions": [ "bounded-source-returned" ],
@@ -49,7 +49,7 @@
     {
       "id": "review-pr",
       "prompt": "Review this PR.",
-      "profile": "review",
+      "surface": "unified",
       "expectedFirstSteps": [ "navlyn_review_diff", "review-diff" ],
       "avoidTools": [ "navlyn_file_outline", "navlyn_batch" ],
       "acceptedStopConditions": [ "review-facts-available" ],
@@ -66,7 +66,7 @@
     {
       "id": "readme-install-instructions",
       "prompt": "Find install instructions in README.",
-      "profile": "none",
+      "surface": "none",
       "expectedFirstSteps": [ "file-read", "rg" ],
       "avoidTools": [ "navlyn_workspace_summary", "navlyn_resolve_target", "navlyn_find_symbol", "repo-graph", "find" ],
       "acceptedStopConditions": [ "markdown-section-found" ],
@@ -83,7 +83,7 @@
     {
       "id": "callers-question",
       "prompt": "Who calls this method?",
-      "profile": "reader",
+      "surface": "unified",
       "expectedFirstSteps": [ "navlyn_resolve_target", "resolve-target" ],
       "avoidTools": [ "navlyn_context_pack", "navlyn_review_diff", "navlyn_batch" ],
       "acceptedStopConditions": [ "callers-answer-or-rerun-hint" ],
@@ -100,7 +100,7 @@
     {
       "id": "edit-reading-queue",
       "prompt": "What files should be read before changing this symbol?",
-      "profile": "edit",
+      "surface": "unified",
       "expectedFirstSteps": [ "navlyn_resolve_target", "resolve-target" ],
       "avoidTools": [ "navlyn_batch", "navlyn_review_diff", "navlyn_tests_for_diff" ],
       "acceptedStopConditions": [ "bounded-reading-queue" ],
@@ -117,7 +117,7 @@
     {
       "id": "workspace-projects",
       "prompt": "What projects and target frameworks are in this repo?",
-      "profile": "reader",
+      "surface": "unified",
       "expectedFirstSteps": [ "navlyn_workspace_summary", "repo-graph" ],
       "avoidTools": [ "navlyn_find_symbol", "navlyn_symbol_source", "navlyn_review_diff", "navlyn_context_pack" ],
       "acceptedStopConditions": [ "project-target-facts-returned" ],
@@ -134,7 +134,7 @@
     {
       "id": "known-file-inspection",
       "prompt": "Inspect this known C# or Visual Basic file before deciding if more facts are needed.",
-      "profile": "reader",
+      "surface": "unified",
       "expectedFirstSteps": [ "navlyn_file_outline", "navlyn_inspect_file", "outline" ],
       "avoidTools": [ "navlyn_batch", "navlyn_review_diff", "navlyn_tests_for_diff", "navlyn_public_api_diff", "navlyn_di_impact" ],
       "acceptedStopConditions": [ "file-outline-or-follow-up" ],
@@ -151,7 +151,7 @@
     {
       "id": "route-protection",
       "prompt": "Is this route protected?",
-      "profile": "full",
+      "surface": "unified",
       "expectedFirstSteps": [ "route-map", "route-impact" ],
       "avoidTools": [ "navlyn_review_diff", "navlyn_context_pack", "navlyn_tests_for_diff" ],
       "acceptedStopConditions": [ "route-auth-source-facts" ],

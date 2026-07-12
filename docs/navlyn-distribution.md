@@ -67,7 +67,7 @@ The installed stdio server shape is:
 ```json
 {
   "command": "navlyn-mcp",
-  "args": ["--workspace", "path/to/YourRepo.slnx", "--tool-profile", "reader"]
+  "args": ["--workspace", "path/to/YourRepo.slnx"]
 }
 ```
 
@@ -75,7 +75,7 @@ For VS Code workspace configuration, use `.vscode/mcp.json` with a `servers` obj
 
 For local development from this repository, use [`../examples/mcp/local-development.json`](../examples/mcp/local-development.json). For installed tools, use [`../examples/mcp/dotnet-tool.json`](../examples/mcp/dotnet-tool.json).
 
-When an agent needs several facts from one workspace, prefer CLI `navlyn batch`, or MCP `navlyn_batch` from `--tool-profile full`, with examples from [`../examples/batch`](../examples/batch). This reduces repeated workspace load cost after the needed facts are known.
+When an agent needs several facts from one workspace, prefer CLI `navlyn batch`, or MCP `navlyn_batch`, with examples from [`../examples/batch`](../examples/batch). This reduces repeated workspace load cost after the needed facts are known.
 
 ## Release Identity
 

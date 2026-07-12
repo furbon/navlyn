@@ -14,11 +14,13 @@ internal sealed record NavlynMcpServerOptions(
     int MaxJsonChars,
     string? DaemonPipe,
     NavlynMcpToolProfile ToolProfile,
-    WorkspaceRootPolicy WorkspaceRootPolicy)
+    WorkspaceRootPolicy WorkspaceRootPolicy,
+    bool DeprecatedToolProfileSpecified = false,
+    string? DeprecatedToolProfileValue = null)
 {
     public const int DefaultTimeoutMilliseconds = 120000;
     public const int DefaultMaxJsonChars = 4000000;
-    public const NavlynMcpToolProfile DefaultToolProfile = NavlynMcpToolProfile.Reader;
+    public const NavlynMcpToolProfile DefaultToolProfile = NavlynMcpToolProfile.Full;
     public const WorkspaceRootPolicy DefaultWorkspaceRootPolicy = WorkspaceRootPolicy.RepoRelative;
     public const string ToolProfileEnvironmentVariable = "NAVLYN_MCP_TOOL_PROFILE";
 
@@ -38,6 +40,8 @@ internal sealed record NavlynMcpServerOptions(
         int maxJsonChars = DefaultMaxJsonChars;
         string? daemonPipe = null;
         NavlynMcpToolProfile toolProfile = DefaultToolProfile;
+        bool deprecatedToolProfileSpecified = false;
+        string? deprecatedToolProfileValue = null;
         WorkspaceRootPolicy workspaceRootPolicy = DefaultWorkspaceRootPolicy;
         showHelp = false;
 
@@ -47,6 +51,11 @@ internal sealed record NavlynMcpServerOptions(
             options = CreateEmpty();
             error = $"{ToolProfileEnvironmentVariable} must be one of: reader, review, edit, full.";
             return false;
+        }
+        else if (!string.IsNullOrWhiteSpace(environmentProfile))
+        {
+            deprecatedToolProfileSpecified = true;
+            deprecatedToolProfileValue = environmentProfile.Trim();
         }
 
         for (int index = 0; index < args.Count; index++)
@@ -131,6 +140,8 @@ internal sealed record NavlynMcpServerOptions(
                         return false;
                     }
 
+                    deprecatedToolProfileSpecified = true;
+                    deprecatedToolProfileValue = rawToolProfile.Trim();
                     break;
                 case "--workspace-root-policy":
                     if (!TryReadValue(args, ref index, arg, out string rawWorkspaceRootPolicy, out error))
@@ -204,7 +215,9 @@ internal sealed record NavlynMcpServerOptions(
             MaxJsonChars: maxJsonChars,
             DaemonPipe: daemonPipe,
             ToolProfile: toolProfile,
-            WorkspaceRootPolicy: workspaceRootPolicy);
+            WorkspaceRootPolicy: workspaceRootPolicy,
+            DeprecatedToolProfileSpecified: deprecatedToolProfileSpecified,
+            DeprecatedToolProfileValue: deprecatedToolProfileValue);
         error = null;
         return true;
     }
@@ -222,9 +235,12 @@ internal sealed record NavlynMcpServerOptions(
         builder.AppendLine("  --timeout-ms <number>          Per-tool timeout. Defaults to 120000.");
         builder.AppendLine("  --max-json-chars <number>      Max command JSON chars. Defaults to 4000000.");
         builder.AppendLine("  --daemon-pipe <name>           Optional local navlyn serve named pipe for workspace status/refresh.");
-        builder.AppendLine("  --tool-profile <profile>       MCP tool surface: reader, review, edit, or full. Defaults to reader.");
-        builder.AppendLine("                                  Can also be set with NAVLYN_MCP_TOOL_PROFILE.");
         builder.AppendLine("  --workspace-root-policy <mode> Workspace root policy: repo-relative, allow-listed, or all. Defaults to repo-relative.");
+        builder.AppendLine();
+        builder.AppendLine("Deprecated compatibility options:");
+        builder.AppendLine("  --tool-profile <profile>       Deprecated no-op alias. Valid values reader, review, edit, and full are accepted");
+        builder.AppendLine("                                  for existing configs, but Navlyn MCP now exposes one read-only tool surface.");
+        builder.AppendLine("                                  Can also be set with NAVLYN_MCP_TOOL_PROFILE.");
         return builder.ToString();
     }
 
@@ -236,7 +252,7 @@ internal sealed record NavlynMcpServerOptions(
             NavlynMcpToolProfile.Review => "review",
             NavlynMcpToolProfile.Edit => "edit",
             NavlynMcpToolProfile.Full => "full",
-            _ => "reader"
+            _ => "full"
         };
     }
 

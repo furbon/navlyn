@@ -6,5 +6,5 @@
 - Use Navlyn only when C# or Visual Basic semantic identity, project context, source relationships, diff facts, or bounded evidence would change the answer.
 - Before a non-trivial C# or Visual Basic edit, run `dotnet tool run navlyn -- edit-preflight --workspace <workspace> --query <SymbolName> --assume-kind <kind> --goal modify`.
 - After editing, run `dotnet tool run navlyn -- post-edit-guard --workspace <workspace> --candidate-id <candidateId> --fail-on-risk high` or `wrong-symbol-guard`.
-- For MCP, start `dotnet tool run navlyn-mcp -- --workspace <workspace> --tool-profile reader`; restart with `edit` or `review` only when the task needs that broader surface.
+- For MCP, start `dotnet tool run navlyn-mcp -- --workspace <workspace>`; use the unified read-only tool surface and call edit or review evidence tools only when the task needs them.
 - Keep generated reports under ignored artifact paths and keep Navlyn stdout as JSON.

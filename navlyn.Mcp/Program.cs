@@ -20,6 +20,12 @@ if (showHelp)
     return 0;
 }
 
+if (options.DeprecatedToolProfileSpecified)
+{
+    Console.Error.WriteLine(
+        $"Warning NAVLYN_MCP_TOOL_PROFILE_DEPRECATED: --tool-profile/NAVLYN_MCP_TOOL_PROFILE is deprecated and ignored. Navlyn MCP now exposes one read-only tool surface; supplied profile '{options.DeprecatedToolProfileValue}' is treated as a compatibility alias and may be removed after the next major version.");
+}
+
 Directory.SetCurrentDirectory(options.WorkingDirectory);
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder([]);
@@ -60,25 +66,6 @@ builder.Services
                 .ToList();
 
             return result;
-        });
-
-        filters.AddCallToolFilter(next => async (request, cancellationToken) =>
-        {
-            NavlynMcpServerOptions serverOptions = request.Services!.GetRequiredService<NavlynMcpServerOptions>();
-            string toolName = request.Params.Name;
-            if (!NavlynMcpToolProfilePolicy.Allows(serverOptions.ToolProfile, toolName))
-            {
-                string profile = NavlynMcpServerOptions.FormatToolProfile(serverOptions.ToolProfile);
-                return NavlynToolResultFormatter.ToCallToolResult(NavlynToolResult.Failed(
-                    toolName,
-                    sourceCommand: null,
-                    workspace: serverOptions.WorkspaceArgument,
-                    new NavlynToolError(
-                        "NAVLYN_MCP_TOOL_PROFILE",
-                        $"Tool '{toolName}' is not exposed by MCP tool profile '{profile}'. Restart the server with --tool-profile review, edit, or full when that tool surface is needed.")));
-            }
-
-            return await next(request, cancellationToken);
         });
     })
     .WithToolsFromAssembly()

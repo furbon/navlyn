@@ -38,7 +38,7 @@ MCP legacy external CLI:
 
 The MCP server reuses its process, loaded assemblies, command runtime, MSBuildLocator registration, a lazy workspace cache, and a workspace-scoped `DocumentIndex` for direct reader tools. `navlyn_file_outline` seeds an in-memory candidate target map for the current server process, so immediate `navlyn_symbol_source(candidateId: "...")` follow-ups can avoid a broad candidate scan. Tools that still run through the command adapter preserve the existing CLI behavior and may load the workspace independently.
 
-The direct cache is session-local and has no file watcher. Use `navlyn_workspace_refresh` or restart the MCP server after source or project changes when freshness matters. Use `navlyn_batch` from `--tool-profile full` when several batch-supported adapter-backed facts should share one workspace load. Navlyn does not add an editing surface, network access, or arbitrary command execution.
+The direct cache is session-local and has no file watcher. Use `navlyn_workspace_refresh` or restart the MCP server after source or project changes when freshness matters. Use `navlyn_batch` when several batch-supported adapter-backed facts should share one workspace load. Navlyn does not add an editing surface, network access, or arbitrary command execution.
 
 `navlyn serve` is an opt-in local read-only daemon for workspace lifecycle requests. It accepts newline-delimited JSON over stdin/stdout, or a local named pipe when `--pipe` is supplied. CLI `workspace-status` / `workspace-refresh` and MCP `navlyn_workspace_status` / `navlyn_workspace_refresh` can connect to that pipe only when explicitly configured. If a configured daemon is unavailable, callers fall back to the normal stateless or in-process path.
 

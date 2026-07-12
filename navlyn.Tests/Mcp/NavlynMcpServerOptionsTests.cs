@@ -26,7 +26,9 @@ public sealed class NavlynMcpServerOptionsTests
         Assert.Equal(repoRoot, options.WorkingDirectory);
         Assert.Null(options.NavlynExecutable);
         Assert.False(options.UseExternalCli);
-        Assert.Equal(NavlynMcpToolProfile.Reader, options.ToolProfile);
+        Assert.Equal(NavlynMcpToolProfile.Full, options.ToolProfile);
+        Assert.False(options.DeprecatedToolProfileSpecified);
+        Assert.Null(options.DeprecatedToolProfileValue);
         Assert.Equal(WorkspaceRootPolicy.RepoRelative, options.WorkspaceRootPolicy);
     }
 
@@ -58,7 +60,7 @@ public sealed class NavlynMcpServerOptionsTests
     }
 
     [Fact]
-    public void TryParse_ToolProfile_OverridesDefault()
+    public void TryParse_ToolProfile_IsAcceptedAsDeprecatedCompatibilityAlias()
     {
         string repoRoot = FindRepositoryRoot();
 
@@ -71,6 +73,8 @@ public sealed class NavlynMcpServerOptionsTests
         Assert.True(valid);
         Assert.Null(error);
         Assert.Equal(NavlynMcpToolProfile.Full, options.ToolProfile);
+        Assert.True(options.DeprecatedToolProfileSpecified);
+        Assert.Equal("full", options.DeprecatedToolProfileValue);
     }
 
     [Fact]
@@ -121,7 +125,7 @@ public sealed class NavlynMcpServerOptionsTests
     }
 
     [Fact]
-    public void TryParse_ToolProfileEnvironment_ProvidesDefault()
+    public void TryParse_ToolProfileEnvironment_IsAcceptedAsDeprecatedCompatibilityAlias()
     {
         string repoRoot = FindRepositoryRoot();
         string? previous = Environment.GetEnvironmentVariable(NavlynMcpServerOptions.ToolProfileEnvironmentVariable);
@@ -138,6 +142,8 @@ public sealed class NavlynMcpServerOptionsTests
             Assert.True(valid);
             Assert.Null(error);
             Assert.Equal(NavlynMcpToolProfile.Review, options.ToolProfile);
+            Assert.True(options.DeprecatedToolProfileSpecified);
+            Assert.Equal("review", options.DeprecatedToolProfileValue);
         }
         finally
         {
@@ -146,7 +152,7 @@ public sealed class NavlynMcpServerOptionsTests
     }
 
     [Fact]
-    public void TryParse_CommandLineToolProfile_OverridesEnvironment()
+    public void TryParse_CommandLineToolProfile_OverridesEnvironmentForCompatibilityWarning()
     {
         string repoRoot = FindRepositoryRoot();
         string? previous = Environment.GetEnvironmentVariable(NavlynMcpServerOptions.ToolProfileEnvironmentVariable);
@@ -163,6 +169,8 @@ public sealed class NavlynMcpServerOptionsTests
             Assert.True(valid);
             Assert.Null(error);
             Assert.Equal(NavlynMcpToolProfile.Edit, options.ToolProfile);
+            Assert.True(options.DeprecatedToolProfileSpecified);
+            Assert.Equal("edit", options.DeprecatedToolProfileValue);
         }
         finally
         {

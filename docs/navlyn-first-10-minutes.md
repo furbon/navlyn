@@ -50,18 +50,18 @@ navlyn edit-preflight --workspace path/to/YourRepo.sln --candidate-id sym:v1:...
 
 If the task only needs one fact, use `symbol-source`, `references`, or `about` directly and stop. Use `edit-preflight` when an agent is about to modify code and needs a reusable evidence envelope.
 
-## 6-8 Minutes: Give An Agent MCP Reader Tools
+## 6-8 Minutes: Give An Agent MCP Tools
 
-Start narrow:
+Configure one read-only MCP surface for the workspace:
 
 ```json
 {
   "command": "navlyn-mcp",
-  "args": ["--workspace", "path/to/YourRepo.sln", "--tool-profile", "reader"]
+  "args": ["--workspace", "path/to/YourRepo.sln"]
 }
 ```
 
-In the first session, prefer:
+The agent should choose the smallest semantic fact that answers the current question:
 
 ```text
 navlyn_resolve_target
@@ -69,10 +69,12 @@ navlyn_file_outline
 navlyn_symbol_source
 navlyn_symbol_edges
 navlyn_about_symbol
+navlyn_edit_preflight
+navlyn_review_diff
 navlyn_doctor
 ```
 
-Switch to `--tool-profile edit` for concrete edit planning with `navlyn_edit_preflight` and post-edit guard tools. Use `review` for real Git diffs. Use `full` only when the client needs every tool, including `navlyn_batch`.
+Use edit and review tools only when their facts are relevant. They are read-only evidence tools; Navlyn still does not edit files, run tests, or publish review comments.
 
 ## 8-10 Minutes: Post-Edit Evidence
 
