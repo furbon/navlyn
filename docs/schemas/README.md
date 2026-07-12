@@ -4,7 +4,7 @@ This directory contains envelope-first schemas plus focused schemas for high-ris
 
 - `navlyn-workflow-envelope.schema.json`: shared `schemaVersion: "navlyn.workflow.v1"` CLI workflow profile envelope.
 - `navlyn-mcp-tool-result.schema.json`: shared MCP structured-content tool result envelope.
-- `navlyn-workspace.schema.json`: repository-local `navlyn.workspace.json` discovery and root-policy configuration.
+- `navlyn-workspace.schema.json`: repository-local `navlyn.workspace.json` discovery and root-policy configuration. See [workspace configuration](../navlyn-workspace.md) before using it.
 - `navlyn-resolve-target-result.schema.json`: high-use `resolve-target` target-selection result shape.
 - `navlyn-file-outline-result.schema.json`: file-first `outline` / MCP file outline entry shape with reusable `candidateId` values.
 - `navlyn-symbol-source-result.schema.json`: bounded `symbol-source` / MCP symbol source result shape.

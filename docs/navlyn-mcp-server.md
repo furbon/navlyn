@@ -1,6 +1,6 @@
 # Navlyn MCP Server
 
-`navlyn-mcp` gives MCP clients a read-only C#-first .NET semantic evidence surface with Roslyn-backed Visual Basic support. It is designed for agents that should inspect code with Roslyn/MSBuild facts before they edit, review, or explain it.
+`navlyn-mcp` gives MCP clients a read-only C#-first .NET semantic evidence surface with Roslyn-backed Visual Basic support. It is designed for agents that should inspect code with Roslyn/MSBuild facts before they edit, review, or explain it. For installation and client-specific copyable files, start with the [README](../README.md#use-with-mcp).
 
 The server is intentionally facts-only:
 
@@ -43,9 +43,11 @@ Installed .NET tool command shape:
 ```json
 {
   "command": "navlyn-mcp",
-  "args": ["--workspace", "path/to/navlyn.workspace.json", "--tool-profile", "reader"]
+  "args": ["--workspace", "path/to/YourRepo.sln", "--tool-profile", "reader"]
 }
 ```
+
+`navlyn.workspace.json` is optional. Use a solution/project path for a normal repository; add the JSON configuration only when the repository needs a shared candidate-selection policy. Its settings are described in [`navlyn-workspace.md`](navlyn-workspace.md).
 
 MCP defaults `--workspace-root-policy` to `repo-relative`, so `.code-workspace` folders and `navlyn.workspace.json` candidates outside the repository root are rejected unless the server is started with `--workspace-root-policy allow-listed` and matching `allowRoots`, or `--workspace-root-policy all`.
 
@@ -57,7 +59,7 @@ VS Code workspace configuration shape:
     "navlyn": {
       "type": "stdio",
       "command": "navlyn-mcp",
-      "args": ["--workspace", "${workspaceFolder}/navlyn.workspace.json", "--tool-profile", "reader"],
+      "args": ["--workspace", "${workspaceFolder}/YourRepo.sln", "--tool-profile", "reader"],
       "cwd": "${workspaceFolder}"
     }
   }

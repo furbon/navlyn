@@ -4,6 +4,7 @@ This document captures durable local development checks, command implementation 
 
 ## Documentation Map
 
+- `docs/navlyn-workspace.md` and `docs/navlyn-workspace_ja.md`: optional workspace-configuration reference.
 - `docs/navlyn-cli-commands.md`: public CLI contract. Update this when implemented command behavior changes.
 - `docs/navlyn-mcp-server.md`: public MCP server setup, tool surface, result envelope, and boundaries.
 - `docs/navlyn-first-10-minutes.md`: short first-run onboarding path.

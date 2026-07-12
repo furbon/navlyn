@@ -1,6 +1,6 @@
 # Navlyn First 10 Minutes
 
-This guide gets a C# repository from "Navlyn is installed" to "an agent has semantic evidence before editing" without reading the full command reference.
+This guide gets a C# repository from "Navlyn is installed" to "an agent has semantic evidence before editing" without reading the full command reference. Before this guide, configure the MCP server from the [README](../README.md#use-with-mcp); `navlyn.workspace.json` is optional.
 
 Use one path first. The CLI path is easiest to verify in a shell. The MCP path is best when an agent client should call Navlyn directly.
 
@@ -25,7 +25,7 @@ dotnet tool restore
 Diagnose the local SDK and workspace:
 
 ```powershell
-navlyn doctor --workspace path/to/YourRepo.slnx
+navlyn doctor --workspace path/to/YourRepo.sln
 ```
 
 Success means stdout is JSON with `ok: true`, the expected workspace path, SDK facts, checks, and a project count. Stderr should be empty on success. If the workspace path is wrong, `doctor` still returns JSON with `ok: false`, `workspace.error`, and `nextAction`.
@@ -35,7 +35,7 @@ Success means stdout is JSON with `ok: true`, the expected workspace path, SDK f
 Pick one C# type or method that an agent might edit:
 
 ```powershell
-navlyn resolve-target --workspace path/to/YourRepo.slnx --query PaymentService --assume-kind NamedType --limit 10
+navlyn resolve-target --workspace path/to/YourRepo.sln --query PaymentService --assume-kind NamedType --limit 10
 ```
 
 Stop when there is one high-confidence `candidateId`. If candidates are ambiguous, ask the user or add `--project` / a more precise `--assume-kind`.
@@ -45,7 +45,7 @@ Stop when there is one high-confidence `candidateId`. If candidates are ambiguou
 Use the returned `candidateId` instead of searching the name again. For a concrete edit, `edit-preflight` collects the anchor, bounded source, bounded context, related tests, confidence evidence, and the post-edit guard command in one envelope:
 
 ```powershell
-navlyn edit-preflight --workspace path/to/YourRepo.slnx --candidate-id sym:v1:... --goal modify --change-kind behavior
+navlyn edit-preflight --workspace path/to/YourRepo.sln --candidate-id sym:v1:... --goal modify --change-kind behavior
 ```
 
 If the task only needs one fact, use `symbol-source`, `references`, or `about` directly and stop. Use `edit-preflight` when an agent is about to modify code and needs a reusable evidence envelope.
@@ -57,7 +57,7 @@ Start narrow:
 ```json
 {
   "command": "navlyn-mcp",
-  "args": ["--workspace", "path/to/navlyn.workspace.json", "--tool-profile", "reader"]
+  "args": ["--workspace", "path/to/YourRepo.sln", "--tool-profile", "reader"]
 }
 ```
 
@@ -79,9 +79,9 @@ Switch to `--tool-profile edit` for concrete edit planning with `navlyn_edit_pre
 After an edit, check the actual diff:
 
 ```powershell
-navlyn post-edit-guard --workspace path/to/YourRepo.slnx --candidate-id sym:v1:... --fail-on-risk high
-navlyn wrong-symbol-guard --workspace path/to/YourRepo.slnx --query PaymentService --assume-kind NamedType --fail-on-risk medium
-navlyn review-diff --workspace path/to/YourRepo.slnx --profile evidence --symbol-limit 20 --impact-limit 40 --diagnostic-limit 40 --related-test-limit 20
+navlyn post-edit-guard --workspace path/to/YourRepo.sln --candidate-id sym:v1:... --fail-on-risk high
+navlyn wrong-symbol-guard --workspace path/to/YourRepo.sln --query PaymentService --assume-kind NamedType --fail-on-risk medium
+navlyn review-diff --workspace path/to/YourRepo.sln --profile evidence --symbol-limit 20 --impact-limit 40 --diagnostic-limit 40 --related-test-limit 20
 ```
 
 The guard commands return deterministic JSON even when policy fails. Exit code `1` means the diff did not satisfy the configured risk threshold, which is the moment to pause before more edits.
@@ -99,8 +99,8 @@ Check these first:
 Then run:
 
 ```powershell
-navlyn doctor --workspace path/to/YourRepo.slnx
-navlyn repo-graph --workspace path/to/YourRepo.slnx --profile compact
+navlyn doctor --workspace path/to/YourRepo.sln
+navlyn repo-graph --workspace path/to/YourRepo.sln --profile compact
 ```
 
 The first command diagnoses SDK, workspace, restore assets, and repair hints. The second shows project names, target frameworks, package facts, and test relationships you can use for more precise follow-up calls.
