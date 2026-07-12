@@ -70,6 +70,50 @@ public sealed class CandidateTargetResolverComponentTests(ResolverComponentTestF
         Assert.Equal(enrichmentCount, declarationIndex.SemanticEnrichmentCount);
     }
 
+    [Fact]
+    public async Task ResolveAsync_StaleCandidateIdAfterSourceRename_ReturnsNotFound()
+    {
+        FuzzyFindResult find = await new FuzzyDiscoveryResolver().FindAsync(
+            fixture.FuzzyDiscoveryWorkspace,
+            new FuzzyQueryOptions(
+                Query: "EnemyManagerTools",
+                AssumeKinds: ["NamedType"],
+                Match: "smart",
+                CaseSensitive: null,
+                ExcludeGenerated: true,
+                Limit: null),
+            fixture.FuzzyDiscoveryWorkspace.Solution.Projects.ToArray(),
+            projectFilters: null,
+            CancellationToken.None);
+
+        string staleCandidateId = find.SelectedCandidate!.CandidateId!;
+        Microsoft.CodeAnalysis.Solution solution = fixture.FuzzyDiscoveryWorkspace.Solution;
+        Microsoft.CodeAnalysis.Document document = solution.Projects
+            .SelectMany(project => project.Documents)
+            .Single(document => string.Equals(
+                Path.GetFullPath(document.FilePath!),
+                fixture.FuzzyDiscoverySource.FullPath,
+                StringComparison.OrdinalIgnoreCase));
+        Microsoft.CodeAnalysis.Text.SourceText sourceText = await document.GetTextAsync(CancellationToken.None);
+        Microsoft.CodeAnalysis.Text.SourceText renamedText = Microsoft.CodeAnalysis.Text.SourceText.From(
+            sourceText.ToString().Replace("EnemyManagerTools", "EnemyManagerToolkit", StringComparison.Ordinal),
+            sourceText.Encoding);
+        Microsoft.CodeAnalysis.Solution staleSolution = document.WithText(renamedText).Project.Solution;
+
+        CandidateTargetResolutionResult result = await new CandidateTargetResolver().ResolveAsync(
+            staleSolution,
+            staleSolution.Projects.ToArray(),
+            staleCandidateId,
+            excludeGenerated: true,
+            CancellationToken.None);
+
+        Assert.Null(result.Resolution);
+        Assert.NotNull(result.Error);
+        Assert.Equal(DiagnosticIds.CandidateIdNotFound, result.Error.DiagnosticId);
+        Assert.Equal(ExitCodes.UsageError, result.Error.ExitCode);
+        Assert.Contains("current workspace", result.Error.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("bad", DiagnosticIds.InvalidCandidateId)]
     [InlineData("sym:v1:00000000000000000000000000000000", DiagnosticIds.CandidateIdNotFound)]
