@@ -1,36 +1,37 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <PackAsTool>true</PackAsTool>
-    <PackageId>navlyn</PackageId>
-    <ToolCommandName>navlyn</ToolCommandName>
-    <Authors>furbon.tech</Authors>
-    <Description>Read-only C#-first .NET semantic evidence CLI with Visual Basic support that helps coding agents avoid wrong-symbol edits.</Description>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageIcon>navlyn-icon.png</PackageIcon>
-    <PackageTags>dotnet-tool;csharp;visual-basic;dotnet;roslyn;cli;mcp;ai-agents;semantic-code-navigation;automation</PackageTags>
-    <RepositoryUrl>https://github.com/furbon/navlyn</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-    <PackageProjectUrl>https://github.com/furbon/navlyn</PackageProjectUrl>
-    <PackageReleaseNotes>0.7.0 prepares the public release by aligning package and runtime version identity, sharpening first-run MCP and CLI onboarding, documenting reproducible evidence workflows, and keeping Navlyn read-only, source-level, bounded, and facts-only.</PackageReleaseNotes>
-    <Copyright>Copyright (c) 2026 furbon.tech</Copyright>
-    <NeutralLanguage>en-US</NeutralLanguage>
-    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-  </PropertyGroup>
+	<PropertyGroup>
+		<ReportAnalyzer>true</ReportAnalyzer>
+		<OutputType>Exe</OutputType>
+		<TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<PackAsTool>true</PackAsTool>
+		<PackageId>navlyn</PackageId>
+		<ToolCommandName>navlyn</ToolCommandName>
+		<Authors>furbon.tech</Authors>
+		<Description>Read-only C#-first .NET semantic evidence CLI with Visual Basic support that helps coding agents avoid wrong-symbol edits.</Description>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageIcon>navlyn-icon.png</PackageIcon>
+		<PackageTags>dotnet-tool;csharp;visual-basic;dotnet;roslyn;cli;mcp;ai-agents;semantic-code-navigation;automation</PackageTags>
+		<RepositoryUrl>https://github.com/furbon/navlyn</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<PackageProjectUrl>https://github.com/furbon/navlyn</PackageProjectUrl>
+		<PackageReleaseNotes>0.7.0 prepares the public release by aligning package and runtime version identity, sharpening first-run MCP and CLI onboarding, documenting reproducible evidence workflows, and keeping Navlyn read-only, source-level, bounded, and facts-only.</PackageReleaseNotes>
+		<Copyright>Copyright (c) 2026 furbon.tech</Copyright>
+		<NeutralLanguage>en-US</NeutralLanguage>
+		<PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <None Include="..\assets\navlyn-icon.png" Pack="true" PackagePath="\" />
-    <None Include="..\README.md" Pack="true" PackagePath="\" />
-    <None Include="..\README_ja.md" Pack="true" PackagePath="\" />
-  </ItemGroup>
+	<ItemGroup>
+		<None Include="..\assets\navlyn-icon.png" Pack="true" PackagePath="\" />
+		<None Include="..\README.md" Pack="true" PackagePath="\" />
+		<None Include="..\README_ja.md" Pack="true" PackagePath="\" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Navlyn.CommandLine\Navlyn.CommandLine.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\Navlyn.CommandLine\Navlyn.CommandLine.csproj" />
+	</ItemGroup>
 
 </Project>
