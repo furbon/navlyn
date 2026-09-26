@@ -95,7 +95,7 @@ public sealed class NavlynContractSchemaTests
             }
             """);
         NavlynToolResult result = NavlynToolResult.Succeeded(
-            "navlyn_find_symbol",
+            "navlyn_target",
             new NavlynSourceCommand("find", ["find", "--workspace", "navlyn.slnx", "--query", "SymbolSourceResolver"]),
             "navlyn.slnx",
             resultDocument.RootElement,
@@ -111,7 +111,7 @@ public sealed class NavlynContractSchemaTests
         JsonElement root = envelope.RootElement;
 
         Assert.True(root.GetProperty("ok").GetBoolean());
-        Assert.Equal("navlyn_find_symbol", root.GetProperty("tool").GetString());
+        Assert.Equal("navlyn_target", root.GetProperty("tool").GetString());
         Assert.Equal("navlyn.slnx", root.GetProperty("workspace").GetString());
         Assert.Equal("abc123", root.GetProperty("metadata").GetProperty("snapshotId").GetString());
         Assert.Equal("fresh", root.GetProperty("metadata").GetProperty("freshnessStatus").GetString());

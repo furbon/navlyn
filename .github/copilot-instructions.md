@@ -14,8 +14,8 @@ Core rules:
 - Emit repository-relative JSON paths with `/` separators where possible.
 - When asked to use Navlyn MCP, call actual `navlyn_*` MCP tools; if they are unavailable, say so instead of treating source reads as MCP usage.
 - Use normal file reads and `rg` first when text is enough. Use Navlyn only when C# semantic identity, project context, source relationships, diff facts, or bounded evidence would change the answer.
-- For MCP symbol work, use `navlyn_file_outline` for one known C# file, `navlyn_resolve_target` for approximate symbol intent, then `navlyn_symbol_source` or `navlyn_symbol_edges` for one precise fact.
-- Do not run `navlyn_review_diff`, `navlyn_tests_for_*`, `navlyn_context_pack`, or `navlyn_batch` as a default checklist. Use them only for an actual diff, explicit test-impact need, bounded context escalation, or multiple already-needed facts.
+- For MCP symbol work, use `navlyn_file_outline` for one known C# file, `navlyn_target` for approximate symbol intent, then `navlyn_read` or `navlyn_navigate` for one precise fact.
+- Do not run `navlyn_review`, `navlyn_tests_for_*`, `navlyn_context_pack`, or `navlyn_batch` as a default checklist. Use them only for an actual diff, explicit test-impact need, bounded context escalation, or multiple already-needed facts.
 - Use `rg` for text search, docs, comments, strings, non-C# files, and fallback investigation.
 - Keep generated artifacts, build output, and local notes out of commits.
 - Validate relevant code changes with `dotnet restore navlyn.slnx`, `dotnet build navlyn.slnx`, `dotnet test navlyn.slnx --no-build`, and `./scripts/test-quick.ps1 -NoBuild -SkipDotnetTest`.

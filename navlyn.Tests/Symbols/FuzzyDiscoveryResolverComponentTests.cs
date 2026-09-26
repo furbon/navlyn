@@ -32,12 +32,21 @@ public sealed class FuzzyDiscoveryResolverComponentTests(ResolverComponentTestFi
         Assert.Equal("net10.0", result.SelectedCandidate.Selector.TargetFramework);
         ResolverAssert.PathEndsWith(result.SelectedCandidate.Path, fixture.FuzzyDiscoverySource);
 
+        FuzzyNextAction definitionAction = Assert.Single(result.NextActions, action => action.Command == "definition");
+        Assert.Equal("navlyn_navigate", definitionAction.McpTool);
+        Assert.Equal("definition", definitionAction.Arguments!["operation"]);
+        Assert.Equal(result.SelectedCandidate.CandidateId, definitionAction.Arguments["candidateId"]);
         FuzzyNextAction referencesAction = Assert.Single(result.NextActions, action => action.Command == "references");
         Assert.Equal(result.SelectedCandidate.CandidateId, referencesAction.CandidateId);
-        Assert.Equal("navlyn_exact_navigation", referencesAction.McpTool);
+        Assert.Equal("navlyn_navigate", referencesAction.McpTool);
         Assert.NotNull(referencesAction.Arguments);
         Assert.Equal("references", referencesAction.Arguments["operation"]);
         Assert.Equal(result.SelectedCandidate.CandidateId, referencesAction.Arguments["candidateId"]);
+        FuzzyNextAction declarationAction = Assert.Single(result.NextActions, action => action.Command == "symbol-source");
+        Assert.Equal("read-selected-declaration-source", declarationAction.Reason);
+        Assert.Equal("navlyn_read", declarationAction.McpTool);
+        Assert.Equal(result.SelectedCandidate.CandidateId, declarationAction.Arguments!["candidateId"]);
+        Assert.Equal("declaration", declarationAction.Arguments["view"]);
     }
 
     [Fact]
@@ -59,6 +68,10 @@ public sealed class FuzzyDiscoveryResolverComponentTests(ResolverComponentTestFi
         Assert.Equal("ambiguous", result.Confidence);
         Assert.Null(result.SelectedCandidate);
         Assert.True(result.CandidateCount >= 2);
+        FuzzyNextAction findAction = Assert.Single(result.NextActions, action => action.Command == "find");
+        Assert.Equal("navlyn_target", findAction.McpTool);
+        Assert.Equal("list", findAction.Arguments!["mode"]);
+        Assert.Equal("EnemyManager", findAction.Arguments["query"]);
         Assert.All(
             result.Candidates.Where(candidate => candidate.Name == "EnemyManager"),
             candidate => Assert.Contains("exact-name-match", candidate.ReasonCodes));

@@ -70,8 +70,7 @@ The agent should choose the smallest semantic fact that answers the current ques
 navlyn_target
 navlyn_file_outline
 navlyn_read
-navlyn_symbol_edges
-navlyn_about_symbol
+navlyn_navigate
 navlyn_prepare_edit
 navlyn_verify_edit
 navlyn_review

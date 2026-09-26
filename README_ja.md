@@ -100,7 +100,7 @@ Navlyn MCP は、読み取り専用の semantic tool surface を一つだけ公�
 | --- | --- |
 | ユーザーが指しているシンボルはどれか | `navlyn_target` |
 | 選んだシンボルの宣言を見たい | `navlyn_read` |
-| 呼び出し元や参照元を知りたい | `navlyn_symbol_edges` |
+| 呼び出し元や参照元を知りたい | `navlyn_navigate` |
 | 変更前に何を把握すべきか | `navlyn_prepare_edit` |
 | 実際の diff が対象から外れていないか | `navlyn_verify_edit` |
 | この Git diff は何へ影響したか | `navlyn_review` |

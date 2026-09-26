@@ -16,7 +16,7 @@ Practical rule: use one precise fact first, reuse returned `candidateId` values,
 
 - CLI commands load the configured workspace for each process invocation.
 - `navlyn-mcp` is a read-only stdio server that runs Navlyn commands in-process by default through the shared engine.
-- MCP reader-path tools (`navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, `navlyn_inspect_file`, and `navlyn_symbol_source`) use a direct Core resolver path with a lazy per-server workspace cache and workspace-scoped `DocumentIndex`.
+- MCP reader-path tools (`navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, and `navlyn_read`) use a direct Core resolver path with a lazy per-server workspace cache and workspace-scoped `DocumentIndex`.
 - `navlyn_batch` can reduce repeated workspace loads when several batch-supported facts should be collected together.
 - `navlyn serve` is an opt-in local read-only daemon for workspace status/refresh requests over stdio JSON lines or a local named pipe.
 - `.navlyn/cache/workspace-index.json` is an opt-in lightweight manifest for freshness and index facts, not a serialized Roslyn workspace.
@@ -143,8 +143,8 @@ Prefer this pattern for a file-first MCP loop:
 
 ```text
 navlyn_file_outline(file: "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs")
-navlyn_symbol_source(candidateId: "sym:v1:...", view: "declaration")
-navlyn_symbol_edges(operation: "calls", candidateId: "sym:v1:...", limit: 30)
+navlyn_read(candidateId: "sym:v1:...", view: "declaration")
+navlyn_navigate(operation: "calls", candidateId: "sym:v1:...", limit: 30)
 ```
 
 For CLI users, the comparable file-first facts are:
@@ -171,7 +171,7 @@ Get-Content examples/batch/investigation-loop.json | navlyn batch --workspace na
 
 For MCP clients, `navlyn_batch` remains useful after the agent already knows it needs several batch-supported facts. Prefer direct focused tools for workspace summary, a single known file, or a selected symbol because they reuse the MCP workspace cache and `DocumentIndex` without encouraging broad fact collection.
 
-For fuzzy symbol workflows, prefer reusing `candidateId` values returned by `find`, `resolve-target`, and MCP outline/source tools. Candidate records are validated against the current solution fingerprint, so same-snapshot follow-ups can skip broad declaration rediscovery while stale or unknown IDs still fall back to deterministic validation and diagnostics. Use `about --profile light` and `impact --profile light` for first-pass agent calls; expand to `full`, a broader `--scope`, or a larger `--max-documents` only when the returned facts show that the broader search is needed.
+For fuzzy symbol workflows, prefer reusing `candidateId` values returned by CLI `find` / `resolve-target` and MCP `navlyn_target` / `navlyn_file_outline`. Candidate records are validated against the current solution fingerprint, so same-snapshot follow-ups can skip broad declaration rediscovery while stale or unknown IDs still fall back to deterministic validation and diagnostics. Use CLI `about --profile light` or MCP `navlyn_navigate(operation: "symbol_info")` and `navlyn_impact` for first-pass selected-symbol facts; expand to a richer profile, a broader `scope`, or a larger `maxDocuments` only when the returned facts show that the broader search is needed.
 
 Do not interpret faster compact output as better semantic coverage. It is smaller by design. If a compact result warns about truncation or omits the expected file, rerun with higher limits, `evidence`, or `full`.
 

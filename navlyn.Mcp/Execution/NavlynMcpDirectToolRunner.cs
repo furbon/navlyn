@@ -28,7 +28,7 @@ internal sealed class NavlynMcpDirectToolRunner(
     public bool CanRun(CommandBuildResult command)
     {
         return command.StandardInput is null &&
-            command.Command is "repo-graph" or "outline" or "symbol-source" or "workspace-status" or "workspace-refresh";
+            command.Command is "repo-graph" or "outline" or "read" or "symbol-source" or "workspace-status" or "workspace-refresh";
     }
 
     public async Task<NavlynToolResult> RunAsync(
@@ -86,7 +86,7 @@ internal sealed class NavlynMcpDirectToolRunner(
                 "workspace-refresh" => await RunWorkspaceRefreshAsync(toolName, sourceCommand, cachedWorkspace, cacheResult.CacheHit, command.Arguments, cancellationToken),
                 "repo-graph" => RunRepoGraph(toolName, sourceCommand, cachedWorkspace, cacheResult.CacheHit, command.Arguments),
                 "outline" => await RunOutlineAsync(toolName, sourceCommand, cachedWorkspace, cacheResult.CacheHit, command.Arguments, cancellationToken),
-                "symbol-source" => await RunSymbolSourceAsync(toolName, sourceCommand, cachedWorkspace, cacheResult.CacheHit, command.Arguments, cancellationToken),
+                "read" or "symbol-source" => await RunSymbolSourceAsync(toolName, sourceCommand, cachedWorkspace, cacheResult.CacheHit, command.Arguments, cancellationToken),
                 _ => Failed(toolName, sourceCommand, "NAVLYN_MCP_DIRECT_UNSUPPORTED", $"Direct MCP execution is not available for {command.Command}.")
             };
         }

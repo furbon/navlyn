@@ -100,7 +100,7 @@ Navlyn MCP exposes one stable read-only semantic tool surface. The default start
 | --- | --- |
 | Which symbol did the user mean? | `navlyn_target` |
 | Show the declaration for this selected symbol. | `navlyn_read` |
-| Who calls or references it? | `navlyn_symbol_edges` |
+| Who calls or references it? | `navlyn_navigate` |
 | What should I know before changing it? | `navlyn_prepare_edit` |
 | Did the actual diff stay on target? | `navlyn_verify_edit` |
 | What did this Git diff affect? | `navlyn_review` |

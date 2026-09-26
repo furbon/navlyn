@@ -39,7 +39,7 @@ Track these fields for each trace:
 | Overloaded method change | Resolve by source position or exact candidate, inspect callers/references | The edited member matches the anchored overload. |
 | Partial class edit | Resolve target and inspect source locations or context pack | The agent sees the relevant partial declaration before editing. |
 | Multi-target project | Use `--project` or inspect target framework facts | The edit is made in the intended target framework context. |
-| Pre-edit evidence envelope | Run `prepare-edit`, `edit-preflight`, `navlyn_prepare_edit`, or `navlyn_edit_preflight` | Anchor, source evidence, context, confidence, known unknowns, and next guard command are present. |
+| Pre-edit evidence envelope | Run CLI `prepare-edit` or `edit-preflight`, or MCP `navlyn_prepare_edit` | Anchor, source evidence, context, confidence, known unknowns, and next guard command are present. |
 | Diff review after edit | Run `verify-edit`, `post-edit-guard`, `wrong-symbol-guard`, `review`, or `review-diff` | Changed symbols are compared with the pre-edit anchor. |
 | Related tests | Use `tests-for-symbol` or `tests-for-diff` only after an edit plan or diff | Test files are evidence, not a first-pass checklist. |
 | Text-only task | Use file read or `rg` | No Navlyn call is made for Markdown/comments/config text. |

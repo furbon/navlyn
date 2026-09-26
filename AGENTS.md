@@ -29,6 +29,8 @@ Agents working here should make small, verifiable changes while preserving the p
 
 Use `rg --files` and `rg "<query>"` for text search, comments, strings, docs, non-C# files, and fallback investigation. Prefer existing Navlyn commands for C# semantic questions that the CLI already supports.
 
+For MCP clients, use `navlyn_file_outline` for one known source file, `navlyn_target` for approximate symbol intent, and `navlyn_read` or `navlyn_navigate` for one precise source or relationship fact. Use broader review, context, test, or batch tools only when the task requires them.
+
 ## Verification
 
 For general code changes, start with:

@@ -130,6 +130,8 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- repo-grap
 
 The separate `navlyn.Mcp` project exposes a read-only stdio MCP server for agent clients. MCP tool results wrap existing CLI JSON in `{ ok, tool, sourceCommand, workspace, metadata, result, error }`; `metadata` is additive and optional, and the inner `result` shapes remain the CLI contract documented here.
 
+The v0.8 MCP surface maps the CLI contract into exactly 25 tools: `navlyn_target`, `navlyn_read`, `navlyn_file_outline`, `navlyn_navigate`, `navlyn_prepare_edit`, `navlyn_verify_edit`, `navlyn_review`, `navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_doctor`, `navlyn_impact`, `navlyn_context_pack`, `navlyn_entrypoints`, `navlyn_tests_for_symbol`, `navlyn_tests_for_diff`, `navlyn_diagnostics`, `navlyn_di`, `navlyn_public_api_diff`, `navlyn_routes`, `navlyn_options`, `navlyn_messages`, `navlyn_ef`, `navlyn_packages`, and `navlyn_batch`. Consolidation of the MCP surface does not remove advanced CLI commands such as `find`, `resolve-target`, `about`, `related`, `review-diff`, `edit-preflight`, or the agent guard and handoff commands documented below.
+
 See [`navlyn-mcp-server.md`](navlyn-mcp-server.md) for setup, tool names, result envelope, and boundaries.
 
 ## Agent Evidence Commands

@@ -762,7 +762,7 @@ internal sealed class FuzzyDiscoveryResolver
             SelectedCandidate: selected,
             Alternatives: alternatives is { Count: > 0 } ? alternatives : null,
             Warnings: resolution.Warnings,
-            NextActions: CreateNextActions(workspace, selected),
+            NextActions: CreateNextActions(workspace, options.Query, selected),
             CandidateLimit: limit,
             CandidatesTruncated: resolution.TotalCandidates > candidates.Count,
             SelectionInput: options.CandidateId is null
@@ -773,12 +773,12 @@ internal sealed class FuzzyDiscoveryResolver
                 : null);
     }
 
-    private static IReadOnlyList<FuzzyNextAction> CreateNextActions(string workspace, FuzzySymbolCandidate? candidate)
+    private static IReadOnlyList<FuzzyNextAction> CreateNextActions(string workspace, string query, FuzzySymbolCandidate? candidate)
     {
         if (candidate is null)
         {
             return [
-                new FuzzyNextAction("find", workspace, Query: null, File: null, Line: null, Column: null, Reason: "try-broader-query"),
+                new FuzzyNextAction("find", workspace, Query: query, File: null, Line: null, Column: null, Reason: "try-broader-query", McpTool: "navlyn_target", Arguments: CreateMcpArguments(("mode", "list"), ("query", query))),
                 new FuzzyNextAction("symbols", workspace, Query: null, File: null, Line: null, Column: null, Reason: "try-precise-symbol-search")
             ];
         }
@@ -793,7 +793,7 @@ internal sealed class FuzzyDiscoveryResolver
                 Column: candidate.Column,
                 Reason: "inspect-selected-definition",
                 CandidateId: candidate.CandidateId,
-                McpTool: "navlyn_exact_navigation",
+                McpTool: "navlyn_navigate",
                 Arguments: CreateMcpArguments(("operation", "definition"), ("candidateId", candidate.CandidateId))),
             new FuzzyNextAction(
                 "references",
@@ -804,19 +804,19 @@ internal sealed class FuzzyDiscoveryResolver
                 Column: candidate.Column,
                 Reason: "inspect-selected-references",
                 CandidateId: candidate.CandidateId,
-                McpTool: "navlyn_exact_navigation",
+                McpTool: "navlyn_navigate",
                 Arguments: CreateMcpArguments(("operation", "references"), ("candidateId", candidate.CandidateId))),
             new FuzzyNextAction(
-                "about",
+                "symbol-source",
                 workspace,
                 Query: candidate.Name,
                 File: null,
                 Line: null,
                 Column: null,
-                Reason: "summarize-selected-symbol",
+                Reason: "read-selected-declaration-source",
                 CandidateId: candidate.CandidateId,
-                McpTool: "navlyn_about_symbol",
-                Arguments: CreateMcpArguments(("candidateId", candidate.CandidateId)))
+                McpTool: "navlyn_read",
+                Arguments: CreateMcpArguments(("candidateId", candidate.CandidateId), ("view", "declaration")))
         ];
     }
 

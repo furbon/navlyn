@@ -51,7 +51,7 @@ Navlyn MCP exposes one stable read-only semantic tool surface. Configure the wor
 | Setup and workspace health | `navlyn_doctor` |
 | First symbol anchor | `navlyn_target` |
 | Known file outline | `navlyn_file_outline` |
-| One selected source or relationship fact | `navlyn_read` or `navlyn_symbol_edges` |
+| One selected source or relationship fact | `navlyn_read` or `navlyn_navigate` |
 | Pre-edit evidence | `navlyn_prepare_edit` |
 | Actual Git diff evidence | `navlyn_review` |
 

@@ -18,8 +18,8 @@ Use Navlyn as a facts-only C#-first .NET semantic investigation server for {targ
 
 Recommended flow:
 1. If candidateId is missing, call navlyn_target with the query and inspect confidence, selectedTarget, candidates, and warnings.
-2. Call navlyn_about_symbol with candidateId when possible.
-3. Call navlyn_read for bounded source text or navlyn_symbol_edges for references, callers, calls, or implementations when precise facts are needed.
+2. Call navlyn_read with candidateId for bounded declaration or source facts.
+3. Call navlyn_navigate with the specific operation and candidateId for definitions, references, callers, calls, implementations, hierarchy, or symbol information.
 4. Call navlyn_context_pack with goal understand only when normal file reads or smaller symbol facts are not enough.
 
 Do not infer runtime behavior from static facts alone. Check confidence, warnings, truncation, and CLI diagnostics before relying on a result.
@@ -43,14 +43,14 @@ Use the unified read-only MCP surface; Navlyn provides facts and guard evidence,
 Recommended flow:
 1. Call navlyn_prepare_edit with candidateId when available, or with query when the target still needs to be resolved.
 2. Inspect anchor, source, context, tests, confidence, known unknowns, and next guard command.
-3. Call navlyn_symbol_edges, navlyn_impact, or navlyn_tests_for_symbol only when the pre-edit result shows a specific missing fact.
+3. Call navlyn_navigate, navlyn_impact, or navlyn_tests_for_symbol only when the pre-edit result shows a specific missing fact.
 4. Escalate to navlyn_context_pack with goal modify, changeKind when known, profile compact, and a budget that fits the client only when a bounded reading queue is still needed.
 
 Keep Navlyn in facts-provider mode. Use the returned facts to decide what files to read and edit with normal editor/file tools.
 """;
     }
 
-    [McpServerPrompt(Name = "navlyn_review_diff", Title = "Review A Git Diff With Facts")]
+    [McpServerPrompt(Name = "navlyn_review_changes", Title = "Review A Git Diff With Facts")]
     [Description("Guide an MCP client through a Navlyn diff review facts flow.")]
     public static string ReviewDiff(
         [Description("Optional base Git ref.")] string? @base = null,
@@ -90,11 +90,10 @@ Navlyn does not generate review comments or approve changes. Treat it as source-
 Investigate {target} with Navlyn facts before editing.
 
 Recommended flow:
-1. If an exact file/line/column is known, call navlyn_target for an anchor, or call navlyn_read when bounded source text is the needed fact.
-2. Use navlyn_context_pack around the affected symbol or diff only when bounded reading material is needed.
-3. Use navlyn_batch only for batch-supported workspace, diagnostics, review, tests, DI, or application-domain facts after deciding several facts are needed from one workspace.
-4. For direct CLI-only facts such as symbol-diagnostics, diagnostic-pack, scope-at, or signature, ask the client to run the matching Navlyn CLI command outside MCP when that surface is available.
-5. After editing, run the repository's normal build/test validation outside Navlyn.
+1. For one diagnostic at an exact file/line/column or selected symbol, call navlyn_diagnostics with mode symbol and the location or candidateId; include diagnosticId when known.
+2. For workspace-wide filtering, use mode workspace with an optional project and diagnosticId or diagnosticIds. Use mode pack only when a bounded diagnostic context pack is specifically needed.
+3. Do not use navlyn_batch for one diagnostic fact. Escalate to navlyn_context_pack only when ordinary reads and the focused diagnostic result are insufficient.
+4. After editing, run the repository's normal build/test validation outside Navlyn; navlyn_diagnostics reports existing diagnostics and does not build or apply fixes.
 
 Navlyn reports compiler and source-level facts. It does not apply fixes or prove runtime behavior.
 """;

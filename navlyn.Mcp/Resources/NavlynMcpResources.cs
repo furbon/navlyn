@@ -69,7 +69,7 @@ internal static class NavlynMcpResources
             cancellationToken);
     }
 
-    [McpServerResource(UriTemplate = SymbolSourceResource, Name = "navlyn_symbol_source", Title = "Navlyn Symbol Source")]
+    [McpServerResource(UriTemplate = SymbolSourceResource, Name = "navlyn_read_source", Title = "Navlyn Symbol Source")]
     public static Task<string> SymbolSource(
         IServiceProvider services,
         string candidateId,
@@ -78,7 +78,16 @@ internal static class NavlynMcpResources
     {
         string effectiveView = string.IsNullOrWhiteSpace(view) ? "declaration" : view.Trim();
         CommandBuildResult command = IsKnownSourceView(effectiveView)
-            ? CommandBuildResult.Valid("symbol-source", ["--candidate-id", candidateId.Trim(), "--view", effectiveView])
+            ? NavlynToolCommandBuilder.Read(
+                candidateId.Trim(),
+                file: null,
+                line: null,
+                column: null,
+                project: null,
+                excludeGenerated: null,
+                view: effectiveView,
+                maxLines: null,
+                budgetTokens: null)
             : CommandBuildResult.Invalid("view must be one of: signature, declaration, body, members, xml-doc, attributes.");
 
         return RunJsonAsync(
@@ -98,7 +107,7 @@ internal static class NavlynMcpResources
         return Task.FromResult(NavlynToolResultFormatter.ToJson(service.CreateInvalidArgumentResult(
             "navlyn_resource_file",
             $"navlyn://file/{path}",
-            "navlyn://file resources are advertised for discovery, but raw file reads are intentionally unsupported. Use navlyn_context_pack, navlyn_exact_navigation, or navlyn://symbol/{candidateId}/source?view=declaration for bounded source facts.")));
+            "navlyn://file resources are advertised for discovery, but raw file reads are intentionally unsupported. Use navlyn_read, navlyn_navigate, or navlyn_context_pack for bounded source facts.")));
     }
 
     private static async Task<string> RunJsonAsync(

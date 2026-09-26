@@ -24,7 +24,7 @@ MCP default:
 
 1. `navlyn.Mcp` receives an MCP tool, resource, or prompt request.
 2. MCP arguments are validated and mapped to an allowlisted logical Navlyn command.
-3. Reader-path tools such as `navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, `navlyn_inspect_file`, and `navlyn_symbol_source` use direct Core resolver paths with a lazy per-server workspace cache and `DocumentIndex`.
+3. Reader-path tools such as `navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, and `navlyn_read` use direct Core resolver paths with a lazy per-server workspace cache and `DocumentIndex`.
 4. Other tools use `NavlynInProcessCommandAdapter`, which runs the shared command runtime in-process.
 5. The MCP result envelope returns `sourceCommand` for traceability and the command JSON under `result`.
 
@@ -36,7 +36,7 @@ MCP legacy external CLI:
 
 ## Cache Boundary
 
-The MCP server reuses its process, loaded assemblies, command runtime, MSBuildLocator registration, a lazy workspace cache, and a workspace-scoped `DocumentIndex` for direct reader tools. `navlyn_file_outline` seeds an in-memory candidate target map for the current server process, so immediate `navlyn_symbol_source(candidateId: "...")` follow-ups can avoid a broad candidate scan. Tools that still run through the command adapter preserve the existing CLI behavior and may load the workspace independently.
+The MCP server reuses its process, loaded assemblies, command runtime, MSBuildLocator registration, a lazy workspace cache, and a workspace-scoped `DocumentIndex` for direct reader tools. `navlyn_file_outline` seeds an in-memory candidate target map for the current server process, so immediate `navlyn_read(candidateId: "...", view: "declaration")` follow-ups can avoid a broad candidate scan. Tools that still run through the command adapter preserve the existing CLI behavior and may load the workspace independently.
 
 The direct cache is session-local and has no file watcher. Use `navlyn_workspace_refresh` or restart the MCP server after source or project changes when freshness matters. Use `navlyn_batch` when several batch-supported adapter-backed facts should share one workspace load. Navlyn does not add an editing surface, network access, or arbitrary command execution.
 
