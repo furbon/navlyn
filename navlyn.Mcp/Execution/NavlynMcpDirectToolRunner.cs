@@ -25,6 +25,17 @@ internal sealed class NavlynMcpDirectToolRunner(
         WriteIndented = true
     };
 
+    private readonly Action<int>? beforeValidation;
+
+    internal NavlynMcpDirectToolRunner(
+        NavlynMcpServerOptions options,
+        NavlynMcpWorkspaceCache workspaceCache,
+        Action<int> beforeValidation)
+        : this(options, workspaceCache)
+    {
+        this.beforeValidation = beforeValidation;
+    }
+
     public bool CanRun(CommandBuildResult command)
     {
         return command.StandardInput is null &&
@@ -37,62 +48,74 @@ internal sealed class NavlynMcpDirectToolRunner(
         CancellationToken cancellationToken)
     {
         NavlynSourceCommand sourceCommand = CreateSourceCommand(command);
-        if ((command.Command == "workspace-status" || command.Command == "workspace-refresh") &&
-            !string.IsNullOrWhiteSpace(options.DaemonPipe))
+        try
         {
-            NavlynToolResult? daemonResult = await TryRunDaemonWorkspaceToolAsync(
-                toolName,
-                sourceCommand,
-                command,
-                cancellationToken);
-            if (daemonResult is not null)
+            if (command.Command == "workspace-status" && !string.IsNullOrWhiteSpace(options.DaemonPipe))
             {
-                return daemonResult;
+                NavlynToolResult? daemonStatus = await TryRunDaemonWorkspaceToolAsync(
+                    toolName, sourceCommand, command, cancellationToken);
+                if (daemonStatus is not null)
+                {
+                    return daemonStatus;
+                }
             }
-        }
 
-        NavlynMcpWorkspaceCacheResult cacheResult;
-        try
-        {
-            cacheResult = command.Command == "workspace-refresh"
-                ? await workspaceCache.RefreshAsync(cancellationToken)
-                : await workspaceCache.GetAsync(cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            return Failed(toolName, sourceCommand, "NAVLYN_MCP_CANCELED", "Tool call was canceled.");
-        }
-        catch (Exception ex)
-        {
-            return Failed(toolName, sourceCommand, "NAVLYN_MCP_SERVER_ERROR", $"Unexpected MCP direct runner error: {ex.Message}");
-        }
-
-        if (cacheResult.Error is not null)
-        {
-            return Failed(
-                toolName,
-                sourceCommand,
-                DiagnosticCode(cacheResult.Error.DiagnosticId),
-                cacheResult.Error.Message,
-                cacheResult.Error.ExitCode);
-        }
-
-        NavlynMcpWorkspaceCache.CachedWorkspace cachedWorkspace = cacheResult.CachedWorkspace!;
-        try
-        {
-            return command.Command switch
+            for (int attempt = 0; attempt < 2; attempt++)
             {
-                "workspace-status" => await RunWorkspaceStatusAsync(toolName, sourceCommand, cachedWorkspace, cacheResult.CacheHit, command.Arguments, cancellationToken),
-                "workspace-refresh" => await RunWorkspaceRefreshAsync(toolName, sourceCommand, cachedWorkspace, cacheResult.CacheHit, command.Arguments, cancellationToken),
-                "repo-graph" => RunRepoGraph(toolName, sourceCommand, cachedWorkspace, cacheResult.CacheHit, command.Arguments),
-                "outline" => await RunOutlineAsync(toolName, sourceCommand, cachedWorkspace, cacheResult.CacheHit, command.Arguments, cancellationToken),
-                "read" or "symbol-source" => await RunSymbolSourceAsync(toolName, sourceCommand, cachedWorkspace, cacheResult.CacheHit, command.Arguments, cancellationToken),
-                _ => Failed(toolName, sourceCommand, "NAVLYN_MCP_DIRECT_UNSUPPORTED", $"Direct MCP execution is not available for {command.Command}.")
-            };
+                NavlynMcpWorkspaceCacheResult cacheResult = command.Command == "workspace-refresh" && attempt == 0
+                    ? await workspaceCache.RefreshAsync(cancellationToken)
+                    : await workspaceCache.GetAsync(cancellationToken);
+                if (cacheResult.Error is not null)
+                {
+                    return Failed(
+                        toolName,
+                        sourceCommand,
+                        DiagnosticCode(cacheResult.Error.DiagnosticId),
+                        cacheResult.Error.Message,
+                        cacheResult.Error.ExitCode);
+                }
+
+                await using NavlynMcpWorkspaceCache.WorkspaceLease lease = cacheResult.Lease!;
+                NavlynMcpWorkspaceCache.CachedWorkspace cachedWorkspace = lease.CachedWorkspace;
+                NavlynToolResult result = command.Command switch
+                {
+                    "workspace-status" => await RunWorkspaceStatusAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
+                    "workspace-refresh" => await RunWorkspaceRefreshAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
+                    "repo-graph" => RunRepoGraph(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments),
+                    "outline" => await RunOutlineAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
+                    "read" or "symbol-source" => await RunSymbolSourceAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
+                    _ => Failed(toolName, sourceCommand, "NAVLYN_MCP_DIRECT_UNSUPPORTED", $"Direct MCP execution is not available for {command.Command}.")
+                };
+
+                beforeValidation?.Invoke(attempt);
+                if (!await workspaceCache.ValidateAsync(lease, cancellationToken))
+                {
+                    continue;
+                }
+
+                if (command.Command == "workspace-refresh" && result.Ok && !string.IsNullOrWhiteSpace(options.DaemonPipe))
+                {
+                    NavlynToolResult? daemonRefresh = await TryRunDaemonWorkspaceToolAsync(
+                        toolName, sourceCommand, command, cancellationToken);
+                    if (daemonRefresh is not null)
+                    {
+                        return daemonRefresh;
+                    }
+                }
+
+                return result;
+            }
+
+            return Failed(toolName, sourceCommand, "NAVLYN_MCP_STALE_WORKSPACE",
+                "Workspace inputs changed during the tool call. Wait for edits to finish, then retry the call.");
         }
         catch (OperationCanceledException)
         {
             return Failed(toolName, sourceCommand, "NAVLYN_MCP_CANCELED", "Tool call was canceled.");
+        }
+        catch (WorkspaceInputStaleException ex)
+        {
+            return Failed(toolName, sourceCommand, "NAVLYN_MCP_STALE_WORKSPACE", ex.Message);
         }
         catch (Exception ex)
         {

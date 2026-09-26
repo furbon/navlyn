@@ -22,7 +22,7 @@ Practical rule: use one precise fact first, reuse returned `candidateId` values,
 - `.navlyn/cache/workspace-index.json` is an opt-in lightweight manifest for freshness and index facts, not a serialized Roslyn workspace.
 - `compact` and `evidence` profiles can reduce output size and downstream token pressure.
 
-Navlyn does not include a file watcher, telemetry pipeline, hosted service, network listener, or write surface. The MCP direct workspace cache, `DocumentIndex`, and declaration/candidate indexes are session-local and should be refreshed with `navlyn_workspace_refresh` or by restarting the MCP server after source or project changes when freshness matters. Adapter-backed tools still preserve the CLI execution path and may load the workspace independently. Use `navlyn_batch` when several batch-supported adapter-backed facts should share one workspace load.
+Navlyn does not include a file watcher, telemetry pipeline, hosted service, network listener, or write surface. The MCP direct workspace cache, `DocumentIndex`, and declaration/candidate indexes are session-local. Each direct call hashes checked workspace inputs before reuse and before returning success, so warm calls cost more than a cache lookup but detect content edits without relying on timestamps. A stable source or project edit reloads the snapshot automatically; `navlyn_workspace_refresh` remains available to force a reload. Adapter-backed tools still preserve the CLI execution path and may load the workspace independently. Use `navlyn_batch` when several batch-supported adapter-backed facts should share one workspace load.
 
 The on-disk cache is privacy-conscious and freshness-oriented. It stores workspace/version fingerprints, project graph facts, document-index facts, declaration syntax facts when written by `workspace-refresh --write-cache`, tracked file hashes/mtimes, and `candidateRecordsStored: false`. It does not store source text or semantic models. `workspace-status --cache on` reports `fresh`, `missing`, `stale`, `invalid`, or `disabled`; stale manifests are rejected rather than reused.
 
@@ -100,7 +100,7 @@ For agent adoption decisions, inspect more than elapsed time:
 - JSON validity and top-level command/profile: whether automation can safely parse the result.
 - result counts: candidate count, changed symbol count, related files, tests, routes, or diagnostics.
 - truncation flags and warnings: whether the chosen profile or limits hid useful evidence.
-- MCP metadata: whether a tool used the direct path, whether the workspace cache was hit, which session-local `snapshotId` / `workspaceFingerprint` produced the result, and how large the in-memory document index is.
+- MCP metadata: whether a tool used the direct path, whether the workspace cache was hit, which content-sensitive `snapshotId` and graph-level `workspaceFingerprint` produced the result, and how large the in-memory document index is.
 - stage timings: whether startup, workspace load, project selection, resolver execution, serialization, or MCP path overhead dominates the measured workflow.
 - fuzzy/index behavior: whether repeated fuzzy or candidate-id flows reuse semantic enrichment in the same workspace snapshot.
 - expected files: whether the files a maintainer expects are present in related/context outputs.

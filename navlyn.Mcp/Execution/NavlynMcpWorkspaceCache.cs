@@ -1,4 +1,6 @@
-﻿using Microsoft.CodeAnalysis;
+﻿using System.Security.Cryptography;
+using System.Text;
+using Microsoft.CodeAnalysis;
 using Navlyn.Mcp.Configuration;
 using Navlyn.Symbols;
 using Navlyn.Workspaces;
@@ -7,99 +9,302 @@ namespace Navlyn.Mcp.Execution;
 
 internal sealed class NavlynMcpWorkspaceCache(NavlynMcpServerOptions options) : IDisposable
 {
-    private readonly SemaphoreSlim loadLock = new(1, 1);
-    private readonly WorkspaceSnapshotManager workspaceManager = new();
-    private CachedWorkspace? cachedWorkspace;
+    private const int MaximumLoadAttempts = 3;
+    private readonly Action? beforePublication;
+    private readonly SemaphoreSlim gate = new(1, 1);
+    private readonly WorkspaceLoader loader = new();
+    private CachedWorkspace? active;
+    private long generation;
+    private bool disposed;
+
+    internal NavlynMcpWorkspaceCache(NavlynMcpServerOptions options, Action beforePublication)
+        : this(options)
+    {
+        this.beforePublication = beforePublication;
+    }
 
     public async Task<NavlynMcpWorkspaceCacheResult> GetAsync(CancellationToken cancellationToken)
     {
-        if (cachedWorkspace is not null)
-        {
-            return NavlynMcpWorkspaceCacheResult.Succeeded(cachedWorkspace, cacheHit: true);
-        }
-
-        await loadLock.WaitAsync(cancellationToken);
+        await gate.WaitAsync(cancellationToken);
         try
         {
-            if (cachedWorkspace is not null)
+            ThrowIfDisposed();
+            WorkspaceInputSpec spec = active?.InputSpec ?? WorkspaceInputSpec.Create(options, null);
+            if (active is not null)
             {
-                return NavlynMcpWorkspaceCacheResult.Succeeded(cachedWorkspace, cacheHit: true);
+                WorkspaceInputState current = Capture(spec, cancellationToken);
+                if (!IsInspectable(current))
+                {
+                    RetireActive();
+                    throw new WorkspaceInputStaleException();
+                }
+
+                if (current.IsComplete && current.Digest == active.InputState.Digest)
+                {
+                    return NavlynMcpWorkspaceCacheResult.Succeeded(Lease(active, true), true);
+                }
+
+                RetireActive();
             }
 
-            WorkspaceSnapshotManagerResult loadResult = await workspaceManager.GetAsync(
-                new FileInfo(options.Workspace),
-                new WorkspaceLoadOptions(options.WorkspaceRootPolicy),
-                cancellationToken);
-            if (loadResult.Error is not null)
-            {
-                return NavlynMcpWorkspaceCacheResult.Failed(loadResult.Error, loadResult.Diagnostics);
-            }
-
-            cachedWorkspace = new CachedWorkspace(loadResult.Snapshot!);
-            return NavlynMcpWorkspaceCacheResult.Succeeded(cachedWorkspace, loadResult.CacheHit);
+            return await LoadStableAsync(spec, cancellationToken);
         }
         finally
         {
-            loadLock.Release();
+            gate.Release();
         }
     }
 
     public async Task<NavlynMcpWorkspaceCacheResult> RefreshAsync(CancellationToken cancellationToken)
     {
-        await loadLock.WaitAsync(cancellationToken);
+        await gate.WaitAsync(cancellationToken);
         try
         {
-            cachedWorkspace = null;
-
-            WorkspaceSnapshotManagerResult loadResult = await workspaceManager.RefreshAsync(
-                new FileInfo(options.Workspace),
-                new WorkspaceLoadOptions(options.WorkspaceRootPolicy),
-                cancellationToken);
-            if (loadResult.Error is not null)
-            {
-                return NavlynMcpWorkspaceCacheResult.Failed(loadResult.Error, loadResult.Diagnostics);
-            }
-
-            cachedWorkspace = new CachedWorkspace(loadResult.Snapshot!);
-            return NavlynMcpWorkspaceCacheResult.Succeeded(cachedWorkspace, loadResult.CacheHit);
+            ThrowIfDisposed();
+            WorkspaceInputSpec spec = active?.InputSpec ?? WorkspaceInputSpec.Create(options, null);
+            RetireActive();
+            return await LoadStableAsync(spec, cancellationToken);
         }
         finally
         {
-            loadLock.Release();
+            gate.Release();
+        }
+    }
+
+    public async Task InvalidateAsync(CancellationToken cancellationToken)
+    {
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            ThrowIfDisposed();
+            RetireActive();
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    public async Task<bool> ValidateAsync(WorkspaceLease lease, CancellationToken cancellationToken)
+    {
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            ThrowIfDisposed();
+            if (active != lease.CachedWorkspace || generation != lease.Generation)
+            {
+                return false;
+            }
+
+            WorkspaceInputState current = Capture(lease.CachedWorkspace.InputSpec, cancellationToken);
+            if (!IsInspectable(current))
+            {
+                RetireActive();
+                throw new WorkspaceInputStaleException();
+            }
+
+            if (!current.IsComplete || current.Digest != lease.CachedWorkspace.InputState.Digest)
+            {
+                RetireActive();
+                return false;
+            }
+
+            return true;
+        }
+        finally
+        {
+            gate.Release();
         }
     }
 
     public void Dispose()
     {
-        workspaceManager.Dispose();
-        loadLock.Dispose();
+        gate.Wait();
+        try
+        {
+            if (!disposed)
+            {
+                disposed = true;
+                RetireActive();
+            }
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
-    internal sealed class CachedWorkspace(WorkspaceSnapshot snapshot)
+    private async Task<NavlynMcpWorkspaceCacheResult> LoadStableAsync(WorkspaceInputSpec spec, CancellationToken cancellationToken)
+    {
+        for (int attempt = 0; attempt < MaximumLoadAttempts; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            WorkspaceInputState before = Capture(spec, cancellationToken);
+            if (!IsInspectable(before))
+            {
+                throw new WorkspaceInputStaleException();
+            }
+
+            WorkspaceLoadResult loaded = await loader.LoadAsync(
+                new FileInfo(options.Workspace),
+                new WorkspaceLoadOptions(options.WorkspaceRootPolicy),
+                cancellationToken);
+            if (loaded.Error is not null)
+            {
+                return NavlynMcpWorkspaceCacheResult.Failed(loaded.Error, loaded.Diagnostics);
+            }
+
+            LoadedWorkspace workspace = loaded.Workspace!;
+            bool published = false;
+            try
+            {
+                WorkspaceInputState after = Capture(spec, cancellationToken);
+                WorkspaceInputSpec nextSpec = WorkspaceInputSpec.Create(options, workspace);
+                WorkspaceInputState nextState = Capture(nextSpec, cancellationToken);
+                if (!IsInspectable(after) || !IsInspectable(nextState))
+                {
+                    throw new WorkspaceInputStaleException();
+                }
+
+                if (before.Digest == after.Digest && after.Digest == nextState.Digest && nextState.IsComplete)
+                {
+                    beforePublication?.Invoke();
+                    cancellationToken.ThrowIfCancellationRequested();
+                    WorkspaceSnapshot baseSnapshot = WorkspaceSnapshot.Create(workspace);
+                    WorkspaceSnapshot snapshot = baseSnapshot with
+                    {
+                        SnapshotId = CreateSnapshotId(baseSnapshot.Fingerprint, nextState.Digest)
+                    };
+                    CachedWorkspace cached = new(snapshot, nextState, nextSpec, generation);
+                    active = cached;
+                    published = true;
+                    return NavlynMcpWorkspaceCacheResult.Succeeded(Lease(cached, false), false);
+                }
+
+                spec = nextSpec;
+            }
+            finally
+            {
+                if (!published)
+                {
+                    workspace.Dispose();
+                }
+            }
+        }
+
+        throw new WorkspaceInputStaleException();
+    }
+
+    private WorkspaceLease Lease(CachedWorkspace workspace, bool cacheHit)
+    {
+        workspace.LeaseCount++;
+        return new WorkspaceLease(this, workspace, workspace.Generation, cacheHit);
+    }
+
+    private async ValueTask ReleaseAsync(CachedWorkspace workspace)
+    {
+        await gate.WaitAsync();
+        try
+        {
+            workspace.LeaseCount--;
+            if (workspace.Retired && workspace.LeaseCount == 0)
+            {
+                workspace.Workspace.Dispose();
+            }
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private void RetireActive()
+    {
+        generation++;
+        CachedWorkspace? previous = active;
+        active = null;
+        if (previous is null)
+        {
+            return;
+        }
+
+        previous.Retired = true;
+        if (previous.LeaseCount == 0)
+        {
+            previous.Workspace.Dispose();
+        }
+    }
+
+    private static WorkspaceInputState Capture(WorkspaceInputSpec spec, CancellationToken cancellationToken)
+    {
+        return WorkspaceInputState.Capture(
+            spec.Root, spec.SelectedInputs, spec.LoadedInputs, spec.AdditionalRoots, cancellationToken);
+    }
+
+    private static bool IsInspectable(WorkspaceInputState state)
+    {
+        int fileErrors = state.Files.Count(file => file.Error is not null);
+        return state.Errors.Count == fileErrors && state.Files.All(file => file.Error is null or "missing");
+    }
+
+    private static string CreateSnapshotId(string fingerprint, string digest)
+    {
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint + "\0" + digest));
+        return Convert.ToHexString(hash).ToLowerInvariant()[..16];
+    }
+
+    private void ThrowIfDisposed()
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+    }
+
+    internal sealed class WorkspaceLease(
+        NavlynMcpWorkspaceCache owner,
+        CachedWorkspace cachedWorkspace,
+        long generation,
+        bool cacheHit) : IAsyncDisposable
+    {
+        private int released;
+
+        public CachedWorkspace CachedWorkspace { get; } = cachedWorkspace;
+        public long Generation { get; } = generation;
+        public bool CacheHit { get; } = cacheHit;
+
+        public async ValueTask DisposeAsync()
+        {
+            if (Interlocked.Exchange(ref released, 1) == 0)
+            {
+                await owner.ReleaseAsync(CachedWorkspace);
+            }
+        }
+    }
+
+    internal sealed class CachedWorkspace(
+        WorkspaceSnapshot snapshot,
+        WorkspaceInputState inputState,
+        WorkspaceInputSpec inputSpec,
+        long generation)
     {
         private readonly object candidateGate = new();
         private readonly Dictionary<string, NavlynMcpCandidateTarget> candidateTargets = new(StringComparer.Ordinal);
 
         public LoadedWorkspace Workspace => snapshot.Workspace;
-
         public string Fingerprint => snapshot.Fingerprint;
-
         public string SnapshotId => snapshot.SnapshotId;
-
         public string FreshnessStatus => snapshot.FreshnessStatus;
-
         public DocumentIndex DocumentIndex => snapshot.DocumentIndex;
+        public WorkspaceInputState InputState { get; } = inputState;
+        public WorkspaceInputSpec InputSpec { get; } = inputSpec;
+        public long Generation { get; } = generation;
+        public int LeaseCount { get; set; }
+        public bool Retired { get; set; }
 
         public void RecordCandidateTarget(OutlineEntry entry)
         {
             lock (candidateGate)
             {
                 candidateTargets[entry.CandidateId] = new NavlynMcpCandidateTarget(
-                    entry.CandidateId,
-                    entry.CandidatePath,
-                    entry.CandidateLine,
-                    entry.CandidateColumn,
-                    entry.Facts.Project);
+                    entry.CandidateId, entry.CandidatePath, entry.CandidateLine, entry.CandidateColumn, entry.Facts.Project);
             }
         }
 
@@ -129,32 +334,79 @@ internal sealed class NavlynMcpWorkspaceCache(NavlynMcpServerOptions options) : 
                     .FirstOrDefault(project => string.Equals(project.Name, projectName, StringComparison.Ordinal));
         }
     }
+
+    internal sealed record WorkspaceInputSpec(
+        string Root,
+        IReadOnlyList<string> SelectedInputs,
+        IReadOnlyList<string> LoadedInputs,
+        IReadOnlyList<string> AdditionalRoots)
+    {
+        public static WorkspaceInputSpec Create(NavlynMcpServerOptions options, LoadedWorkspace? workspace)
+        {
+            bool isAuto = string.Equals(options.Workspace, "auto", StringComparison.Ordinal);
+            string root = isAuto ? options.WorkingDirectory : Path.GetDirectoryName(Path.GetFullPath(options.Workspace))!;
+            List<string> selected = [];
+            if (!isAuto)
+            {
+                selected.Add(options.Workspace);
+            }
+
+            if (workspace is null)
+            {
+                return new WorkspaceInputSpec(root, selected, [], []);
+            }
+
+            selected.Add(workspace.FullPath);
+            List<string> loaded = [];
+            List<string> roots = [];
+            Add(loaded, workspace.Solution.FilePath);
+            foreach (Project project in workspace.Solution.Projects)
+            {
+                Add(loaded, project.FilePath);
+                if (project.FilePath is not null)
+                {
+                    roots.Add(Path.GetDirectoryName(project.FilePath)!);
+                }
+
+                foreach (TextDocument document in project.Documents.Cast<TextDocument>()
+                    .Concat(project.AdditionalDocuments).Concat(project.AnalyzerConfigDocuments))
+                {
+                    Add(loaded, document.FilePath);
+                }
+            }
+
+            return new WorkspaceInputSpec(root, selected, loaded, roots);
+        }
+
+        private static void Add(List<string> paths, string? path)
+        {
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                paths.Add(path);
+            }
+        }
+    }
 }
 
 internal sealed record NavlynMcpWorkspaceCacheResult(
-    NavlynMcpWorkspaceCache.CachedWorkspace? CachedWorkspace,
+    NavlynMcpWorkspaceCache.WorkspaceLease? Lease,
     bool CacheHit,
     WorkspaceLoadError? Error,
     IReadOnlyList<WorkspaceLoadDiagnostic> Diagnostics)
 {
-    public static NavlynMcpWorkspaceCacheResult Succeeded(
-        NavlynMcpWorkspaceCache.CachedWorkspace cachedWorkspace,
-        bool cacheHit)
-    {
-        return new NavlynMcpWorkspaceCacheResult(cachedWorkspace, cacheHit, Error: null, Diagnostics: []);
-    }
+    public static NavlynMcpWorkspaceCacheResult Succeeded(NavlynMcpWorkspaceCache.WorkspaceLease lease, bool cacheHit)
+        => new(lease, cacheHit, Error: null, Diagnostics: []);
 
-    public static NavlynMcpWorkspaceCacheResult Failed(
-        WorkspaceLoadError error,
-        IReadOnlyList<WorkspaceLoadDiagnostic> diagnostics)
+    public static NavlynMcpWorkspaceCacheResult Failed(WorkspaceLoadError error, IReadOnlyList<WorkspaceLoadDiagnostic> diagnostics)
+        => new(Lease: null, CacheHit: false, error, diagnostics);
+}
+
+internal sealed class WorkspaceInputStaleException : Exception
+{
+    public WorkspaceInputStaleException()
+        : base("Workspace inputs changed or could not be inspected. Wait for edits to finish, then retry the call.")
     {
-        return new NavlynMcpWorkspaceCacheResult(CachedWorkspace: null, CacheHit: false, error, diagnostics);
     }
 }
 
-internal sealed record NavlynMcpCandidateTarget(
-    string CandidateId,
-    string Path,
-    int Line,
-    int Column,
-    string? ProjectName);
+internal sealed record NavlynMcpCandidateTarget(string CandidateId, string Path, int Line, int Column, string? ProjectName);

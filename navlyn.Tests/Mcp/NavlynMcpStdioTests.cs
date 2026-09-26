@@ -388,7 +388,7 @@ public sealed class NavlynMcpStdioTests
         Assert.True(outlineStructured.GetProperty("metadata").GetProperty("workspaceCacheHit").GetBoolean());
         Assert.Equal("warm", outlineStructured.GetProperty("metadata").GetProperty("indexStatus").GetString());
         Assert.Equal("cheap-file-first", outlineStructured.GetProperty("metadata").GetProperty("costClass").GetString());
-        Assert.Equal(
+        Assert.NotEqual(
             outlineStructured.GetProperty("metadata").GetProperty("workspaceFingerprint").GetString(),
             outlineStructured.GetProperty("metadata").GetProperty("snapshotId").GetString());
         JsonElement outlineEntry = outlineStructured
@@ -618,6 +618,241 @@ public sealed class NavlynMcpStdioTests
         Assert.Contains("mode list only for explicit broader candidate discovery", target.Description, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task StdioServer_DirectSnapshotRefreshesAfterStableSourceAndProjectEdits()
+    {
+        string fixtureRoot = Path.Combine(Path.GetTempPath(), $"navlyn-mcp-freshness-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(fixtureRoot);
+        string projectPath = Path.Combine(fixtureRoot, "Fixture.csproj");
+        string sourcePath = Path.Combine(fixtureRoot, "Fixture.cs");
+        string originalProject = """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+              </PropertyGroup>
+              <ItemGroup>
+                <Compile Include="Fixture.cs" />
+              </ItemGroup>
+            </Project>
+            """;
+        const string originalSource = "namespace Fixture; public sealed class Alpha { }\n#if ENABLE_BETA\npublic sealed class Beta { }\n#endif\n";
+        await File.WriteAllTextAsync(projectPath, originalProject);
+        await File.WriteAllTextAsync(sourcePath, originalSource);
+
+        try
+        {
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(180));
+            await using McpClient client = await CreateClientAsync(profile: null, projectPath);
+
+            JsonElement initial = await CallOutlineAsync(client, timeout.Token);
+            string initialSnapshotId = initial.GetProperty("metadata").GetProperty("snapshotId").GetString()!;
+            Assert.Contains(initial.GetProperty("result").GetProperty("entries").EnumerateArray(), entry => entry.GetProperty("name").GetString() == "Alpha");
+            string candidateId = initial.GetProperty("result").GetProperty("entries").EnumerateArray()
+                .Single(entry => entry.GetProperty("name").GetString() == "Alpha")
+                .GetProperty("candidateId").GetString()!;
+
+            DateTime originalWriteTimeUtc = File.GetLastWriteTimeUtc(sourcePath);
+            string changedSource = originalSource.Replace("Alpha", "Bravo", StringComparison.Ordinal);
+            Assert.Equal(originalSource.Length, changedSource.Length);
+            await File.WriteAllTextAsync(sourcePath, changedSource);
+            File.SetLastWriteTimeUtc(sourcePath, originalWriteTimeUtc);
+
+            JsonElement changed = await CallOutlineAsync(client, timeout.Token);
+            Assert.Contains(changed.GetProperty("result").GetProperty("entries").EnumerateArray(), entry => entry.GetProperty("name").GetString() == "Bravo");
+            Assert.DoesNotContain(changed.GetProperty("result").GetProperty("entries").EnumerateArray(), entry => entry.GetProperty("name").GetString() == "Alpha");
+            Assert.NotEqual(initialSnapshotId, changed.GetProperty("metadata").GetProperty("snapshotId").GetString());
+            Assert.Equal("fresh", changed.GetProperty("metadata").GetProperty("freshnessStatus").GetString());
+            string survivingCandidateId = changed.GetProperty("result").GetProperty("entries").EnumerateArray()
+                .Single(entry => entry.GetProperty("name").GetString() == "Bravo")
+                .GetProperty("candidateId").GetString()!;
+
+            CallToolResult target = await client.CallToolAsync(
+                NavlynMcpTools.TargetTool,
+                new Dictionary<string, object?> { ["mode"] = "list", ["query"] = "Bravo", ["assumeKind"] = "NamedType" },
+                cancellationToken: timeout.Token);
+            Assert.False(target.IsError, target.StructuredContent?.ToString());
+            string adapterCandidateId = target.StructuredContent!.Value.GetProperty("result")
+                .GetProperty("candidates")[0].GetProperty("candidateId").GetString()!;
+            CallToolResult adapterFollowUp = await client.CallToolAsync(
+                NavlynMcpTools.ReadTool,
+                new Dictionary<string, object?> { ["candidateId"] = adapterCandidateId, ["view"] = "declaration" },
+                cancellationToken: timeout.Token);
+            Assert.False(adapterFollowUp.IsError, adapterFollowUp.StructuredContent?.ToString());
+            Assert.Contains("Bravo", adapterFollowUp.StructuredContent!.Value.GetProperty("result").ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("Alpha", adapterFollowUp.StructuredContent!.Value.GetProperty("result").ToString(), StringComparison.Ordinal);
+
+            ReadResourceResult summaryResource = await client.ReadResourceAsync("navlyn://workspace/summary", cancellationToken: timeout.Token);
+            TextResourceContents summaryText = Assert.IsType<TextResourceContents>(Assert.Single(summaryResource.Contents));
+            using JsonDocument summaryJson = JsonDocument.Parse(summaryText.Text);
+            Assert.Equal(changed.GetProperty("metadata").GetProperty("snapshotId").GetString(),
+                summaryJson.RootElement.GetProperty("metadata").GetProperty("snapshotId").GetString());
+
+            CallToolResult staleCandidateResult = await client.CallToolAsync(
+                NavlynMcpTools.ReadTool,
+                new Dictionary<string, object?> { ["candidateId"] = candidateId, ["view"] = "declaration" },
+                cancellationToken: timeout.Token);
+            Assert.True(staleCandidateResult.IsError, staleCandidateResult.StructuredContent?.ToString());
+            JsonElement staleEnvelope = staleCandidateResult.StructuredContent!.Value;
+            Assert.False(staleEnvelope.GetProperty("ok").GetBoolean());
+            Assert.Equal("NAVLYN1702", staleEnvelope.GetProperty("error").GetProperty("code").GetString());
+            Assert.True(!staleEnvelope.TryGetProperty("result", out JsonElement staleResult) ||
+                staleResult.ValueKind == JsonValueKind.Null);
+
+            string projectWithBeta = originalProject.Replace(
+                "<EnableDefaultCompileItems>false</EnableDefaultCompileItems>",
+                "<EnableDefaultCompileItems>false</EnableDefaultCompileItems>\n    <DefineConstants>$(DefineConstants);ENABLE_BETA</DefineConstants>",
+                StringComparison.Ordinal);
+            await File.WriteAllTextAsync(projectPath, projectWithBeta);
+            JsonElement afterProjectEdit = await CallOutlineAsync(client, timeout.Token);
+            Assert.Contains(afterProjectEdit.GetProperty("result").GetProperty("entries").EnumerateArray(), entry => entry.GetProperty("name").GetString() == "Beta");
+            Assert.NotEqual(changed.GetProperty("metadata").GetProperty("snapshotId").GetString(), afterProjectEdit.GetProperty("metadata").GetProperty("snapshotId").GetString());
+            Assert.Equal("fresh", afterProjectEdit.GetProperty("metadata").GetProperty("freshnessStatus").GetString());
+
+            CallToolResult survivingCandidateRead = await client.CallToolAsync(
+                NavlynMcpTools.ReadTool,
+                new Dictionary<string, object?> { ["candidateId"] = survivingCandidateId, ["view"] = "declaration" },
+                cancellationToken: timeout.Token);
+            Assert.False(survivingCandidateRead.IsError, survivingCandidateRead.StructuredContent?.ToString());
+            Assert.Contains("Bravo", survivingCandidateRead.StructuredContent!.Value.GetProperty("result").ToString(), StringComparison.Ordinal);
+
+            JsonElement freshCandidate = afterProjectEdit.GetProperty("result").GetProperty("entries").EnumerateArray()
+                .Single(entry => entry.GetProperty("name").GetString() == "Bravo");
+            string freshCandidateId = freshCandidate.GetProperty("candidateId").GetString()!;
+
+            CallToolResult refreshResult = await client.CallToolAsync(
+                NavlynMcpTools.WorkspaceRefreshTool,
+                new Dictionary<string, object?>(),
+                cancellationToken: timeout.Token);
+            Assert.False(refreshResult.IsError, refreshResult.StructuredContent?.ToString());
+            JsonElement refreshed = refreshResult.StructuredContent!.Value;
+            Assert.True(refreshed.GetProperty("ok").GetBoolean(), refreshed.ToString());
+            Assert.Equal(afterProjectEdit.GetProperty("metadata").GetProperty("snapshotId").GetString(), refreshed.GetProperty("metadata").GetProperty("snapshotId").GetString());
+            Assert.False(refreshed.GetProperty("metadata").GetProperty("workspaceCacheHit").GetBoolean());
+
+            CallToolResult freshCandidateRead = await client.CallToolAsync(
+                NavlynMcpTools.ReadTool,
+                new Dictionary<string, object?> { ["candidateId"] = freshCandidateId, ["view"] = "declaration" },
+                cancellationToken: timeout.Token);
+            Assert.False(freshCandidateRead.IsError, freshCandidateRead.StructuredContent?.ToString());
+            Assert.Contains("Bravo", freshCandidateRead.StructuredContent!.Value.GetProperty("result").ToString(), StringComparison.Ordinal);
+
+            ReadResourceResult sourceResource = await client.ReadResourceAsync(
+                $"navlyn://symbol/{freshCandidateId}/source?view=declaration",
+                cancellationToken: timeout.Token);
+            TextResourceContents sourceText = Assert.IsType<TextResourceContents>(Assert.Single(sourceResource.Contents));
+            using JsonDocument resourceJson = JsonDocument.Parse(sourceText.Text);
+            Assert.True(resourceJson.RootElement.GetProperty("ok").GetBoolean(), sourceText.Text);
+            Assert.Contains("Bravo", resourceJson.RootElement.GetProperty("result").ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("Alpha", resourceJson.RootElement.GetProperty("result").ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(fixtureRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task StdioServer_DirectSnapshotTracksImplicitSourceAddRenameAndDeleteInOneProcess()
+    {
+        string fixtureRoot = Path.Combine(Path.GetTempPath(), $"navlyn-mcp-membership-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(fixtureRoot);
+        string projectPath = Path.Combine(fixtureRoot, "Fixture.csproj");
+        string originalPath = Path.Combine(fixtureRoot, "Fixture.cs");
+        await File.WriteAllTextAsync(projectPath, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+            </Project>
+            """);
+        await File.WriteAllTextAsync(originalPath, "namespace Fixture; public sealed class Stable { }\n");
+
+        try
+        {
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(180));
+            await using McpClient client = await CreateClientAsync(profile: null, projectPath);
+            await CallOutlineAsync(client, timeout.Token, "Fixture.cs");
+
+            string addedPath = Path.Combine(fixtureRoot, "Added.cs");
+            await File.WriteAllTextAsync(addedPath, "namespace Fixture; public sealed class AddedType { }\n");
+            JsonElement added = await CallOutlineAsync(client, timeout.Token, "Added.cs");
+            Assert.Contains(added.GetProperty("result").GetProperty("entries").EnumerateArray(), entry => entry.GetProperty("name").GetString() == "AddedType");
+
+            string renamedPath = Path.Combine(fixtureRoot, "Renamed.cs");
+            File.Move(addedPath, renamedPath);
+            JsonElement renamed = await CallOutlineAsync(client, timeout.Token, "Renamed.cs");
+            Assert.Contains(renamed.GetProperty("result").GetProperty("entries").EnumerateArray(), entry => entry.GetProperty("name").GetString() == "AddedType");
+
+            File.Delete(renamedPath);
+            CallToolResult deleted = await client.CallToolAsync(
+                NavlynMcpTools.FileOutlineTool,
+                new Dictionary<string, object?> { ["file"] = "Renamed.cs" },
+                cancellationToken: timeout.Token);
+            Assert.True(deleted.IsError, deleted.StructuredContent?.ToString());
+        }
+        finally
+        {
+            Directory.Delete(fixtureRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task StdioServer_DirectSnapshotDetectsLinkedVisualBasicEditOutsideWorkspaceRoot()
+    {
+        string fixtureRoot = Path.Combine(Path.GetTempPath(), $"navlyn-mcp-linked-vb-{Guid.NewGuid():N}");
+        string projectRoot = Path.Combine(fixtureRoot, "project");
+        string linkedRoot = Path.Combine(fixtureRoot, "linked");
+        Directory.CreateDirectory(projectRoot);
+        Directory.CreateDirectory(linkedRoot);
+        string projectPath = Path.Combine(projectRoot, "Fixture.vbproj");
+        string sourcePath = Path.Combine(linkedRoot, "Shared.vb");
+        await File.WriteAllTextAsync(projectPath, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+              </PropertyGroup>
+              <ItemGroup>
+                <Compile Include="..\linked\Shared.vb" Link="Shared.vb" />
+              </ItemGroup>
+            </Project>
+            """);
+        await File.WriteAllTextAsync(sourcePath, "Namespace Fixture\n    Public Class Alpha\n    End Class\nEnd Namespace\n");
+
+        try
+        {
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(180));
+            await using McpClient client = await CreateClientAsync(profile: null, projectPath);
+            JsonElement initial = await CallOutlineAsync(client, timeout.Token, sourcePath);
+            Assert.Contains(initial.GetProperty("result").GetProperty("entries").EnumerateArray(), entry => entry.GetProperty("name").GetString() == "Alpha");
+
+            DateTime originalWriteTimeUtc = File.GetLastWriteTimeUtc(sourcePath);
+            await File.WriteAllTextAsync(sourcePath, "Namespace Fixture\n    Public Class Bravo\n    End Class\nEnd Namespace\n");
+            File.SetLastWriteTimeUtc(sourcePath, originalWriteTimeUtc);
+            JsonElement edited = await CallOutlineAsync(client, timeout.Token, sourcePath);
+            Assert.Contains(edited.GetProperty("result").GetProperty("entries").EnumerateArray(), entry => entry.GetProperty("name").GetString() == "Bravo");
+            Assert.DoesNotContain(edited.GetProperty("result").GetProperty("entries").EnumerateArray(), entry => entry.GetProperty("name").GetString() == "Alpha");
+            Assert.NotEqual(initial.GetProperty("metadata").GetProperty("snapshotId").GetString(),
+                edited.GetProperty("metadata").GetProperty("snapshotId").GetString());
+        }
+        finally
+        {
+            Directory.Delete(fixtureRoot, recursive: true);
+        }
+    }
+
+    private static async Task<JsonElement> CallOutlineAsync(McpClient client, CancellationToken cancellationToken, string file = "Fixture.cs")
+    {
+        CallToolResult result = await client.CallToolAsync(
+            NavlynMcpTools.FileOutlineTool,
+            new Dictionary<string, object?> { ["file"] = file },
+            cancellationToken: cancellationToken);
+        Assert.False(result.IsError, result.StructuredContent?.ToString());
+        JsonElement structured = result.StructuredContent!.Value;
+        Assert.True(structured.GetProperty("ok").GetBoolean(), structured.ToString());
+        Assert.Equal("direct", structured.GetProperty("metadata").GetProperty("executionPath").GetString());
+        return structured;
+    }
+
     public static IEnumerable<object?[]> ProfileToolData()
     {
         yield return [null];
@@ -630,14 +865,20 @@ public sealed class NavlynMcpStdioTests
     private static async Task<McpClient> CreateClientAsync(string? profile)
     {
         string repoRoot = FindRepositoryRoot();
+        return await CreateClientAsync(profile, Path.Combine(repoRoot, "navlyn.slnx"));
+    }
+
+    private static async Task<McpClient> CreateClientAsync(string? profile, string workspacePath)
+    {
+        string repoRoot = FindRepositoryRoot();
         string serverDll = Path.Combine(repoRoot, "navlyn.Mcp", "bin", "Debug", GetCurrentTargetFramework(), "navlyn.Mcp.dll");
         Assert.True(File.Exists(serverDll), $"MCP server assembly does not exist: {serverDll}");
 
         List<string> arguments =
         [
             serverDll,
-            "--workspace", Path.Combine(repoRoot, "navlyn.slnx"),
-            "--working-directory", repoRoot,
+            "--workspace", workspacePath,
+            "--working-directory", Path.GetDirectoryName(workspacePath)!,
             "--timeout-ms", "60000",
             "--max-json-chars", "4000000"
         ];
@@ -652,7 +893,7 @@ public sealed class NavlynMcpStdioTests
             {
                 Command = "dotnet",
                 Arguments = arguments,
-                WorkingDirectory = repoRoot
+                WorkingDirectory = Path.GetDirectoryName(workspacePath)!
             },
             NullLoggerFactory.Instance);
 
