@@ -18,7 +18,26 @@ The installed tools are local .NET tools. They do not install a background servi
 
 Both tool packages include `net8.0` and `net10.0` assets. The .NET SDK selects the compatible tool asset during install or restore. Semantic workspace loading still requires an installed .NET SDK/MSBuild that can load the target repository.
 
-Release validation installs both .NET 8 and .NET 10 SDKs, runs the xUnit suite on both target frameworks, and runs package install smoke tests with `dotnet tool install --framework net8.0` and `--framework net10.0`.
+The Windows release lane installs both .NET 8 and .NET 10 SDKs, runs the xUnit suite on both target frameworks, and tests isolated package installation with `dotnet tool install --framework net8.0` and `--framework net10.0`.
+
+## Current Release State
+
+`0.7.0` is the published public release. `0.8.0-preview.1` is an unpublished local release-rehearsal identity; it is not available from nuget.org and the rehearsal does not authorize publication. Historical references to `0.7.0` below describe that public release. The manual protected publish workflow remains a separate release operation.
+
+To reproduce the preview rehearsal on Windows without changing global tools or real client settings, use .NET SDK 10 to build both target frameworks:
+
+```powershell
+$releaseOutput = "artifacts/preview-$([guid]::NewGuid().ToString('N'))"
+$checks = "artifacts/preview-checks-$([guid]::NewGuid().ToString('N'))"
+./scripts/test-release-contract.ps1
+./scripts/pack-release.ps1 -NoValidation -Output $releaseOutput
+$manifest = Join-Path $releaseOutput 'navlyn-release-pack.json'
+./scripts/test-package-contract.ps1 -Manifest $manifest
+New-Item -ItemType Directory -Path $checks | Out-Null
+./scripts/test-consumer-install.ps1 -Manifest $manifest -OutputReport (Join-Path $PWD "$checks/consumer-install.json")
+```
+
+The consumer harness installs into isolated `--tool-path` directories and tests both target frameworks. To install manually from a local feed, use `dotnet tool install --tool-path <isolated-tool-dir> --add-source <local-feed> navlyn --version 0.8.0-preview.1` (repeat for `navlyn-mcp`). Run the installed executable by absolute path from a separate consumer workspace. Rollback can be exercised by passing an older package manifest with `-RollbackManifest`; uninstall and cleanup are included in the harness. Reports and packages are written under ignored `artifacts/` paths.
 
 ## User Install Shape
 
@@ -81,7 +100,7 @@ When an agent needs several facts from one workspace, prefer CLI `navlyn batch`,
 
 ## Release Identity
 
-The current public release target is `0.7.0`.
+The public release is `0.7.0`; the current unreleased rehearsal identity is `0.8.0-preview.1`.
 
 Keep `navlyn` and `navlyn-mcp` versions synchronized for the initial public releases. Both packages should use the same repository URL, license expression, README, package icon, author, and release notes discipline.
 
@@ -108,23 +127,9 @@ The package icon must be a committed PNG or JPEG included in the package. Navlyn
 
 ## Local Package Smoke
 
-Run a local pack/install smoke before publishing:
+For the current preview, run the unique-output commands in [Current Release State](#current-release-state) to pack and validate the candidate, then install it from its local feed into isolated tool paths and a separate consumer workspace.
 
-```powershell
-./scripts/test-package-install.ps1
-./scripts/test-package-install.ps1 -Frameworks net8.0
-./scripts/test-package-install.ps1 -Frameworks net10.0
-```
-
-The script packs both tools, installs them from a local package source, and verifies three install shapes for each requested target framework: `navlyn` only, `navlyn-mcp` only, and both tools together. It runs:
-
-- `navlyn --help`
-- `navlyn doctor --workspace navlyn.slnx`
-- `navlyn repo-graph --workspace navlyn.slnx --profile compact`
-- `navlyn-mcp --help`
-- a minimal installed-tool MCP stdio smoke without passing `--navlyn-executable`
-
-`artifacts/` is ignored and should not be committed.
+The consumer script verifies CLI-only, MCP-only, and combined installations for `net8.0` and `net10.0`, executes installed tools outside the Navlyn repository, checks the exact 25-tool MCP surface and a semantic call, and removes its isolated installation after the run. It never uses global tool installation. Pass `-RollbackManifest <previous-package-manifest>` to include an older package version in the update/rollback scenario. The release workflow also exercises the lifecycle and cleanup path. `artifacts/` is ignored and should not be committed.
 
 ## Release Pack
 
@@ -132,6 +137,8 @@ Create release packages and a manifest:
 
 ```powershell
 ./scripts/pack-release.ps1 -Output artifacts/packages
+./scripts/test-package-contract.ps1 -Manifest artifacts/packages/navlyn-release-pack.json
+./scripts/publish-nuget.ps1 -Manifest artifacts/packages/navlyn-release-pack.json -DryRun
 ```
 
 By default this runs release validation before packing. Use `-NoValidation` only when validation already ran in the same environment.
@@ -173,9 +180,9 @@ The workflow must run release validation before packing and publishing. Normal `
 
 ## GitHub Release
 
-After packages are published and install smoke passes from NuGet:
+For a future authorized public release, after packages are published and install smoke passes from NuGet:
 
-1. Create a `v0.7.0` tag.
+1. Create a tag matching the published version (the existing public release is `v0.7.0`).
 2. Create a GitHub Release using the `CHANGELOG.md` entry.
 3. Link to the NuGet install commands.
 4. Optionally attach `navlyn-release-pack.json` and package artifacts for traceability.
@@ -194,7 +201,7 @@ navlyn-mcp --help
 navlyn doctor --workspace auto
 ```
 
-For local machines that already have the tools installed, use a temporary `--tool-path` instead of global install.
+For a local rehearsal, prefer the isolated `scripts/test-consumer-install.ps1` harness above. If testing manually, use a temporary `--tool-path` and invoke the installed executable by absolute path rather than changing global tools.
 
 ## Rollback / Unlist
 
@@ -213,7 +220,7 @@ NuGet packages are immutable after publication. If a bad package is published:
 - Update versions and release notes in both tool projects.
 - Update `CHANGELOG.md`.
 - Run `./scripts/test-release.ps1`.
-- Run `./scripts/test-package-install.ps1`.
+- Run the isolated preview package smoke in [Local Package Smoke](#local-package-smoke).
 - Run `./scripts/pack-release.ps1`.
 - Dry-run `./scripts/publish-nuget.ps1 -DryRun`.
 - Publish with `-Publish` only from an intentional release environment.

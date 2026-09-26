@@ -1,111 +1,75 @@
-# Navlyn First 10 Minutes
+# Navlyn First 10 Minutes on Windows
 
-This guide gets a C# repository from "Navlyn is installed" to "an agent has semantic evidence before editing" without reading the full command reference. Before this guide, configure the MCP server from the [README](../README.md#use-with-mcp); `navlyn.workspace.json` is optional.
+This guide installs the current `0.8.0-preview.1` candidate from a local package feed, then asks Navlyn for one semantic fact. The preview is a release rehearsal and is not published to NuGet. Do not use `dotnet tool install --global` for this path.
 
-Use one path first. The CLI path is easiest to verify in a shell. The MCP path is best when an agent client should call Navlyn directly.
+Requirements: Windows, PowerShell 7, and .NET SDK 10. Start in a Navlyn source checkout at its repository root and set `$navlynSource` to that absolute path. The pack step builds both `net8.0` and `net10.0` assets and writes packages under a unique `artifacts/navlyn-preview-<id>` directory; it does not publish them.
 
-## 0-2 Minutes: Install And Diagnose
-
-Global install:
+## 0–3 Minutes: Pack And Install Locally
 
 ```powershell
-dotnet tool install --global navlyn --version 0.7.0
-dotnet tool install --global navlyn-mcp --version 0.7.0
+$navlynSource = (Get-Location).Path
+$releaseOutput = "artifacts/navlyn-preview-$([guid]::NewGuid().ToString('N'))"
+& (Join-Path $navlynSource 'scripts/pack-release.ps1') -NoValidation -Output $releaseOutput
+$feed = (Resolve-Path $releaseOutput).Path
+$tools = Join-Path $env:TEMP "navlyn-preview-tools-$([guid]::NewGuid().ToString('N'))"
+New-Item -ItemType Directory $tools | Out-Null
+Write-Host "Tool path: $tools"
+dotnet tool install navlyn --tool-path $tools --source $feed --version 0.8.0-preview.1
+dotnet tool install navlyn-mcp --tool-path $tools --source $feed --version 0.8.0-preview.1
 ```
 
-Repository-local install:
+The tools live only in the unique temporary tool directory. Switch to the unrelated C# or Visual Basic repository you want to inspect, then run the installed executable by its absolute path:
 
 ```powershell
-dotnet new tool-manifest
-dotnet tool install navlyn --version 0.7.0
-dotnet tool install navlyn-mcp --version 0.7.0
-dotnet tool restore
+Set-Location 'C:\path\to\consumer-repository'
+& (Join-Path $tools 'navlyn.exe') doctor --workspace auto
+& (Join-Path $tools 'navlyn.exe') target --workspace auto --query PaymentService --assume-kind NamedType --limit 10
 ```
 
-Diagnose the local SDK and workspace. Use `auto` first in a repository with one top-level workspace candidate:
+The first semantic fact is the selected symbol in the CLI `target` JSON result. Continue with its `candidateId`, for example:
 
 ```powershell
-navlyn doctor --workspace auto
+& (Join-Path $tools 'navlyn.exe') read --workspace auto --candidate-id sym:v1:... --view declaration --max-lines 80
 ```
 
-Success means stdout is JSON with `ok: true`, the expected workspace path, SDK facts, checks, and a project count. Stderr should be empty on success. If the workspace path is wrong, `doctor` still returns JSON with `ok: false`, `workspace.error`, and `nextAction`.
+If there is no single workspace candidate, pass the intended solution/project path explicitly. This local-feed workflow is for rehearsal; after publication, use the versioned NuGet install instructions in the README.
 
-If `auto` reports multiple candidates, pass the intended `.slnx`, `.sln`, `.csproj`, or `.vbproj` path explicitly, or add `navlyn.workspace.json` to make the repository choice shared.
+## Codex Routing Skill
 
-## 2-4 Minutes: Anchor One Symbol
-
-Pick one C# type or method that an agent might edit:
+From the consumer repository, install the three-file skill from the Navlyn source checkout into that repository's `.agents/skills` directory:
 
 ```powershell
-navlyn target --workspace auto --query PaymentService --assume-kind NamedType --limit 10
+$skillRoot = Join-Path (Get-Location) '.agents/skills'
+New-Item -ItemType Directory -Force $skillRoot | Out-Null
+& (Join-Path $navlynSource 'scripts/install-routing-skill.ps1') -Action Install -DestinationRoot $skillRoot
 ```
 
-Stop when there is one high-confidence `candidateId`. If candidates are ambiguous, ask the user or add `--project` / a more precise `--assume-kind`.
-
-## 4-6 Minutes: Create Pre-Edit Evidence
-
-Use the returned `candidateId` instead of searching the name again. For a concrete edit, `prepare-edit` collects the anchor, bounded source, bounded context, related tests, confidence evidence, and the post-edit guard command in one envelope:
+Run the same command to update it. The installer is idempotent for identical bytes. It records ownership in the adjacent `.navlyn-semantic-routing.install.json` file. If files were changed outside the installer, an ownership marker is missing/invalid, or unrelated files occupy the destination, it stops and preserves them; inspect and resolve the conflict yourself before retrying. Remove a managed installation with:
 
 ```powershell
-navlyn prepare-edit --workspace auto --candidate-id sym:v1:... --goal modify --change-kind behavior
+& (Join-Path $navlynSource 'scripts/install-routing-skill.ps1') -Action Uninstall -DestinationRoot $skillRoot
 ```
 
-If the task only needs one fact, use `read`, `references`, or `about` directly and stop. Use `prepare-edit` when an agent is about to modify code and needs a reusable evidence envelope.
+Codex skill discovery and activation were exercised with Codex CLI `0.155.0-alpha.16` on Windows. The six-case activation smoke passed in a process-scoped full-access session with no source write attempts or diff. It did not pass under the tested Windows read-only sandbox, where WindowsApps PowerShell could not launch; do not generalize the activation result to that mode. See [the release contract](navlyn-release-contract.md#client-support-claims) for the evidence boundary.
 
-## 6-8 Minutes: Give An Agent MCP Tools
+## MCP Client Setup
 
-Configure one read-only MCP surface. In a normal one-workspace repository, no MCP arguments are needed:
+For an isolated local-preview server, use the absolute path to the installed `navlyn-mcp.exe` in your client configuration. Start it from the inspected repository root so workspace discovery uses that repository.
 
-```json
-{
-  "command": "navlyn-mcp"
-}
-```
+**GitHub Copilot CLI** reads `.mcp.json` (or `.github/mcp.json`) at the repository root with the `mcpServers` property. Opt in to repository MCP configuration in PowerShell with `$env:GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP = 'true'` before starting `copilot`. **VS Code** reads `.vscode/mcp.json` with the `servers` property. These formats are different; see [Copilot CLI example](../examples/install/copilot-cli-mcp.json) and the [VS Code MCP guide](https://code.visualstudio.com/docs/agent-customization/mcp-servers). Copilot CLI `1.0.88` on Windows was observed starting the locally installed preview server and completing `navlyn_target` against an unrelated consumer workspace using the explicit additional-config option. That verifies this CLI/package pair only; it does not verify the Codex routing skill in Copilot. VS Code is documented, not release-tested.
 
-Use `args: ["--workspace", "path/to/YourRepo.sln"]` only when the repository has multiple plausible workspace candidates.
-
-The agent should choose the smallest semantic fact that answers the current question:
-
-```text
-navlyn_target
-navlyn_file_outline
-navlyn_read
-navlyn_navigate
-navlyn_prepare_edit
-navlyn_verify_edit
-navlyn_review
-navlyn_doctor
-```
-
-Use edit and review tools only when their facts are relevant. They are read-only evidence tools; Navlyn still does not edit files, run tests, or publish review comments.
-
-## 8-10 Minutes: Post-Edit Evidence
-
-After an edit, check the actual diff:
+For Codex CLI MCP, add the executable from your repository root:
 
 ```powershell
-navlyn verify-edit --workspace auto --candidate-id sym:v1:... --fail-on-risk high
-navlyn wrong-symbol-guard --workspace auto --query PaymentService --assume-kind NamedType --fail-on-risk medium
-navlyn review --workspace auto --profile evidence --symbol-limit 20 --impact-limit 40 --diagnostic-limit 40 --related-test-limit 20
+$mcpExe = Join-Path $tools 'navlyn-mcp.exe'
+codex mcp add navlyn -- $mcpExe
 ```
 
-The guard commands return deterministic JSON even when policy fails. Exit code `1` means the diff did not satisfy the configured risk threshold, which is the moment to pause before more edits.
+This registers the MCP command; the Codex activation evidence above concerns the routing skill, not a separate Codex MCP semantic-client test. For current configuration fields and login requirements, use the official [Copilot CLI MCP documentation](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers), [Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli), and [VS Code MCP documentation](https://code.visualstudio.com/docs/agent-customization/mcp-servers).
 
 ## If It Fails
 
-Check these first:
-
-- The target repository is already buildable by the local C#/.NET development environment; if not, run the repository's normal restore/build setup.
-- The `--workspace` path points at the intended `.slnx`, `.sln`, `.csproj`, `.vbproj`, `.code-workspace`, or `navlyn.workspace.json`.
-- `--workspace auto` is not ambiguous.
-- The selected project or target framework is the one the agent should reason about.
-- Generated or outside-root files are intentional and allowed by workspace policy.
-
-Then run:
-
-```powershell
-navlyn doctor --workspace auto
-navlyn repo-graph --workspace auto --profile compact
-```
-
-The first command diagnoses SDK, workspace, restore assets, and repair hints. The second shows project names, target frameworks, package facts, and test relationships you can use for more precise follow-up calls.
+- Confirm `dotnet --list-sdks` includes 10.x for source packing and the feed contains both `.nupkg` files.
+- Run the installed absolute executable from the consumer repository, not from a repository `bin` or `obj` directory.
+- If `doctor` reports an ambiguous workspace, specify the intended `.slnx`, `.sln`, `.csproj`, or `.vbproj` path.
+- For the full isolated CLI/MCP install matrix, use `scripts/test-consumer-install.ps1` with a fresh release-pack manifest as described in the release validation guide.

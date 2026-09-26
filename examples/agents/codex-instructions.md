@@ -1,4 +1,15 @@
-# Agent Instructions
+# Codex Agent Instructions
+
+The Navlyn routing skill is installed separately from the MCP server. From the current repository, call the installer in the Navlyn source checkout and target this repository's `.agents/skills` directory:
+
+```powershell
+$navlynSource = 'C:\path\to\navlyn'
+$skillRoot = Join-Path (Get-Location) '.agents/skills'
+New-Item -ItemType Directory -Force $skillRoot | Out-Null
+& (Join-Path $navlynSource 'scripts/install-routing-skill.ps1') -Action Install -DestinationRoot $skillRoot
+```
+
+Uninstall a managed copy with `& (Join-Path $navlynSource 'scripts/install-routing-skill.ps1') -Action Uninstall -DestinationRoot $skillRoot`. The installer uses an adjacent ownership marker and stops on a missing/invalid marker or divergent files; preserve and inspect conflicts before resolving them. The isolated activation smoke was verified with Codex CLI 0.155.0-alpha.16 on Windows in a process-scoped full-access session. This example does not imply support in GitHub Copilot.
 
 - Inspect existing code before changing behavior.
 - Use `rg` and normal file reads for text search, comments, docs, strings, non-Roslyn-source files, and simple file-local answers.

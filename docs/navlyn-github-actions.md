@@ -33,4 +33,10 @@ The example workflow:
 - appends `summary.md` to the GitHub job summary,
 - uploads JSON facts as an artifact.
 
-Use published tools in downstream repositories once packages are available. During local development, the example builds from source.
+The copyable example targets Windows and builds the checked-out source. For the current unpublished `0.8.0-preview.1` rehearsal, keep this job local to the repository; `0.7.0` is the public NuGet release. The example does not claim that preview packages are available to downstream repositories.
+
+## Release workflow lanes
+
+The repository's [CI workflow](../.github/workflows/ci.yml) runs deterministic, credential-free checks on Windows for pushes and pull requests, including restore/build/tests, focused contracts, package inspection, and skill lifecycle checks. The [release-validation workflow](../.github/workflows/release-validation.yml) runs the full release suite and isolated consumer/skill checks on Windows for manual dispatch and release refs, then stores candidate evidence. It runs no live model evaluation and does not publish.
+
+Live evaluation is a separate explicit, credential-gated operation using a named client/model/scenario set. NuGet publication remains in the separate manual [protected publish workflow](../.github/workflows/publish-nuget.yml), with the `nuget-production` environment and Trusted Publishing. Ordinary push and pull request triggers cannot publish packages.

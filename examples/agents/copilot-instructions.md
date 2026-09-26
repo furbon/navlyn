@@ -1,4 +1,10 @@
-# Agent Instructions
+# GitHub Copilot Instructions
+
+Use this guidance with GitHub Copilot CLI or VS Code + GitHub Copilot after configuring Navlyn MCP. The Codex routing skill is a separate Codex-only installation and is not installed by this file.
+
+- For Copilot CLI, copy `examples/install/copilot-cli-mcp.json` to the repository root as `.mcp.json` or `.github/mcp.json`; replace the command with the absolute path to your installed `navlyn-mcp.exe`. The Copilot CLI config uses `mcpServers`.
+- For VS Code, configure `.vscode/mcp.json` using VS Code's `servers` format and `${workspaceFolder}`. Do not use the Copilot CLI config file as the VS Code config.
+- A configuration file alone does not prove that MCP started. The tested Copilot CLI 1.0.88 on Windows completed a `navlyn_target` call using the locally installed `0.8.0-preview.1` package.
 
 - Use normal file reads and `rg` first when text is enough.
 - Use Navlyn only when C# or Visual Basic semantic identity, project context, source relationships, diff facts, or bounded evidence would change the answer.

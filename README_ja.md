@@ -19,7 +19,13 @@ Navlyn は「`PaymentService` を直して」のような指示を、エージ�
 
 ## 3 分の最短導線
 
-コーディングエージェントから使う場合は MCP server をインストールします。
+現在の `0.8.0-preview.1` candidate は、公開前のローカル release rehearsal 用です。NuGet には公開されていません。Windows、PowerShell 7、.NET SDK 10 を用意し、[Windows 向けローカル feed quick start](docs/navlyn-first-10-minutes.md) に従って両ターゲットの package を作成し、`--tool-path` に隔離して install してください。install した絶対パスの `navlyn.exe` で最初の semantic fact を取得します。repository にある tool manifest もこの preview を指定しているため、対応するローカル feed を使って restore してください。
+
+### 公開済みの 0.7.0
+
+以下のコマンドは公開済みの `0.7.0` 用です。`0.8.0-preview.1` candidate を試す場合は、上記のローカル feed quick start を使用してください。
+
+コーディングエージェント用の MCP server を install します。
 
 ```powershell
 dotnet tool install --global navlyn-mcp --version 0.7.0
@@ -52,9 +58,20 @@ navlyn review --workspace auto --profile evidence
 
 トップレベルの workspace 候補が一つだけのリポジトリでは、MCP server はリポジトリルートの working directory から自動で workspace を見つけます。複数の solution/project があり得るリポジトリだけ、明示的に `--workspace` を渡します。MCP client が server をリポジトリルートから起動しない場合は、`--workspace` ではなく `--working-directory <repo-root>` を渡します。
 
-### GitHub Copilot / VS Code
+### GitHub Copilot CLI
 
-リポジトリのルートに `.vscode/mcp.json` を作成します。
+ローカル preview を使う場合は、[Copilot CLI MCP 設定例](examples/install/copilot-cli-mcp.json)を repository ルートの `.mcp.json` または `.github/mcp.json` にコピーし、command を install 済み `navlyn-mcp.exe` の絶対パスに置き換えます。Copilot CLI の設定形式は `mcpServers` です。prompt session で repository MCP 設定を有効にするには、起動前に PowerShell で次を設定します。
+
+```powershell
+$env:GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP = 'true'
+copilot
+```
+
+Windows 上の Copilot CLI `1.0.88` で、ローカル install した preview server の起動と `navlyn_target` の semantic call を明示的な追加設定で確認しました。この結果は当該 CLI/package の組み合わせに限られ、Codex skill が Copilot で使えることを示しません。現在の project config の opt-in 条件は公式の [Copilot CLI MCP guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers) を参照してください。
+
+### GitHub Copilot in VS Code
+
+リポジトリのルートに `.vscode/mcp.json` を作成します。ローカル preview では、`navlyn-mcp` を install 済み実行ファイルの絶対パスに置き換えます。
 
 ```json
 {
@@ -68,13 +85,34 @@ navlyn review --workspace auto --profile evidence
 }
 ```
 
+VS Code は `.vscode/mcp.json` と `servers` 形式を使います。これは設定方法を記載したもので、この rehearsal では VS Code の動作確認はしていません。詳細は公式の [VS Code MCP guide](https://code.visualstudio.com/docs/agent-customization/mcp-servers) を参照してください。
+
 ### Codex
 
-リポジトリのルートで次を実行します。
+公開済みの global install では、リポジトリのルートで次を実行します。ローカル preview では [quick start](docs/navlyn-first-10-minutes.md#mcp-client-setup) の絶対パスを使用します。
 
 ```powershell
 codex mcp add navlyn -- navlyn-mcp
 ```
+
+## Codex routing skill
+
+Navlyn routing skill は `navlyn-mcp` とは別に install します。対象 repository で、Navlyn source checkout にある installer を呼び出し、その repository の `.agents/skills` に install / update します。
+
+```powershell
+$navlynSource = (Resolve-Path '<navlyn-source-checkout>').Path
+$skillRoot = Join-Path (Get-Location) '.agents/skills'
+New-Item -ItemType Directory -Force $skillRoot | Out-Null
+& (Join-Path $navlynSource 'scripts/install-routing-skill.ps1') -Action Install -DestinationRoot $skillRoot
+```
+
+同じ bytes で再実行しても変更はありません。隣接する `.navlyn-semantic-routing.install.json` marker が所有権を記録します。marker がない・不正、管理対象の bytes が変わった、または無関係なファイルがある場合は停止し、ファイルを保持します。状態を確認して競合を解決してから再実行してください。管理下の skill は次のように削除できます。
+
+```powershell
+& (Join-Path $navlynSource 'scripts/install-routing-skill.ps1') -Action Uninstall -DestinationRoot $skillRoot
+```
+
+Windows の Codex CLI `0.155.0-alpha.16` で隔離 discovery と6ケースの activation smoke を確認しました。process-scoped full-access session で実施し、source への書き込み試行や diff はありませんでした。検証した read-only Windows sandbox では WindowsApps PowerShell が起動できず、同 sandbox mode での activation は確認していません。Codex skill は Copilot 対応を意味しません。詳細は [release contract](docs/navlyn-release-contract.md#client-support-claims) を参照してください。
 
 ### Claude Code
 

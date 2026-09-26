@@ -6,9 +6,10 @@ param(
     [string]$ScenarioFile = 'docs/evals/tool-selection.scenarios.json',
     [string[]]$ScenarioIds,
     [int]$RunsPerCondition = 5,
-    [string]$Client = 'codex',
+    [string]$Client = 'codex.exe',
     [string]$Model = 'gpt-5.5',
     [ValidateSet('low','medium','high','xhigh')][string]$Reasoning = 'low',
+    [ValidateSet('read-only','danger-full-access')][string]$Sandbox = 'read-only',
     [ValidateRange(1,3600)][int]$TimeoutSeconds = 300,
     [ValidateRange(1,4)][int]$MaxParallelism = 1,
     [string]$Output,
@@ -88,8 +89,20 @@ function Get-UsageObject([object]$event) {
     $totalTokens=if(Has-JsonProperty $usage 'total_tokens'){$usage.total_tokens}elseif(Has-JsonProperty $usage 'totalTokens'){$usage.totalTokens}else{$null}
     return [pscustomobject]@{inputTokens=$inputTokens;outputTokens=$outputTokens;totalTokens=$totalTokens}
 }
+function Set-CodexWindowsShellPath([Diagnostics.ProcessStartInfo]$startInfo) {
+    foreach ($key in @($startInfo.Environment.Keys)) {
+        if ($key -like 'CODEX_*' -and $key -ne 'CODEX_HOME') { [void]$startInfo.Environment.Remove($key) }
+    }
+    if (!$IsWindows) { return }
+    $windowsPowerShell = Join-Path $env:WINDIR 'System32/WindowsPowerShell/v1.0/powershell.exe'
+    if (!(Test-Path -LiteralPath $windowsPowerShell -PathType Leaf)) { Fail 'Windows PowerShell executable is unavailable for the isolated Codex shell.' }
+    $entries = @($startInfo.Environment['PATH'] -split ';' | Where-Object { $_ -and $_ -notmatch '(?i)WindowsApps' })
+    if ($entries.Count -eq 0) { Fail 'Isolated Codex shell PATH is empty.' }
+    $startInfo.Environment['PATH'] = ($entries -join ';')
+}
 function Test-PromptInputSkillVisibility([string]$conditionRoot,[string]$condition,[string]$artifactDirectory) {
     $psi=[Diagnostics.ProcessStartInfo]::new($Client);$psi.WorkingDirectory=$conditionRoot;$psi.UseShellExecute=$false;$psi.RedirectStandardOutput=$true;$psi.RedirectStandardError=$true
+    if ($Sandbox -eq 'read-only') { Set-CodexWindowsShellPath $psi }
     foreach($arg in @('debug','prompt-input','--disable','plugins','--disable','shell_snapshot','Inspect which repository-local agent skills are available from this working root for C# semantic navigation. Report names and paths only.')){$psi.ArgumentList.Add($arg)}
     $process=[Diagnostics.Process]::new();$process.StartInfo=$psi;$process.Start()|Out-Null
     $outTask=$process.StandardOutput.ReadToEndAsync();$errTask=$process.StandardError.ReadToEndAsync();$finished=$process.WaitForExit(60000)
@@ -325,6 +338,15 @@ function Score-Trace($trace,$scenarios) {
 function Get-Hash([string]$path) { $sha=[Security.Cryptography.SHA256]::Create();try{return ([Convert]::ToHexString($sha.ComputeHash([IO.File]::ReadAllBytes($path))).ToLowerInvariant())}finally{$sha.Dispose()} }
 function Get-SkillFiles { return @(Get-ChildItem -LiteralPath (Join-Path $repoRoot '.agents/skills/navlyn-semantic-routing') -File -Recurse | Sort-Object FullName) }
 function Get-SkillHash { $files=Get-SkillFiles; $concat=($files|ForEach-Object { $_.FullName.Substring((Join-Path $repoRoot '.agents/skills/navlyn-semantic-routing').Length).Replace('\','/')+':'+(Get-Hash $_.FullName) }) -join "`n"; $sha=[Security.Cryptography.SHA256]::Create();try{return [Convert]::ToHexString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($concat))).ToLowerInvariant()}finally{$sha.Dispose()} }
+function Install-LiveSkill([string]$conditionRoot) {
+    $parent=Join-Path $conditionRoot '.agents/skills'
+    [IO.Directory]::CreateDirectory($parent)|Out-Null
+    $installer=Join-Path $repoRoot 'scripts/install-routing-skill.ps1'
+    $output=& pwsh.exe -NoLogo -NoProfile -File $installer -Action Install -DestinationRoot $parent 2>$null
+    if($LASTEXITCODE -ne 0){Fail 'Routing skill installer failed in an isolated live condition.'}
+    try{$installed=$output|ConvertFrom-Json}catch{Fail 'Routing skill installer returned invalid JSON in an isolated live condition.'}
+    if($installed.status -ne 'installed' -or !(Test-Path -LiteralPath (Join-Path $parent 'navlyn-semantic-routing/SKILL.md') -PathType Leaf)){Fail 'Routing skill installer did not produce the expected live condition.'}
+}
 function New-Prompt($scenario) {
     $facts=[Collections.Generic.List[string]]::new();$args=$scenario.baselineTrace.calls[0].arguments
     foreach($property in $args.PSObject.Properties){$facts.Add("$($property.Name)=$($property.Value)")}
@@ -334,7 +356,7 @@ function New-Prompt($scenario) {
     return "Repository root: $repoRoot`nWorkspace: $workspace`nFixture/input: $fixture`n$inputFacts`nRead-only request: do not modify files. Execute at least one available read-only action, base the answer on returned evidence rather than the prompt alone, then stop. Use the authoritative input facts directly. Set stopReason to an allowed output-schema value only when returned evidence supports that reason. Do not inspect unrelated scenario, replay, schema, artifact, product-implementation, or test-expectation files to infer the expected route. A file explicitly named in the authoritative input facts remains in scope.`n`nUser request (verbatim): $($scenario.prompt)"
 }
 function Invoke-Live {
-    if($Client -ne 'codex'){Fail 'Only the codex client is currently supported.'}
+    if($Client -notin @('codex','codex.exe')){Fail 'Only the installed Windows Codex CLI commands are supported.'}
     $version=& $Client --version 2>$null; if($LASTEXITCODE -ne 0 -or !$version){Fail 'Codex CLI is unavailable.'}
     if($RunsPerCondition -lt 1){Fail 'RunsPerCondition must be positive.'}
     $scenarios=@(Get-Scenarios)
@@ -358,7 +380,7 @@ function Invoke-Live {
         $probeRoot=Join-Path $rootBase "discovery-$condition"
         if(Test-Path $probeRoot){$resolvedProbe=[IO.Path]::GetFullPath($probeRoot);$resolvedBase=[IO.Path]::GetFullPath($rootBase)+[IO.Path]::DirectorySeparatorChar;if(!$resolvedProbe.StartsWith($resolvedBase,[StringComparison]::OrdinalIgnoreCase)){Fail "Unsafe prompt-input probe root: $resolvedProbe"};Remove-Item -LiteralPath $resolvedProbe -Recurse -Force}
         [IO.Directory]::CreateDirectory($probeRoot)|Out-Null;Copy-Item -LiteralPath (Join-Path $repoRoot 'AGENTS.md') -Destination $probeRoot
-        if($condition -eq 'on'){[IO.Directory]::CreateDirectory((Join-Path $probeRoot '.agents/skills'))|Out-Null;Copy-Item -LiteralPath $skillDir -Destination (Join-Path $probeRoot '.agents/skills/navlyn-semantic-routing') -Recurse}
+        if($condition -eq 'on'){Install-LiveSkill $probeRoot}
         $probe=Test-PromptInputSkillVisibility $probeRoot $condition $rawDir
         $expectedVisible=$condition -eq 'on'
         if([bool]$probe.visible -ne $expectedVisible){Fail "Codex prompt-input did not confirm local skill visibility only in on (condition=$condition, visible=$($probe.visible))."}
@@ -372,7 +394,7 @@ function Invoke-Live {
         for($rep=1;$rep -le $RunsPerCondition;$rep++){foreach($condition in @('off','on')){
         $conditionRoot=Join-Path $rootBase "$($scenario.id)-$rep-$condition";if(Test-Path $conditionRoot){$resolvedCondition=[IO.Path]::GetFullPath($conditionRoot);$resolvedBase=[IO.Path]::GetFullPath($rootBase)+[IO.Path]::DirectorySeparatorChar;if(!$resolvedCondition.StartsWith($resolvedBase,[StringComparison]::OrdinalIgnoreCase)){Fail "Unsafe condition-root target: $resolvedCondition"};Remove-Item -LiteralPath $resolvedCondition -Recurse -Force};[IO.Directory]::CreateDirectory($conditionRoot)|Out-Null
         Copy-Item -LiteralPath (Join-Path $repoRoot 'AGENTS.md') -Destination $conditionRoot
-        if($condition -eq 'on'){[IO.Directory]::CreateDirectory((Join-Path $conditionRoot '.agents/skills'))|Out-Null;Copy-Item -LiteralPath $skillDir -Destination (Join-Path $conditionRoot '.agents/skills/navlyn-semantic-routing') -Recurse}
+        if($condition -eq 'on'){Install-LiveSkill $conditionRoot}
         $visible=Test-Path -LiteralPath (Join-Path $conditionRoot '.agents/skills/navlyn-semantic-routing')
         if($visible -ne ($condition -eq 'on')){Fail "Skill visibility isolation failed for $condition."}
         $noMcp=$scenario.id -eq 'unavailable-mcp-35'
@@ -380,7 +402,9 @@ function Invoke-Live {
         Set-Content -LiteralPath $promptPath -Value $prompt -Encoding utf8
         $started=[DateTimeOffset]::UtcNow
         $psi=[Diagnostics.ProcessStartInfo]::new($Client);$psi.WorkingDirectory=$repoRoot;$psi.UseShellExecute=$false;$psi.RedirectStandardOutput=$true;$psi.RedirectStandardError=$true
-        foreach($arg in @('-a','never','--strict-config','exec','--json','--ephemeral','--ignore-user-config','--skip-git-repo-check','--disable','plugins','--disable','shell_snapshot','--sandbox','read-only','-C',$conditionRoot,'--add-dir',$repoRoot,'--model',$Model,'--output-schema',$scenarioSchemaPath,'-o',$lastPath)){$psi.ArgumentList.Add($arg)}
+        if ($Sandbox -eq 'read-only') { Set-CodexWindowsShellPath $psi }
+        foreach($arg in @('-a','never','--strict-config','exec','--json','--ephemeral','--ignore-user-config','--skip-git-repo-check','--disable','plugins','--disable','shell_snapshot','--sandbox',$Sandbox,'-C',$conditionRoot,'--add-dir',$repoRoot,'--model',$Model,'--output-schema',$scenarioSchemaPath,'-o',$lastPath)){$psi.ArgumentList.Add($arg)}
+        $psi.ArgumentList.Add('-c');$psi.ArgumentList.Add('cli_auth_credentials_store="file"')
         $psi.ArgumentList.Add('-c');$psi.ArgumentList.Add("model_reasoning_effort=`"$Reasoning`"")
         if(!$noMcp){
             $workspaceArgument=([string]$scenario.workspace).Replace('\','/')
@@ -429,7 +453,7 @@ function Invoke-Live {
         if($null -ne $structured){$answer=[string]$structured.answer;$stop=[string]$structured.stopReason;$claims=@($structured.claims);$edit=[bool]$structured.editAttempted;$anchor=[bool]$structured.anchorBeforeEdit;$ambiguity=[bool]$structured.ambiguityReported;$stale=[bool]$structured.staleReported;$partial=[bool]$structured.partialResult;$outputValid=![string]::IsNullOrWhiteSpace($answer)}
         $activated=$readPaths.Count -gt 0
         $canonicalChars=if($null -ne $structured){([string]($structured|ConvertTo-Json -Compress -Depth 30)).Length}else{$answer.Length}
-        $runConfig=[pscustomobject]@{client=$Client;model=$Model;modelReasoningEffort=$Reasoning;approval='never';sandbox='read-only';ephemeral=$true;ignoreUserConfig=$true;strictConfig=$true;skipGitRepoCheck=$true;plugins=$false;shellSnapshot=$false;addDir=$repoRoot;mcpServerEnabled=(!$noMcp);mcpServerCommand=if(!$noMcp){$mcpExe}else{$null};mcpServerArguments=if(!$noMcp){@('--workspace',([string]$scenario.workspace).Replace('\','/'),'--workspace-root-policy','repo-relative')}else{@()};mcpServerCwd=if(!$noMcp){$repoRoot}else{$null};requiredMcp=(!$noMcp);defaultToolsApprovalMode=if(!$noMcp){'approve'}else{$null};outputSchema=[IO.Path]::GetFileName($scenarioSchemaPath);timeoutSeconds=$TimeoutSeconds}
+        $runConfig=[pscustomobject]@{client=$Client;model=$Model;modelReasoningEffort=$Reasoning;approval='never';sandbox=$Sandbox;ephemeral=$true;ignoreUserConfig=$true;strictConfig=$true;skipGitRepoCheck=$true;plugins=$false;shellSnapshot=$false;addDir=$repoRoot;mcpServerEnabled=(!$noMcp);mcpServerCommand=if(!$noMcp){$mcpExe}else{$null};mcpServerArguments=if(!$noMcp){@('--workspace',([string]$scenario.workspace).Replace('\','/'),'--workspace-root-policy','repo-relative')}else{@()};mcpServerCwd=if(!$noMcp){$repoRoot}else{$null};requiredMcp=(!$noMcp);defaultToolsApprovalMode=if(!$noMcp){'approve'}else{$null};outputSchema=[IO.Path]::GetFileName($scenarioSchemaPath);timeoutSeconds=$TimeoutSeconds}
         $diagnosticStderrLines=@($stderr -split "`r?`n"|Where-Object {![string]::IsNullOrWhiteSpace($_) -and $_ -cne 'Reading additional input from stdin...'})
         $diagnosticStderr=($diagnosticStderrLines -join "`n")
         $run=[pscustomobject]@{
@@ -448,8 +472,8 @@ function Invoke-Live {
     $doc=[ordered]@{
         schemaVersion='navlyn.routing-skill-live-trace.v1';collectedAtUtc=[DateTimeOffset]::UtcNow.ToString('o');scenarioFile=[IO.Path]::GetRelativePath($repoRoot,$sourcePath).Replace('\','/');scenarioSha256=(Get-Hash $sourcePath)
         repository=[ordered]@{root=$repoRoot;head=[string]$head;dirty=$dirty}
-        client=[ordered]@{name=$Client;version=([string]$version).Trim();model=$Model;reasoning=$Reasoning}
-        configuration=[ordered]@{command=$Client;model=$Model;modelReasoningEffort=$Reasoning;approval='never';sandbox='read-only';ephemeral=$true;ignoreUserConfig=$true;strictConfig=$true;skipGitRepoCheck=$true;plugins=$false;shellSnapshot=$false;addDir=$repoRoot;conditionRootIsolation='system-temp-outside-repository';maxParallelism=$MaxParallelism;actualParallelism=1;timeoutSeconds=$TimeoutSeconds;outputSchema='per-scenario schema with accepted stopReason enum';mcpServer=[ordered]@{name='navlyn';command=$mcpExe;args='per-run --workspace selected from the authoritative scenario';cwd=$repoRoot;required=$true;defaultToolsApprovalMode='approve'}}
+        client=[ordered]@{name='codex';version=([string]$version).Trim();model=$Model;reasoning=$Reasoning}
+        configuration=[ordered]@{command=$Client;model=$Model;modelReasoningEffort=$Reasoning;approval='never';sandbox=$Sandbox;ephemeral=$true;ignoreUserConfig=$true;strictConfig=$true;skipGitRepoCheck=$true;plugins=$false;shellSnapshot=$false;addDir=$repoRoot;conditionRootIsolation='system-temp-outside-repository';maxParallelism=$MaxParallelism;actualParallelism=1;timeoutSeconds=$TimeoutSeconds;outputSchema='per-scenario schema with accepted stopReason enum';mcpServer=[ordered]@{name='navlyn';command=$mcpExe;args='per-run --workspace selected from the authoritative scenario';cwd=$repoRoot;required=$true;defaultToolsApprovalMode='approve'}}
         skill=[ordered]@{name='navlyn-semantic-routing';path=(Join-Path $repoRoot '.agents/skills/navlyn-semantic-routing');sha256=$skillHash}
         runsPerCondition=$RunsPerCondition;subset=@($scenarios|ForEach-Object id);groupCounts=[ordered]@{semantic=@($scenarios|Where-Object id -in $semanticIds).Count;text=@($scenarios|Where-Object id -in $textIds).Count;safety=@($scenarios|Where-Object id -in $safetyIds).Count}
         discovery=[ordered]@{offSkillVisible=[bool]$discovery.off.visible;onSkillVisible=[bool]$discovery.on.visible;mcpConfigured=$true;method='codex debug prompt-input in isolated condition roots';off=$discovery.off;on=$discovery.on}

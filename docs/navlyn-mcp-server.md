@@ -106,11 +106,7 @@ Equivalent MCP client configuration for local development:
 }
 ```
 
-Local package smoke testing uses the standard .NET tool flow:
-
-```powershell
-./scripts/test-package-install.ps1
-```
+For the current preview, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
 
 ## Server Options
 
@@ -162,9 +158,30 @@ navlyn_packages
 navlyn_batch
 ```
 
-The v0.8 MCP consolidation removes these 16 tool names from `tools/list`: `navlyn_resolve_target`, `navlyn_find_symbol`, `navlyn_inspect_file`, `navlyn_symbol_source`, `navlyn_symbol_edges`, `navlyn_about_symbol`, `navlyn_related_files`, `navlyn_exact_navigation`, `navlyn_review_diff`, `navlyn_edit_preflight`, `navlyn_post_edit_guard`, `navlyn_wrong_symbol_guard`, `navlyn_change_intent_pack`, `navlyn_agent_handoff_pack`, `navlyn_confidence_ledger`, and `navlyn_di_impact`. This is an MCP-only breaking change. Their advanced CLI commands remain available; use the canonical MCP tools below or `navlyn_batch` for supported combinations.
+The published `0.7.0` MCP surface predates the `0.8.0-preview.1` consolidation. The preview is unpublished. Its exact `tools/list` surface contains 25 tools (listed above). The consolidation retires these 16 names:
 
-`--tool-profile reader|review|edit|full` and `NAVLYN_MCP_TOOL_PROFILE` are deprecated no-op compatibility aliases during migration. When supplied, the server starts with the same unified tool list and writes a deterministic stderr warning before serving MCP protocol messages on stdout.
+| Retired v0.7 MCP name | v0.8 canonical starting point |
+| --- | --- |
+| `navlyn_resolve_target` | `navlyn_target` |
+| `navlyn_find_symbol` | `navlyn_target` |
+| `navlyn_inspect_file` | `navlyn_file_outline` |
+| `navlyn_symbol_source` | `navlyn_read` |
+| `navlyn_symbol_edges` | `navlyn_navigate` |
+| `navlyn_about_symbol` | `navlyn_target`, then `navlyn_read` for selected source |
+| `navlyn_related_files` | `navlyn_navigate` or `navlyn_context_pack`, depending on the needed evidence |
+| `navlyn_exact_navigation` | `navlyn_navigate` |
+| `navlyn_review_diff` | `navlyn_review` |
+| `navlyn_edit_preflight` | `navlyn_prepare_edit` |
+| `navlyn_post_edit_guard` | `navlyn_verify_edit` |
+| `navlyn_wrong_symbol_guard` | `navlyn_verify_edit` |
+| `navlyn_change_intent_pack` | `navlyn_prepare_edit` |
+| `navlyn_agent_handoff_pack` | `navlyn_context_pack` |
+| `navlyn_confidence_ledger` | `navlyn_context_pack`; report evidence and uncertainty in the consuming workflow |
+| `navlyn_di_impact` | `navlyn_di` |
+
+These are migration starting points, not guaranteed one-to-one schema aliases; review the current tool descriptions and supply their current arguments. This is an MCP-only breaking change: advanced CLI commands remain available. `--tool-profile reader|review|edit|full` and `NAVLYN_MCP_TOOL_PROFILE` remain accepted deprecated no-op aliases for older configurations; each accepted profile exposes the same unified 25-tool list. New configurations should omit them.
+
+When a legacy profile alias is supplied, the server starts with the same unified tool list and writes a deterministic stderr warning before serving MCP protocol messages on stdout.
 
 ## Tool Selection
 

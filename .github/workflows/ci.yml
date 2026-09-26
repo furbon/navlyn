@@ -9,17 +9,9 @@ permissions:
 
 jobs:
   build:
-    name: Build and test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - windows-latest
-          - ubuntu-latest
-          - macos-latest
+    name: Build and test (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -55,3 +47,21 @@ jobs:
       - name: CLI contract core validation
         shell: pwsh
         run: ./scripts/test-cli-contract.ps1 -NoBuild -Suite core
+
+      - name: Release contract validation
+        shell: pwsh
+        run: ./scripts/test-release-contract.ps1
+
+      - name: Pack candidate packages
+        shell: pwsh
+        run: ./scripts/pack-release.ps1 -NoValidation -Output artifacts/ci-candidate
+
+      - name: Candidate package contract validation
+        shell: pwsh
+        run: ./scripts/test-package-contract.ps1 -Manifest artifacts/ci-candidate/navlyn-release-pack.json
+
+      - name: Routing skill lifecycle validation
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts/ci-checks -Force | Out-Null
+          ./scripts/test-routing-skill-install.ps1 -OutputReport (Join-Path $PWD 'artifacts/ci-checks/skill-lifecycle.json')

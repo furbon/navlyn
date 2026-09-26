@@ -41,11 +41,9 @@ If the primary solution is too broad or fails because unrelated projects cannot 
 
 The report includes stdout/stderr character counts and previews for restore, doctor, target, and prepare-edit so failures are diagnosable without rerunning immediately.
 
-## Current v0.7.0 Corpus Result
+## Current v0.8.0-preview.1 Corpus Result
 
-Last local run: 2026-07-12.
-
-Report: `artifacts/external-adoption/external-adoption-corpus-report.json`.
+Last local Windows run: 2026-09-26. The report is retained at `artifacts/release-readiness-goal-20260926/p8-external-adoption.json` (SHA-256 `82deb5e0067070030f2fea7e6f2f61c36a953bd221dffbd98e9597d5110956f9`). This ignored report is local release evidence, not part of the packages.
 
 Summary:
 
@@ -57,17 +55,17 @@ Summary:
 
 Clean successes:
 
-- `https://github.com/Tyrrrz/CliWrap.git`: solution health was valid; edit preparation completed on nearest project fallback.
-- `https://github.com/jbogard/MediatR.git`: solution load was blocked by unrelated test-project target framework diagnostics; edit preparation completed on nearest project fallback.
-- `https://github.com/commandlineparser/commandline.git`: edit preparation completed on nearest project fallback.
+- `https://github.com/Tyrrrz/CliWrap.git` at `804ad88ddd8fa61cbd7d81246051d34974520b9a`: `doctor`, `target`, and `prepare-edit` passed on the nearest project fallback.
+- `https://github.com/jbogard/MediatR.git` at `916ef1b3d68ccdc96db8f914eaf1b32fc7db52c5`: the solution restore failed, but all three Navlyn commands passed on the nearest project fallback.
+- `https://github.com/commandlineparser/commandline.git` at `1e3607b97af6141743edb3c434c06d5b492f6fb3`: all three commands passed on the nearest project fallback.
 
 No-go:
 
-- `https://github.com/rosenbjerg/recreate-sln-structure.git`: the repository requests .NET SDK `9.0.0` via `global.json`; the local machine has SDK `8.0.422`, `10.0.109`, and `10.0.301`, so restore and MSBuild workspace loading fail before semantic navigation can proceed.
+- `https://github.com/rosenbjerg/recreate-sln-structure.git` at `fbbbd1bbe0624363dd3e4327d3393db8f6498b9a`: its `global.json` requests .NET SDK `9.0.0` with `latestMinor` roll-forward. This Windows machine has .NET SDK 8 and 10, so restore and workspace loading fail before semantic navigation; the report retains both diagnostic previews.
 
 ## Release Gate
 
-A v0.7.x adoption claim should not cite this eval unless:
+A v0.8 preview adoption claim should not cite this eval unless:
 
 - At least three public repositories report `clean-success`.
 - At least one incompatible environment reports a diagnosable `no-go` with stderr/stdout previews.

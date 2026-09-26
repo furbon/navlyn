@@ -49,7 +49,7 @@ Navlyn uses separate validation layers so small changes can be checked quickly w
   - `./scripts/test-multi-project-navigation.ps1`
   - `./scripts/test-workspace-semantics.ps1`
   - `./scripts/test-diagnostics.ps1`
-- Package install smoke: `./scripts/test-package-install.ps1`
+- Installed-package smoke: `./scripts/test-consumer-install.ps1` with a manifest produced by `./scripts/pack-release.ps1`; see [`navlyn-distribution.md`](navlyn-distribution.md#local-package-smoke).
 - Release validation: `./scripts/test-release.ps1`
 
 Keep these layers separate. Quick validation should prove that the solution builds, xUnit tests pass, core CLI entrypoints run, stdout/stderr discipline holds, exit codes are stable, and representative JSON shapes are intact. CLI contract validation should cover broader public command wiring, required options, stable error behavior, batch support, top-level JSON shape, and representative workflow commands such as `review-diff`, `review-pack`, `context-pack`, `repo-graph`, `public-api-diff`, `tests-for-symbol`, `tests-for-diff`, `framework-entrypoints`, `di-graph`, `where-registered`, and `di-impact`. Focused fixture checks should cover semantic details that need controlled source code, such as symbol binding, overload selection, local variables, parameters, definitions, references, cross-project navigation, generated-code filtering, compiler diagnostics, conditional compilation, multi-targeting, linked files, and review-pack signals.
@@ -68,7 +68,7 @@ Validation timing can be recorded without changing public stdout/stderr contract
 
 The wrapper writes structured reports under ignored `artifacts/test-timings/`. Use it before and after validation-script changes, release preparation, or performance-related refactors so slow lanes have concrete evidence instead of impressions.
 
-CI runs restore, build, xUnit, C# file format validation, quick validation without duplicate xUnit, and the CLI contract core suite on Windows, Ubuntu, and macOS through `pwsh`. Release validation keeps the full CLI contract suite and focused fixture scripts. Keep script examples compatible with PowerShell Core and prefer `./scripts/...` plus `/` path separators in command examples so they work across all CI operating systems. The xUnit project disables target-framework parallelism because resolver and MCP process tests can load the same MSBuild workspace while test infrastructure is writing per-framework output files; run explicit framework lanes when debugging runtime-specific failures.
+The documented development and test environment is Windows. CI runs restore, build, xUnit for `net8.0` and `net10.0`, C# file format validation, quick validation without duplicate xUnit, and the CLI contract core suite on Windows. Release validation runs the full release suite plus isolated package and skill checks on Windows. Keep scripts compatible with PowerShell Core and prefer `./scripts/...` paths. The xUnit project disables target-framework parallelism because resolver and MCP process tests can load the same MSBuild workspace while test infrastructure is writing per-framework output files; run explicit framework lanes when debugging runtime-specific failures.
 
 ## Standard Local Checks
 
@@ -163,20 +163,23 @@ Envelope schemas live in `docs/schemas`. Golden snapshots live under `navlyn.Tes
 ./scripts/measure-navlyn-performance.ps1 -Workspace navlyn.slnx -Scenario all -Profile evidence -Iterations 1 -Warmup 0 -NoBuild
 ```
 
-The performance script emits structured JSON with elapsed time, stdout/stderr size, exit code, JSON validity, key counts, truncation state, profile, and command arguments. Keep generated reports under ignored local paths such as `artifacts/performance-smoke/` unless a curated baseline is intentionally being published. The MCP scenario starts a local stdio MCP session and records representative tool-call latency/output-size measurements when the MCP server assembly is built; use `navlyn.Tests.Mcp` coverage for functional MCP validation. For 0.6.x release work, record at least quick, file-first, agent-loop, diff, and MCP smoke reports. Treat failures, non-JSON stdout, non-empty stderr on success, unexpected truncation, or missing expected files as performance acceptance failures even when elapsed time looks good.
+The performance script emits structured JSON with elapsed time, stdout/stderr size, exit code, JSON validity, key counts, truncation state, profile, and command arguments. Keep generated reports under ignored local paths such as `artifacts/performance-smoke/` unless a curated baseline is intentionally being published. The MCP scenario starts a local stdio MCP session and records representative tool-call latency/output-size measurements when the MCP server assembly is built; use `navlyn.Tests.Mcp` coverage for functional MCP validation. Historical 0.6.x release work recorded quick, file-first, agent-loop, diff, and MCP smoke reports. Treat failures, non-JSON stdout, non-empty stderr on success, unexpected truncation, or missing expected files as performance acceptance failures even when elapsed time looks good.
 
 ### Package And PR Facts Scripts
 
 ```powershell
-./scripts/test-package-install.ps1
-./scripts/test-package-install.ps1 -Frameworks net8.0
-./scripts/test-package-install.ps1 -Frameworks net10.0
-./scripts/pack-release.ps1 -Output artifacts/packages
-./scripts/publish-nuget.ps1 -DryRun
+$releaseOutput = "artifacts/preview-$([guid]::NewGuid().ToString('N'))"
+$checks = "artifacts/preview-checks-$([guid]::NewGuid().ToString('N'))"
+./scripts/pack-release.ps1 -NoValidation -Output $releaseOutput
+$manifest = Join-Path $releaseOutput 'navlyn-release-pack.json'
+./scripts/test-package-contract.ps1 -Manifest $manifest
+New-Item -ItemType Directory -Path $checks | Out-Null
+./scripts/test-consumer-install.ps1 -Manifest $manifest -OutputReport (Join-Path $PWD "$checks/consumer-install.json")
+./scripts/publish-nuget.ps1 -Manifest $manifest -DryRun
 ./scripts/write-navlyn-pr-facts.ps1 -Workspace navlyn.slnx -Output artifacts/navlyn-pr-facts
 ```
 
-Package and PR facts scripts write generated output under ignored `artifacts/` paths. Package install smoke defaults to both `net8.0` and `net10.0`; pass `-Frameworks` only for focused debugging. Publishing is dry-run by default and `-DryRun` makes that explicit; pass `-Publish` only from an intentional release environment with `NUGET_API_KEY` set.
+Package and PR facts scripts write generated output under ignored `artifacts/` paths. The preview consumer harness tests both `net8.0` and `net10.0`, writes its sanitized report to a unique ignored path, and cleans its isolated tool paths and consumer workspace. Publishing is dry-run by default and `-DryRun` makes that explicit; pass `-Publish` only from an intentional release environment with `NUGET_API_KEY` set and separate authorization.
 When publishing through GitHub Actions, use the guarded manual workflow with the `nuget-production` environment and NuGet Trusted Publishing.
 
 ### Focused Fixture Validation
@@ -228,7 +231,7 @@ Recommended command timeouts for automation:
 - `./scripts/test-workspace-semantics.ps1`: at least 180 seconds.
 - `./scripts/test-release.ps1`: at least 900 seconds.
 
-Observed 0.7.0 local baseline on this Windows workstation after build: restore about 1-2 seconds, build about 4 seconds, `dotnet test navlyn.slnx --no-build` about 169 seconds with target frameworks serialized, quick validation without duplicate xUnit about 13 seconds, and CLI contract core about 34 seconds. Use these as a local sanity check, not a universal budget.
+Historical observed 0.7.0 local baseline on this Windows workstation after build: restore about 1-2 seconds, build about 4 seconds, `dotnet test navlyn.slnx --no-build` about 169 seconds with target frameworks serialized, quick validation without duplicate xUnit about 13 seconds, and CLI contract core about 34 seconds. Use these only as historical local measurements, not as current performance claims or universal budgets.
 
 When Navlyn has already been built in the same turn, prefer validation scripts with `-NoBuild` to avoid rebuilding and to reduce the chance of `bin`/`obj` file locks.
 

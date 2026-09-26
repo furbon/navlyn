@@ -1,6 +1,6 @@
 # Navlyn Architecture
 
-Navlyn 0.7.0 is split into shared implementation assemblies and two tool frontends. The split is meant to keep the public promise boring and inspectable: one engine, deterministic JSON, read-only facts, and no hidden edit or network surface.
+Navlyn is split into shared implementation assemblies and two tool frontends. This architecture description is version-neutral; release identity belongs to the package and release documentation. The split keeps the public promise inspectable: one engine, deterministic JSON, read-only facts, and no hidden edit or network surface.
 
 ## Projects
 
@@ -50,7 +50,7 @@ Expensive reverse-edge operations use `SymbolNavigationSearchOptions` and `Symbo
 
 ## Release Hardening Ledger
 
-These are known architecture pressure points for future releases. They are not required for the v0.7.0 public contract because the current implementation is covered by focused tests, schemas, and CLI/MCP contract checks.
+These are known architecture pressure points for future releases. They are not requirements of the current public contract because the implementation is covered by focused tests, schemas, and CLI/MCP contract checks.
 
 | Area | Current Boundary | Future Split Trigger |
 | --- | --- | --- |

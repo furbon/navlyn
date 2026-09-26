@@ -8,21 +8,17 @@ $ErrorActionPreference = 'Stop'
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 
-function Test-IsBuildOutputPath {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Path
-    )
-
-    $relativePath = [System.IO.Path]::GetRelativePath($RepoRoot, $Path)
-    $segments = $relativePath -split '[\\/]'
-    return $segments -contains 'bin' -or $segments -contains 'obj'
+$RelativeFiles = @(& git -C $RepoRoot -c core.quotepath=false ls-files --cached --others --exclude-standard -- '*.cs')
+if ($LASTEXITCODE -ne 0) {
+    throw 'Could not list repository C# files.'
 }
 
-$Files = Get-ChildItem -LiteralPath $RepoRoot -Recurse -Filter '*.cs' -File |
-    Where-Object {
-        !(Test-IsBuildOutputPath -Path $_.FullName)
+$Files = @($RelativeFiles | ForEach-Object {
+    $path = Join-Path $RepoRoot $_
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
+        Get-Item -LiteralPath $path
     }
+})
 
 $InvalidFiles = @()
 
