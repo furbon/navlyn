@@ -1,4 +1,5 @@
 ﻿using System.Text.RegularExpressions;
+using System.Text.Json;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.VisualBasic;
@@ -7,6 +8,8 @@ namespace Navlyn.Workspaces;
 
 internal static partial class ProjectContextFacts
 {
+    private const long MaxAssetsBytes = 16L * 1024 * 1024;
+
     public static string? GetTargetFramework(Project project)
     {
         string? targetFramework = GetTargetFrameworkFromProjectName(project.Name);
@@ -34,7 +37,7 @@ internal static partial class ProjectContextFacts
                 .FirstOrDefault();
         }
 
-        return fromSymbols ?? GetTargetFrameworkFromOutputPath(project.OutputFilePath);
+        return fromSymbols ?? GetTargetFrameworkFromOutputPath(project);
     }
 
     public static string? GetLanguageVersion(Project project)
@@ -66,8 +69,9 @@ internal static partial class ProjectContextFacts
         return match.Success ? match.Groups["tfm"].Value : null;
     }
 
-    private static string? GetTargetFrameworkFromOutputPath(string? outputFilePath)
+    private static string? GetTargetFrameworkFromOutputPath(Project project)
     {
+        string? outputFilePath = project.OutputFilePath;
         if (string.IsNullOrWhiteSpace(outputFilePath))
         {
             return null;
@@ -80,7 +84,39 @@ internal static partial class ProjectContextFacts
         }
 
         string finalDirectory = Path.GetFileName(Path.TrimEndingDirectorySeparator(directory));
-        return OutputTargetFrameworkRegex().IsMatch(finalDirectory) ? finalDirectory : null;
+        if (!OutputTargetFrameworkRegex().IsMatch(finalDirectory) || project.FilePath is null)
+        {
+            return null;
+        }
+
+        string assetsPath = Path.Combine(Path.GetDirectoryName(project.FilePath)!, "obj", "project.assets.json");
+        try
+        {
+            using FileStream stream = new(assetsPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            if (stream.Length == 0 || stream.Length > MaxAssetsBytes)
+            {
+                return null;
+            }
+
+            byte[] bytes = new byte[checked((int)stream.Length)];
+            stream.ReadExactly(bytes);
+            using JsonDocument assets = JsonDocument.Parse(bytes);
+            if (!assets.RootElement.TryGetProperty("targets", out JsonElement targets) || targets.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            string[] frameworks = targets.EnumerateObject()
+                .Select(target => target.Name.Split('/')[0])
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            return frameworks.Length == 1 && string.Equals(frameworks[0], finalDirectory, StringComparison.OrdinalIgnoreCase)
+                ? frameworks[0] : null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
+        {
+            return null;
+        }
     }
 
     private static string? GetTargetFrameworkFromPreprocessorSymbol(string symbol)

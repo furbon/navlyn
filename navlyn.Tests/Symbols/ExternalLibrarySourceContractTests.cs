@@ -94,6 +94,10 @@ public sealed class ExternalLibrarySourceContractTests
         Assert.Equal("net10.0", ProjectContextFacts.GetTargetFramework(project));
         Project withoutSymbols = project.WithParseOptions(new Microsoft.CodeAnalysis.VisualBasic.VisualBasicParseOptions());
         Assert.Equal("net10.0", ProjectContextFacts.GetTargetFramework(withoutSymbols));
+        Project conflictingOutput = withoutSymbols.Solution.WithProjectOutputFilePath(withoutSymbols.Id, Path.Combine(
+            Path.GetDirectoryName(fixture.VisualBasicProject)!, "bin", "Debug", "net9.0", "VisualBasic.dll"))
+            .GetProject(withoutSymbols.Id)!;
+        Assert.Null(ProjectContextFacts.GetTargetFramework(conflictingOutput));
     }
 
     [Fact]
