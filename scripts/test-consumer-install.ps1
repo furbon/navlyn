@@ -90,7 +90,7 @@ function Get-ManifestPackages {
         $result[[string]$package.id] = [pscustomobject]@{ id = [string]$package.id; version = [string]$package.version; path = $packagePath; sha256 = $actualHash }
     }
     if (!$result.ContainsKey('navlyn') -or !$result.ContainsKey('navlyn-mcp')) { throw 'A package manifest is missing a required package.' }
-    if ($result.navlyn.version -ne $result['navlyn-mcp'].version) { throw 'Tool package versions do not match.' }
+    if ($result.navlyn.version -ne $result['navlyn-mcp'].version) { throw 'Tool package versions do not match. Pack or install both tools at the same release version, then regenerate the manifest.' }
     return $result
 }
 
@@ -308,7 +308,7 @@ $script:WorkspacePath = Join-Path $script:RootPath 'consumer-workspace'
 $markerName = '.navlyn-consumer-install-owner.json'
 $packages = Get-ManifestPackages -Path $Manifest
 $rollbackPackages = if ([string]::IsNullOrWhiteSpace($RollbackManifest)) { $null } else { Get-ManifestPackages -Path $RollbackManifest }
-if ($packages.navlyn.version -cne '0.8.0-preview.1') { throw 'Current package manifest must identify version 0.8.0-preview.1.' }
+if ($packages.navlyn.version -cne '0.8.0') { throw 'Current package manifest must identify version 0.8.0.' }
 if ($null -ne $rollbackPackages -and ($rollbackPackages.navlyn.version -eq $packages.navlyn.version -or $rollbackPackages['navlyn-mcp'].version -ne $rollbackPackages.navlyn.version)) { throw 'Rollback manifest must contain a different synchronized package version.' }
 
 $report = [ordered]@{

@@ -19,24 +19,24 @@ Generic code search gives an agent a pile of matches. Navlyn keeps each next que
 
 ## Three-Minute Path
 
-The current `0.8.0-preview.1` candidate is a local release rehearsal and is not published to NuGet. On Windows with PowerShell 7 and .NET SDK 10, use the [local-feed quick start](docs/navlyn-first-10-minutes.md) to pack both target frameworks, install both tools with `--tool-path`, and run the installed absolute `navlyn.exe` to get a first semantic fact. The checked-in package manifest also names this preview; restore it only with the matching local feed, never public NuGet.
+Install Navlyn 0.8.0 from NuGet, then run one semantic query in your repository. The [first 10 minutes guide](docs/navlyn-first-10-minutes.md) uses an isolated tool directory and an absolute executable path. A copyable repository-local tool manifest is in [examples/install/dotnet-tools.json](examples/install/dotnet-tools.json).
 
-The preview can read a local dependency member's reconstructed C# with `read --external-source decompiled`. See the [real-package evaluation corpus](docs/evals/external-member-corpus.md) for tested boundaries.
+Navlyn can read a local dependency member's reconstructed C# with `read --external-source decompiled`. See the [real-package evaluation corpus](docs/evals/external-member-corpus.md) for tested boundaries.
 
-### Published 0.7.0
+### Install 0.8.0
 
-The following commands use the published `0.7.0` packages. To exercise the `0.8.0-preview.1` candidate, use the local-feed quick start above.
+The following commands install the versioned packages:
 
 Install the MCP server:
 
 ```powershell
-dotnet tool install --global navlyn-mcp --version 0.7.0
+dotnet tool install --global navlyn-mcp --version 0.8.0
 ```
 
 Install the CLI too when you want shell or CI JSON facts:
 
 ```powershell
-dotnet tool install --global navlyn --version 0.7.0
+dotnet tool install --global navlyn --version 0.8.0
 ```
 
 Then verify one workspace and one symbol. In a normal repository with one top-level `.slnx`, `.sln`, `.csproj`, or `.vbproj`, use `auto`:
@@ -62,18 +62,18 @@ For a repository with one top-level workspace candidate, the MCP server can use 
 
 ### GitHub Copilot CLI
 
-For a locally installed preview, copy [the Copilot CLI MCP example](examples/install/copilot-cli-mcp.json) to `.mcp.json` or `.github/mcp.json` in the repository root and replace the executable path with the absolute path to `navlyn-mcp.exe`. Copilot CLI configuration uses `mcpServers`. To enable repository MCP configuration for a prompt session in PowerShell, set the documented opt-in variable before starting Copilot:
+Copy [the Copilot CLI MCP example](examples/install/copilot-cli-mcp.json) to `.mcp.json` or `.github/mcp.json` in the repository root and set its command to the installed `navlyn-mcp` executable. Copilot CLI configuration uses `mcpServers`. To enable repository MCP configuration for a prompt session in PowerShell, set the documented opt-in variable before starting Copilot:
 
 ```powershell
 $env:GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP = 'true'
 copilot
 ```
 
-The `0.8.0-preview.1` package was exercised with Copilot CLI `1.0.88` on Windows using its explicit additional-config option: the installed server started and returned a semantic `navlyn_target` result. This verifies that client/package pair only. It does not mean the Codex skill works in Copilot. See the official [Copilot CLI MCP documentation](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers) for current project-config opt-in behavior.
+The 0.8.0 `navlyn-mcp` package was exercised with Copilot CLI `1.0.88` on Windows using its explicit additional-config option: an observed `navlyn_target` call returned the consumer symbol. See the official [Copilot CLI MCP documentation](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers) for current project-config opt-in behavior.
 
 ### GitHub Copilot In VS Code
 
-Create `.vscode/mcp.json` in the repository root. For the local preview, replace `navlyn-mcp` with the installed executable's absolute path:
+Create `.vscode/mcp.json` in the repository root. If the executable is not on VS Code's path, replace `navlyn-mcp` with its installed absolute path:
 
 ```json
 {
@@ -87,11 +87,11 @@ Create `.vscode/mcp.json` in the repository root. For the local preview, replace
 }
 ```
 
-VS Code uses `.vscode/mcp.json` and the `servers` property as shown above. This configuration is documented; VS Code was not exercised in the release rehearsal. See the official [VS Code MCP documentation](https://code.visualstudio.com/docs/agent-customization/mcp-servers).
+VS Code uses `.vscode/mcp.json` and the `servers` property as shown above. VS Code 1.139.1 Copilot Chat on Windows called `navlyn_target` on an installed 0.8.0 server and returned a symbol from this repository. See the official [VS Code MCP documentation](https://code.visualstudio.com/docs/agent-customization/mcp-servers).
 
 ### Codex
 
-For a published global installation, run this from the repository root. For the local preview, use the absolute executable in the [quick start](docs/navlyn-first-10-minutes.md#mcp-client-setup):
+For a global installation, run this from the repository root. For an isolated tool path, use the absolute executable in the [first 10 minutes guide](docs/navlyn-first-10-minutes.md#mcp-client-setup):
 
 ```powershell
 codex mcp add navlyn -- navlyn-mcp
@@ -130,7 +130,7 @@ Identical reinstall is safe. A valid adjacent `.navlyn-semantic-routing.install.
 & (Join-Path $navlynSource 'scripts/install-routing-skill.ps1') -Action Uninstall -DestinationRoot $skillRoot
 ```
 
-Codex CLI `0.155.0-alpha.16` on Windows passed isolated discovery and a six-case activation smoke in a process-scoped full-access session with no source write attempts or diff. The tested read-only Windows sandbox could not launch WindowsApps PowerShell, so activation in that sandbox mode is not established. The preview skill is not a Copilot skill. See [the release contract](docs/navlyn-release-contract.md#client-support-claims) for tested support boundaries.
+Codex CLI `0.155.0-alpha.16` on Windows passed isolated discovery and a six-case activation smoke in a process-scoped full-access session with no source write attempts or diff. The tested read-only Windows sandbox could not launch WindowsApps PowerShell, so activation in that sandbox mode is not established. This Codex skill does not claim Copilot skill support. See [the release contract](docs/navlyn-release-contract.md#client-support-claims) for tested support boundaries.
 
 Navlyn MCP exposes one stable read-only semantic tool surface. The default startup discovers a single repository-local workspace candidate and fails closed when that choice is ambiguous. The agent should start with the smallest relevant fact, reuse `candidateId`, and stop when the returned JSON answers the question.
 

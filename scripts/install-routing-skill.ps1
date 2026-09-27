@@ -17,8 +17,8 @@ $script:MarkerName = '.navlyn-semantic-routing.install.json'
 $script:SkillName = 'navlyn-semantic-routing'
 $script:SchemaId = 'furbon.navlyn.semantic-routing-install'
 $script:SchemaVersion = 1
-$script:PreviewVersion = '0.8.0-preview.1'
-$script:SupportedMarkerVersions = @('0.8.0-preview.1', '0.8.0-preview.0')
+$script:ReleaseVersion = '0.8.0'
+$script:SupportedMarkerVersions = @('0.8.0', '0.8.0-preview.1', '0.8.0-preview.0')
 $script:RelativeFiles = @(
     'SKILL.md',
     'references/routing-matrix.md',
@@ -156,10 +156,10 @@ try {
         if ($hasMarker) {
             $marker = Read-And-ValidateMarker $markerPath $destination
             Assert-InstalledMatchesMarker $marker $destination
-            $same = $marker.navlynVersion -ceq $script:PreviewVersion
+            $same = $marker.navlynVersion -ceq $script:ReleaseVersion
             foreach ($relative in $script:RelativeFiles) { if ($marker.files[$relative] -cne $sourceHashes[$relative]) { $same = $false } }
             if ($same) {
-                @{ status = 'unchanged'; destination = $destination; version = $script:PreviewVersion } | ConvertTo-Json -Compress
+                @{ status = 'unchanged'; destination = $destination; version = $script:ReleaseVersion } | ConvertTo-Json -Compress
                 exit 0
             }
             $isUpdate = $true
@@ -190,7 +190,7 @@ try {
             $newMarker = [ordered]@{
                 schemaId = $script:SchemaId
                 schemaVersion = $script:SchemaVersion
-                navlynVersion = $script:PreviewVersion
+                navlynVersion = $script:ReleaseVersion
                 destination = $destination
                 files = $installedHashes
                 ownership = [ordered]@{
@@ -225,7 +225,7 @@ try {
             }
             throw
         }
-        @{ status = $(if ($isUpdate) { 'updated' } else { 'installed' }); destination = $destination; version = $script:PreviewVersion } | ConvertTo-Json -Compress
+        @{ status = $(if ($isUpdate) { 'updated' } else { 'installed' }); destination = $destination; version = $script:ReleaseVersion } | ConvertTo-Json -Compress
         exit 0
     }
 

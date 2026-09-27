@@ -5,7 +5,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$ExpectedVersion = '0.8.0-preview.1'
+$ExpectedVersion = '0.8.0'
 $Failures = [System.Collections.Generic.List[string]]::new()
 
 function Get-RequiredXmlValue {

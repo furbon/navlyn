@@ -1,6 +1,7 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Navlyn.Mcp.Configuration;
 using Navlyn.Symbols;
 using Navlyn.Workspaces;
@@ -175,6 +176,18 @@ internal sealed class NavlynMcpWorkspaceCache(NavlynMcpServerOptions options) : 
                     {
                         SnapshotId = CreateSnapshotId(baseSnapshot.Fingerprint, nextState.Digest)
                     };
+                    WorkspaceInputState publicationState = Capture(nextSpec, cancellationToken);
+                    if (!IsInspectable(publicationState))
+                    {
+                        throw new WorkspaceInputStaleException();
+                    }
+
+                    if (!publicationState.IsComplete || publicationState.Digest != nextState.Digest)
+                    {
+                        spec = nextSpec;
+                        continue;
+                    }
+
                     CachedWorkspace cached = new(snapshot, nextState, nextSpec, generation);
                     active = cached;
                     published = true;
@@ -238,7 +251,8 @@ internal sealed class NavlynMcpWorkspaceCache(NavlynMcpServerOptions options) : 
     private static WorkspaceInputState Capture(WorkspaceInputSpec spec, CancellationToken cancellationToken)
     {
         return WorkspaceInputState.Capture(
-            spec.Root, spec.SelectedInputs, spec.LoadedInputs, spec.AdditionalRoots, cancellationToken);
+            spec.Root, spec.SelectedInputs, spec.LoadedInputs, spec.AdditionalRoots, cancellationToken,
+            spec.ProjectDirectories);
     }
 
     private static bool IsInspectable(WorkspaceInputState state)
@@ -339,7 +353,8 @@ internal sealed class NavlynMcpWorkspaceCache(NavlynMcpServerOptions options) : 
         string Root,
         IReadOnlyList<string> SelectedInputs,
         IReadOnlyList<string> LoadedInputs,
-        IReadOnlyList<string> AdditionalRoots)
+        IReadOnlyList<string> AdditionalRoots,
+        IReadOnlyList<string> ProjectDirectories)
     {
         public static WorkspaceInputSpec Create(NavlynMcpServerOptions options, LoadedWorkspace? workspace)
         {
@@ -353,29 +368,54 @@ internal sealed class NavlynMcpWorkspaceCache(NavlynMcpServerOptions options) : 
 
             if (workspace is null)
             {
-                return new WorkspaceInputSpec(root, selected, [], []);
+                return new WorkspaceInputSpec(root, selected, [], [], []);
             }
 
             selected.Add(workspace.FullPath);
             List<string> loaded = [];
             List<string> roots = [];
+            List<string> projectDirectories = [];
+            if (isAuto) roots.Add(root);
             Add(loaded, workspace.Solution.FilePath);
             foreach (Project project in workspace.Solution.Projects)
             {
                 Add(loaded, project.FilePath);
                 if (project.FilePath is not null)
                 {
-                    roots.Add(Path.GetDirectoryName(project.FilePath)!);
+                    string projectDirectory = Path.GetDirectoryName(project.FilePath)!;
+                    roots.Add(projectDirectory);
+                    projectDirectories.Add(projectDirectory);
                 }
 
-                foreach (TextDocument document in project.Documents.Cast<TextDocument>()
-                    .Concat(project.AdditionalDocuments).Concat(project.AnalyzerConfigDocuments))
+                foreach (Document document in project.Documents)
+                {
+                    Add(loaded, document.FilePath);
+                    if (document.FilePath is not null)
+                    {
+                        roots.Add(Path.GetDirectoryName(document.FilePath)!);
+                    }
+                }
+
+                foreach (TextDocument document in project.AdditionalDocuments.Concat(project.AnalyzerConfigDocuments))
                 {
                     Add(loaded, document.FilePath);
                 }
+
+                foreach (MetadataReference reference in project.MetadataReferences)
+                {
+                    if (reference is PortableExecutableReference portableReference)
+                    {
+                        Add(loaded, portableReference.FilePath);
+                    }
+                }
+
+                foreach (AnalyzerReference reference in project.AnalyzerReferences)
+                {
+                    Add(loaded, reference.FullPath);
+                }
             }
 
-            return new WorkspaceInputSpec(root, selected, loaded, roots);
+            return new WorkspaceInputSpec(root, selected, loaded, roots, projectDirectories);
         }
 
         private static void Add(List<string> paths, string? path)

@@ -1,6 +1,6 @@
 # Navlyn First 15 Minutes
 
-Use the [Windows preview quick start](navlyn-first-10-minutes.md) to pack the unpublished `0.8.0-preview.1` candidate into a local feed, install it with `--tool-path`, and ask one semantic question using the installed absolute executable. This guide starts after that install.
+Use the [Windows first 10 minutes guide](navlyn-first-10-minutes.md) to install 0.8.0 into an isolated tool path and ask one semantic question using the installed absolute executable. This guide starts after that install.
 
 ## 0–3 Minutes: Diagnose
 
@@ -45,4 +45,4 @@ Inspect `anchor`, `confidence`, `source`, `context`, `tests`, `knownUnknowns`, a
 
 Guard policy failures are useful stop signals. Navlyn provides static source evidence; run the relevant tests separately.
 
-The local preview is a release rehearsal and is not on NuGet. For a published package, use the version and installation route shown in the README. Windows preview support was exercised with .NET 8/10 and the specific client versions described in the [release contract](navlyn-release-contract.md#client-support-claims); configuration examples alone do not establish support.
+Package and client support evidence is recorded in the [release contract](navlyn-release-contract.md#client-support-claims); configuration examples alone do not establish tested client support.

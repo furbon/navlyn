@@ -149,7 +149,20 @@ public sealed class ExternalLibrarySourceProtocolTests
         string thirdJson = thirdResponse.StructuredContent?.ToString() ?? string.Empty;
         Assert.DoesNotContain("FIXTURE_NET10_INT_OVERLOAD_BODY", thirdJson, StringComparison.Ordinal);
         Assert.DoesNotContain("CHANGED_NET10_INT_OVERLOAD_BODY", thirdJson, StringComparison.Ordinal);
-        Assert.Contains("NAVLYN1405", thirdJson, StringComparison.Ordinal);
+        if (thirdResponse.StructuredContent is { } thirdStructured && thirdStructured.GetProperty("ok").GetBoolean())
+        {
+            Assert.False(thirdStructured.GetProperty("metadata").GetProperty("workspaceCacheHit").GetBoolean());
+            JsonElement thirdResult = thirdStructured.GetProperty("result");
+            Assert.False(thirdResult.GetProperty("symbol").GetProperty("facts").GetProperty("isMetadata").GetBoolean());
+            Assert.False(thirdResult.TryGetProperty("sourceOrigin", out _));
+            Assert.False(thirdResult.TryGetProperty("externalAssembly", out _));
+            Assert.All(thirdResult.GetProperty("slices").EnumerateArray(),
+                item => Assert.Equal("Consumer/Program.cs", item.GetProperty("path").GetString()));
+        }
+        else
+        {
+            Assert.Contains("NAVLYN1405", thirdJson, StringComparison.Ordinal);
+        }
     }
 
     private static JsonElement RequireResult(CallToolResult response)

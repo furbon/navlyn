@@ -1,4 +1,6 @@
 ﻿using Navlyn.Mcp.Configuration;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Navlyn.Mcp.Execution;
 using Navlyn.Mcp.Tools;
 using Navlyn.Workspaces;
@@ -184,6 +186,98 @@ public sealed class NavlynMcpWorkspaceCacheTests
     }
 
     [Fact]
+    public async Task EditAtPublicationBoundary_DoesNotPublishOldSourceAsCurrent()
+    {
+        using TemporaryDirectory directory = TemporaryDirectory.Create();
+        string projectPath = CreateProject(directory.Path);
+        string sourcePath = Path.Combine(directory.Path, "Fixture.cs");
+        await File.WriteAllTextAsync(sourcePath, "namespace Fixture; public sealed class Alpha { }\n");
+        int publicationAttempts = 0;
+        using NavlynMcpWorkspaceCache cache = new(CreateOptions(projectPath), () =>
+        {
+            if (Interlocked.Increment(ref publicationAttempts) == 1)
+            {
+                File.WriteAllText(sourcePath, "namespace Fixture; public sealed class Bravo { }\n");
+            }
+        });
+
+        NavlynMcpWorkspaceCacheResult result = await cache.GetAsync(CancellationToken.None);
+        NavlynMcpWorkspaceCache.WorkspaceLease lease = Assert.IsType<NavlynMcpWorkspaceCache.WorkspaceLease>(result.Lease);
+        try
+        {
+            Assert.True(await cache.ValidateAsync(lease, CancellationToken.None));
+            Microsoft.CodeAnalysis.Document document = Assert.Single(Assert.Single(lease.CachedWorkspace.Workspace.Solution.Projects).Documents,
+                item => item.Name == "Fixture.cs");
+            Assert.Contains("Bravo", (await document.GetTextAsync()).ToString(), StringComparison.Ordinal);
+            Assert.True(publicationAttempts >= 2);
+        }
+        finally
+        {
+            await lease.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task SolutionCache_TracksProjectSourceAndAncestorConfigWithoutScanningUnrelatedArtifacts()
+    {
+        using TemporaryDirectory directory = TemporaryDirectory.Create();
+        string projectRoot = Path.Combine(directory.Path, "src");
+        Directory.CreateDirectory(projectRoot);
+        string projectPath = CreateProject(projectRoot);
+        string solutionPath = Path.Combine(directory.Path, "Fixture.slnx");
+        await File.WriteAllTextAsync(solutionPath, "<Solution><Project Path=\"src/Fixture.csproj\" /></Solution>");
+        await File.WriteAllTextAsync(Path.Combine(projectRoot, "Alpha.cs"), "namespace Fixture; public sealed class Alpha { }\n");
+        string artifactRoot = Path.Combine(directory.Path, "artifacts");
+        Directory.CreateDirectory(artifactRoot);
+        using NavlynMcpWorkspaceCache cache = new(CreateOptions(solutionPath));
+
+        NavlynMcpWorkspaceCache.WorkspaceLease first = Assert.IsType<NavlynMcpWorkspaceCache.WorkspaceLease>(
+            (await cache.GetAsync(CancellationToken.None)).Lease);
+        await File.WriteAllTextAsync(Path.Combine(artifactRoot, "Unrelated.cs"), "class Unrelated {}\n");
+        NavlynMcpWorkspaceCacheResult unchanged = await cache.GetAsync(CancellationToken.None);
+        NavlynMcpWorkspaceCache.WorkspaceLease second = Assert.IsType<NavlynMcpWorkspaceCache.WorkspaceLease>(unchanged.Lease);
+        try
+        {
+            Assert.True(unchanged.CacheHit);
+            Assert.Equal(first.Generation, second.Generation);
+
+            await File.WriteAllTextAsync(Path.Combine(projectRoot, "Bravo.cs"), "namespace Fixture; public sealed class Bravo { }\n");
+            NavlynMcpWorkspaceCacheResult sourceChanged = await cache.GetAsync(CancellationToken.None);
+            NavlynMcpWorkspaceCache.WorkspaceLease third = Assert.IsType<NavlynMcpWorkspaceCache.WorkspaceLease>(sourceChanged.Lease);
+            try
+            {
+                Assert.False(sourceChanged.CacheHit);
+                Assert.NotEqual(second.Generation, third.Generation);
+                Assert.Contains(Assert.Single(third.CachedWorkspace.Workspace.Solution.Projects).Documents,
+                    document => document.Name == "Bravo.cs");
+
+                await File.WriteAllTextAsync(Path.Combine(directory.Path, "Directory.Build.props"),
+                    "<Project><PropertyGroup><DefineConstants>CHANGED</DefineConstants></PropertyGroup></Project>");
+                NavlynMcpWorkspaceCacheResult configChanged = await cache.GetAsync(CancellationToken.None);
+                NavlynMcpWorkspaceCache.WorkspaceLease fourth = Assert.IsType<NavlynMcpWorkspaceCache.WorkspaceLease>(configChanged.Lease);
+                try
+                {
+                    Assert.False(configChanged.CacheHit);
+                    Assert.NotEqual(third.Generation, fourth.Generation);
+                }
+                finally
+                {
+                    await fourth.DisposeAsync();
+                }
+            }
+            finally
+            {
+                await third.DisposeAsync();
+            }
+        }
+        finally
+        {
+            await second.DisposeAsync();
+            await first.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task DirectCall_FailsClosedWhenAReparseDirectoryAppearsAfterInitialSuccess()
     {
         if (!OperatingSystem.IsWindows())
@@ -225,6 +319,130 @@ public sealed class NavlynMcpWorkspaceCacheTests
             Assert.True((File.GetAttributes(junction) & FileAttributes.ReparsePoint) != 0);
             Directory.Delete(junction);
         }
+    }
+
+    [Fact]
+    public async Task ReplacedMetadataReference_RetiresOldLeaseAndLoadsNewBindings()
+    {
+        using TemporaryDirectory directory = TemporaryDirectory.Create();
+        string projectPath = Path.Combine(directory.Path, "Fixture.csproj");
+        await File.WriteAllTextAsync(projectPath, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+              <ItemGroup><Reference Include="FixtureDependency"><HintPath>Dependency.dll</HintPath></Reference></ItemGroup>
+            </Project>
+            """);
+        await File.WriteAllTextAsync(Path.Combine(directory.Path, "Fixture.cs"), "public sealed class Consumer : ExternalBase { }\n");
+        string dependencyPath = Path.Combine(directory.Path, "Dependency.dll");
+        EmitDependency(dependencyPath, "public class ExternalBase { public int Before; }");
+        using NavlynMcpWorkspaceCache cache = new(CreateOptions(projectPath));
+
+        NavlynMcpWorkspaceCache.WorkspaceLease first = Assert.IsType<NavlynMcpWorkspaceCache.WorkspaceLease>(
+            (await cache.GetAsync(CancellationToken.None)).Lease);
+        try
+        {
+            Project firstProject = Assert.Single(first.CachedWorkspace.Workspace.Solution.Projects);
+            Assert.Contains(firstProject.MetadataReferences, reference =>
+                string.Equals(reference.Display, dependencyPath, StringComparison.OrdinalIgnoreCase));
+            Compilation firstCompilation = await firstProject.GetCompilationAsync()
+                ?? throw new InvalidOperationException("No initial compilation was loaded.");
+            INamedTypeSymbol firstType = firstCompilation.GetTypeByMetadataName("ExternalBase")
+                ?? throw new InvalidOperationException("Initial dependency was not loaded.");
+            Assert.Contains(firstType.GetMembers(), member => member.Name == "Before");
+            Assert.DoesNotContain(firstType.GetMembers(), member => member.Name == "After");
+
+            string replacementPath = Path.Combine(directory.Path, "Replacement.dll");
+            EmitDependency(replacementPath, "public class ExternalBase { public int After; }");
+            File.Move(replacementPath, dependencyPath, overwrite: true);
+
+            Assert.False(await cache.ValidateAsync(first, CancellationToken.None));
+            NavlynMcpWorkspaceCacheResult updated = await cache.GetAsync(CancellationToken.None);
+            NavlynMcpWorkspaceCache.WorkspaceLease second = Assert.IsType<NavlynMcpWorkspaceCache.WorkspaceLease>(updated.Lease);
+            try
+            {
+                Assert.False(updated.CacheHit);
+                Assert.NotEqual(first.Generation, second.Generation);
+                Compilation compilation = await Assert.Single(second.CachedWorkspace.Workspace.Solution.Projects).GetCompilationAsync()
+                    ?? throw new InvalidOperationException("No compilation was loaded.");
+                INamedTypeSymbol type = compilation.GetTypeByMetadataName("ExternalBase")
+                    ?? throw new InvalidOperationException("Replaced dependency was not loaded.");
+                Assert.Contains(type.GetMembers(), member => member.Name == "After");
+                Assert.DoesNotContain(type.GetMembers(), member => member.Name == "Before");
+            }
+            finally
+            {
+                await second.DisposeAsync();
+            }
+        }
+        finally
+        {
+            await first.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task ChangedProjectAssets_RetiresOldLease()
+    {
+        using TemporaryDirectory directory = TemporaryDirectory.Create();
+        string projectPath = CreateProject(directory.Path);
+        await File.WriteAllTextAsync(Path.Combine(directory.Path, "Fixture.cs"), "public sealed class Fixture { }\n");
+        using NavlynMcpWorkspaceCache cache = new(CreateOptions(projectPath));
+        NavlynMcpWorkspaceCache.WorkspaceLease first = Assert.IsType<NavlynMcpWorkspaceCache.WorkspaceLease>(
+            (await cache.GetAsync(CancellationToken.None)).Lease);
+        try
+        {
+            string obj = Path.Combine(directory.Path, "obj");
+            Directory.CreateDirectory(obj);
+            await File.WriteAllTextAsync(Path.Combine(obj, "project.assets.json"), "{\"version\":3,\"test\":\"changed\"}");
+            Assert.False(await cache.ValidateAsync(first, CancellationToken.None));
+        }
+        finally
+        {
+            await first.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task NestedProjectAssetsInSolution_RetireOldLease()
+    {
+        using TemporaryDirectory directory = TemporaryDirectory.Create();
+        string rootProjectPath = Path.Combine(directory.Path, "Root.csproj");
+        await File.WriteAllTextAsync(rootProjectPath,
+            "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>");
+        await File.WriteAllTextAsync(Path.Combine(directory.Path, "Root.cs"), "public sealed class Root { }\n");
+        string projectRoot = Path.Combine(directory.Path, "src", "App");
+        Directory.CreateDirectory(projectRoot);
+        CreateProject(projectRoot);
+        await File.WriteAllTextAsync(Path.Combine(projectRoot, "Fixture.cs"), "public sealed class Fixture { }\n");
+        string solutionPath = Path.Combine(directory.Path, "Fixture.slnx");
+        await File.WriteAllTextAsync(solutionPath,
+            "<Solution><Project Path=\"Root.csproj\" /><Project Path=\"src/App/Fixture.csproj\" /></Solution>");
+        using NavlynMcpWorkspaceCache cache = new(CreateOptions(solutionPath));
+        NavlynMcpWorkspaceCache.WorkspaceLease first = Assert.IsType<NavlynMcpWorkspaceCache.WorkspaceLease>(
+            (await cache.GetAsync(CancellationToken.None)).Lease);
+        try
+        {
+            Assert.Contains(first.CachedWorkspace.InputSpec.ProjectDirectories,
+                path => string.Equals(path, projectRoot, StringComparison.OrdinalIgnoreCase));
+            string obj = Path.Combine(projectRoot, "obj");
+            Directory.CreateDirectory(obj);
+            await File.WriteAllTextAsync(Path.Combine(obj, "project.assets.json"), "{\"version\":3,\"test\":\"nested\"}");
+            Assert.False(await cache.ValidateAsync(first, CancellationToken.None));
+        }
+        finally
+        {
+            await first.DisposeAsync();
+        }
+    }
+
+    private static void EmitDependency(string path, string source)
+    {
+        CSharpCompilation compilation = CSharpCompilation.Create("FixtureDependency",
+            [CSharpSyntaxTree.ParseText(source)],
+            [MetadataReference.CreateFromFile(typeof(object).Assembly.Location)],
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        Microsoft.CodeAnalysis.Emit.EmitResult result = compilation.Emit(path);
+        Assert.True(result.Success, string.Join(Environment.NewLine, result.Diagnostics));
     }
 
     private static string CreateProject(string root)

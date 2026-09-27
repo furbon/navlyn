@@ -98,6 +98,22 @@ public sealed class WorkspaceInputStateTests
     }
 
     [Fact]
+    public void Capture_SweepsLoadedProjectRootsWithoutUnrelatedSolutionArtifacts()
+    {
+        using TemporaryDirectory directory = TemporaryDirectory.Create();
+        string workspace = Write(directory.Path, "workspace.slnx", "<Solution />");
+        string project = Write(directory.Path, "src/App.csproj", "<Project />");
+        string projectSource = Write(directory.Path, "src/App.cs", "class App {}\n");
+        string unrelated = Write(directory.Path, "artifacts/Clone.cs", "class Clone {}\n");
+
+        WorkspaceInputState state = WorkspaceInputState.Capture(directory.Path, [workspace, project], [],
+            [Path.GetDirectoryName(project)!]);
+
+        Assert.Contains(state.DiscoveredPaths, path => PathComparer.Equals(path, Path.GetFullPath(projectSource)));
+        Assert.DoesNotContain(state.DiscoveredPaths, path => PathComparer.Equals(path, Path.GetFullPath(unrelated)));
+    }
+
+    [Fact]
     public void Capture_ThrowsCancellationInsteadOfReturningPartialInventory()
     {
         using TemporaryDirectory directory = TemporaryDirectory.Create();

@@ -17,6 +17,7 @@ internal sealed class WorkspaceInputState
     {
         "global.json", "Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", "NuGet.Config",
         "nuget.config", "navlyn.workspace.json", ".editorconfig", "Directory.Build.rsp", "MSBuild.rsp",
+        "project.assets.json",
     };
 
     private static readonly HashSet<string> ExcludedDirectories = new(StringComparer.OrdinalIgnoreCase)
@@ -47,7 +48,8 @@ internal sealed class WorkspaceInputState
         IEnumerable<string> selectedInputs,
         IEnumerable<string> loadedInputs,
         IEnumerable<string>? additionalRoots = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IEnumerable<string>? projectDirectories = null)
     {
         string root = Path.GetFullPath(workspaceRoot);
         HashSet<string> paths = new(PathComparer);
@@ -72,6 +74,19 @@ internal sealed class WorkspaceInputState
             }
 
             AddAncestorConfigurationInputs(sweepRoot, paths, cancellationToken);
+        }
+
+        foreach (string projectDirectory in projectDirectories?.Distinct(PathComparer) ?? [])
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                AddBuildAssetsInput(projectDirectory, paths, inventoryErrors);
+            }
+            catch (Exception exception) when (IsFileSystemException(exception))
+            {
+                inventoryErrors.Add($"{Normalize(projectDirectory)}: assets inventory failed ({exception.GetType().Name})");
+            }
         }
 
         string[] sortedPaths = paths.OrderBy(path => path, PathComparer).ThenBy(path => path, StringComparer.Ordinal).ToArray();
@@ -170,13 +185,33 @@ internal sealed class WorkspaceInputState
         }
     }
 
+    private static void AddBuildAssetsInput(string root, HashSet<string> paths, List<string> inventoryErrors)
+    {
+        string intermediateDirectory = Path.Combine(root, "obj");
+        if (!Directory.Exists(intermediateDirectory))
+        {
+            return;
+        }
+
+        if (IsReparsePoint(new DirectoryInfo(intermediateDirectory)))
+        {
+            inventoryErrors.Add($"{Normalize(intermediateDirectory)}: reparse directory cannot be inventoried safely");
+            return;
+        }
+
+        string assetsPath = Path.Combine(intermediateDirectory, "project.assets.json");
+        if (File.Exists(assetsPath))
+        {
+            paths.Add(Normalize(assetsPath));
+        }
+    }
+
     private static List<string> GetSweepRoots(string workspaceRoot, IEnumerable<string>? additionalRoots)
     {
-        List<string> candidates = [workspaceRoot];
-        if (additionalRoots is not null)
-        {
-            candidates.AddRange(additionalRoots.Where(path => !string.IsNullOrWhiteSpace(path)).Select(Path.GetFullPath));
-        }
+        List<string> candidates = additionalRoots is null
+            ? []
+            : [.. additionalRoots.Where(path => !string.IsNullOrWhiteSpace(path)).Select(Path.GetFullPath)];
+        if (candidates.Count == 0) candidates.Add(workspaceRoot);
 
         List<string> roots = [];
         foreach (string candidate in candidates.Select(Normalize).Distinct(PathComparer).OrderBy(path => path.Length).ThenBy(path => path, PathComparer))

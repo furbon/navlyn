@@ -194,7 +194,7 @@ internal static class ExternalMemberWorker
             return new WorkerResponse(null, null, implementationPath, implementationHash, "no-body");
         }
 
-        CSharpDecompiler decompiler = new(implementationPath, new DecompilerSettings());
+        CSharpDecompiler decompiler = new(implementationPath, new DecompilerSettings { ThrowOnAssemblyResolveErrors = false });
         string reconstructed = decompiler.DecompileAsString(matches[0]);
         string? selectedText = SelectView(reconstructed, request.View, hasBody);
         if (selectedText is null)
@@ -294,7 +294,16 @@ internal static class ExternalMemberWorker
 
         using JsonDocument assets = JsonDocument.Parse(ReadBoundedFile(request.AssetsPath, MaxAssetsBytes));
         JsonElement root = assets.RootElement;
-        if (!root.GetProperty("targets").TryGetProperty(request.TargetFramework, out JsonElement target))
+        string targetName = request.TargetFramework;
+        if (root.TryGetProperty("project", out JsonElement project) &&
+            project.TryGetProperty("runtimes", out JsonElement runtimes))
+        {
+            string[] runtimeIdentifiers = runtimes.EnumerateObject().Select(runtime => runtime.Name).ToArray();
+            if (runtimeIdentifiers.Length > 1) return null;
+            if (runtimeIdentifiers.Length == 1) targetName += "/" + runtimeIdentifiers[0];
+        }
+
+        if (!root.GetProperty("targets").TryGetProperty(targetName, out JsonElement target))
         {
             return null;
         }
@@ -366,9 +375,27 @@ internal static class ExternalMemberWorker
     {
         if (!root.GetProperty("libraries").TryGetProperty(packageKey, out JsonElement library) ||
             !library.TryGetProperty("path", out JsonElement packagePath)) return [];
-        string relative = Path.Combine(packagePath.GetString()!.Replace('/', Path.DirectorySeparatorChar), relativeAsset.Replace('/', Path.DirectorySeparatorChar));
-        return [.. packageFolders.Select(folder => Path.GetFullPath(Path.Combine(folder, relative))).Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase)];
+        string? packageRelative = packagePath.GetString();
+        if (!IsSafeRelativeAsset(packageRelative) || !IsSafeRelativeAsset(relativeAsset)) return [];
+
+        return [.. packageFolders.Select(folder =>
+        {
+            string packageRoot = Path.GetFullPath(Path.Combine(folder, packageRelative!.Replace('/', Path.DirectorySeparatorChar)));
+            string candidate = Path.GetFullPath(Path.Combine(packageRoot, relativeAsset.Replace('/', Path.DirectorySeparatorChar)));
+            return IsWithinDirectory(packageRoot, candidate) && IsWithinDirectory(Path.GetFullPath(folder), packageRoot)
+                ? candidate : null;
+        }).Where(candidate => candidate is not null && File.Exists(candidate)).Cast<string>().Distinct(StringComparer.OrdinalIgnoreCase)];
     }
+
+    private static bool IsSafeRelativeAsset(string? path) =>
+        !string.IsNullOrWhiteSpace(path) &&
+        !Path.IsPathFullyQualified(path) &&
+        !path.Contains('\\', StringComparison.Ordinal) &&
+        !path.Split('/').Any(segment => segment is "" or "." or ".." || segment.Contains(':', StringComparison.Ordinal));
+
+    private static bool IsWithinDirectory(string directory, string path) =>
+        path.StartsWith(Path.TrimEndingDirectorySeparator(directory) + Path.DirectorySeparatorChar,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     private static bool IsImplementation(string path)
     {

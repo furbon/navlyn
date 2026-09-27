@@ -81,4 +81,29 @@ public sealed class SymbolInfoResolverComponentTests(ResolverComponentTestFixtur
         Assert.Equal("string", resolution.Lambda.ReturnType!.Name);
         Assert.Equal("input", Assert.Single(resolution.Lambda.Parameters!).Name);
     }
+
+    [Fact]
+    public async Task ResolveAsync_PrimaryConstructorParameter_ReportsConstructorAsContainer()
+    {
+        SourcePosition query = fixture.SymbolNavigationSource.Position(
+            "public sealed class PrimaryWidget(string name)",
+            "name");
+
+        SymbolInfoResolutionResult result = await new SymbolInfoResolver().ResolveAsync(
+            fixture.SymbolNavigationWorkspace.Solution,
+            fixture.SymbolNavigationSource.File,
+            query.Line,
+            query.Column,
+            project: null,
+            excludeGenerated: true,
+            CancellationToken.None);
+
+        SymbolInfoResolution resolution = ResolverAssert.NoError(result.Resolution, result.Error);
+        Assert.Equal("name", resolution.Symbol.Name);
+        Assert.Equal("Parameter", resolution.Symbol.Kind);
+        Assert.Equal("Method", resolution.ContainingSymbol?.Kind);
+        Assert.True(resolution.ContainingSymbol?.Facts.IsConstructor);
+        Assert.Contains("PrimaryWidget(string)", resolution.ContainingSymbol?.Facts.DisplayName);
+        Assert.Equal("tests/fixtures/SymbolNavigationFixture/FixtureCode.cs", resolution.ContainingSymbol?.Path);
+    }
 }

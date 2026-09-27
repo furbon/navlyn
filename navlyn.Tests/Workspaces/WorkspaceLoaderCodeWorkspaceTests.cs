@@ -80,6 +80,38 @@ public sealed class WorkspaceLoaderCodeWorkspaceTests
     }
 
     [Fact]
+    public async Task LoadAsync_UnavailableGlobalJsonSdk_FailsBeforeMsbuildWithRepairHint()
+    {
+        using TemporaryDirectory temp = TemporaryDirectory.Create();
+        string projectPath = Path.Combine(temp.Path, "MissingSdk.csproj");
+        File.WriteAllText(projectPath, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+        File.WriteAllText(Path.Combine(temp.Path, "global.json"), """
+            { "sdk": { "version": "9999.0.100", "rollForward": "disable" } }
+            """);
+
+        WorkspaceLoadResult result = await new WorkspaceLoader().LoadAsync(new FileInfo(projectPath), CancellationToken.None);
+
+        Assert.NotNull(result.Error);
+        Assert.Equal(DiagnosticIds.MSBuildRegistrationFailed, result.Error.DiagnosticId);
+        Assert.Contains("Install the requested SDK or update global.json", result.Error.Message);
+        Assert.DoesNotContain(temp.Path, result.Error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TryResolveAutoWorkspace_MissingDirectory_ExplainsNextActionWithoutPath()
+    {
+        using TemporaryDirectory temp = TemporaryDirectory.Create();
+        string missingDirectory = Path.Combine(temp.Path, "missing");
+
+        bool resolved = WorkspaceLoader.TryResolveAutoWorkspace(missingDirectory, out _, out string? error);
+
+        Assert.False(resolved);
+        Assert.NotNull(error);
+        Assert.Contains("Check --working-directory and retry", error);
+        Assert.DoesNotContain(temp.Path, error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task LoadAsync_CodeWorkspaceWithOutsideFolder_AllowsAndWarns()
     {
         string repoRoot = FindRepositoryRoot();

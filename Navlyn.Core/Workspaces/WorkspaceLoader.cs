@@ -56,6 +56,14 @@ internal sealed class WorkspaceLoader
                 ExitCodes.UsageError);
         }
 
+        if (HasGlobalJson(workspacePath) && !CanResolveWorkspaceSdk(workspacePath))
+        {
+            return WorkspaceLoadResult.Failed(
+                DiagnosticIds.MSBuildRegistrationFailed,
+                "A compatible .NET SDK is unavailable for this workspace's global.json. Install the requested SDK or update global.json to an installed version.",
+                ExitCodes.Failure);
+        }
+
         try
         {
             using IDisposable? timing = options.Timing?.Measure("workspace.msbuild-registration");
@@ -147,6 +155,54 @@ internal sealed class WorkspaceLoader
         }
     }
 
+    private static bool HasGlobalJson(string workspacePath)
+    {
+        DirectoryInfo? directory = new(Path.GetDirectoryName(workspacePath)!);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "global.json")))
+            {
+                return true;
+            }
+
+            directory = directory.Parent;
+        }
+
+        return false;
+    }
+
+    private static bool CanResolveWorkspaceSdk(string workspacePath)
+    {
+        try
+        {
+            System.Diagnostics.ProcessStartInfo startInfo = new()
+            {
+                FileName = "dotnet",
+                WorkingDirectory = Path.GetDirectoryName(workspacePath)!,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+            startInfo.ArgumentList.Add("--version");
+
+            using System.Diagnostics.Process process = System.Diagnostics.Process.Start(startInfo)!;
+            Task<string> stdout = process.StandardOutput.ReadToEndAsync();
+            Task<string> stderr = process.StandardError.ReadToEndAsync();
+            if (!process.WaitForExit(5000))
+            {
+                process.Kill(entireProcessTree: true);
+                return false;
+            }
+
+            Task.WaitAll(stdout, stderr);
+            return process.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public static bool TryResolveAutoWorkspace(
         string searchDirectory,
         out string workspace,
@@ -156,7 +212,7 @@ internal sealed class WorkspaceLoader
         string fullSearchDirectory = Path.GetFullPath(searchDirectory);
         if (!Directory.Exists(fullSearchDirectory))
         {
-            error = $"--workspace auto search directory does not exist: {fullSearchDirectory}.";
+            error = "--workspace auto search directory does not exist. Check --working-directory and retry.";
             return false;
         }
 
@@ -166,7 +222,7 @@ internal sealed class WorkspaceLoader
             includeNavlynWorkspace: true);
         if (candidates.Count == 0)
         {
-            error = $"--workspace auto could not find a {SourceLanguageFacts.WorkspaceExtensionDisplay} in {fullSearchDirectory}.";
+            error = $"--workspace auto could not find a {SourceLanguageFacts.WorkspaceExtensionDisplay}. Pass --workspace explicitly or start from the repository root.";
             return false;
         }
 

@@ -106,7 +106,7 @@ Equivalent MCP client configuration for local development:
 }
 ```
 
-For the current preview, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
+For the 0.8.0 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
 
 ## Server Options
 
@@ -121,6 +121,8 @@ For the current preview, use the unique-output pack, package-contract, and isola
 - `--tool-profile <reader|review|edit|full>`: deprecated compatibility alias. Valid old values are accepted and ignored; Navlyn MCP now exposes one read-only tool surface. Invalid values still fail so config typos are caught. `NAVLYN_MCP_TOOL_PROFILE` is accepted with the same compatibility behavior.
 
 The server writes MCP protocol messages to stdout. Logs and diagnostics go to stderr.
+
+The in-process warm workspace tracks loaded source and project inputs, referenced assemblies and analyzers, and each loaded project's default `obj/project.assets.json` restore file before reusing a snapshot. Changed inputs retire the old generation; unreadable inputs fail closed instead of returning an old result. A restore that only changes assets at a custom location outside these tracked inputs may leave old bindings until `navlyn_workspace_refresh` is called. Run that refresh after restoring such a project.
 
 Default startup and explicit `--workspace auto` consider top-level `navlyn.workspace.json`, then `.code-workspace`, then `.slnx`, then `.sln`, then `.csproj` or `.vbproj` files. Navlyn chooses a single candidate at the best available priority and fails safely if none exist or if multiple best-priority candidates exist. In multi-solution repositories, pass `--workspace` explicitly.
 
@@ -158,7 +160,9 @@ navlyn_packages
 navlyn_batch
 ```
 
-The published `0.7.0` MCP surface predates the `0.8.0-preview.1` consolidation. The preview is unpublished. Its exact `tools/list` surface contains 25 tools (listed above). The consolidation retires these 16 names:
+### v0.7.0 to v0.8.0 tool migration
+
+The 0.7.0 MCP surface predates the 0.8.0 consolidation. The 0.8.0 `tools/list` surface contains 25 tools (listed above). The consolidation retires these 16 names:
 
 | Retired v0.7 MCP name | v0.8 canonical starting point |
 | --- | --- |
@@ -180,6 +184,7 @@ The published `0.7.0` MCP surface predates the `0.8.0-preview.1` consolidation. 
 | `navlyn_di_impact` | `navlyn_di` |
 
 These are migration starting points, not guaranteed one-to-one schema aliases; review the current tool descriptions and supply their current arguments. This is an MCP-only breaking change: advanced CLI commands remain available. `--tool-profile reader|review|edit|full` and `NAVLYN_MCP_TOOL_PROFILE` remain accepted deprecated no-op aliases for older configurations; each accepted profile exposes the same unified 25-tool list. New configurations should omit them.
+For a retained tool name, `navlyn_verify_edit` adds optional symbol query and source-position selection fields (`query`, `file`, `line`, `column`, and related selection options). Pass the `candidateId` or saved anchor from `navlyn_prepare_edit` when checking an existing selection. The `navlyn_target.mode` and `navlyn_read.externalSource` inputs are also new in 0.8.0. Compare current `tools/list` schemas when migrating saved MCP calls.
 
 When a legacy profile alias is supplied, the server starts with the same unified tool list and writes a deterministic stderr warning before serving MCP protocol messages on stdout.
 

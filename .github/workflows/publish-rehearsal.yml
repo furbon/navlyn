@@ -1,22 +1,16 @@
-name: Publish NuGet
+name: NuGet Publish Rehearsal
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
-
-concurrency:
-  group: publish-nuget
-  cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Publish NuGet packages
+  rehearse:
+    name: NuGet publish rehearsal (Ubuntu)
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    environment: nuget-production
 
     steps:
       - name: Checkout
@@ -27,7 +21,7 @@ jobs:
       - name: Verify main commit
         shell: pwsh
         run: |
-          if ($env:GITHUB_REF -ne 'refs/heads/main') { throw 'NuGet publication requires main.' }
+          if ($env:GITHUB_REF -ne 'refs/heads/main') { throw 'NuGet publish rehearsal requires main.' }
           if ((git rev-parse HEAD).Trim() -ne $env:GITHUB_SHA) { throw 'Checked-out commit differs from the dispatched commit.' }
 
       - name: Setup .NET
@@ -49,27 +43,15 @@ jobs:
         shell: pwsh
         run: ./scripts/test-package-contract.ps1 -Manifest artifacts/packages/navlyn-release-pack.json
 
-      - name: Retain package bytes before publication
+      - name: Retain rehearsal package bytes
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: navlyn-release-packages-prepush
+          name: navlyn-publish-rehearsal
           path: artifacts/packages
           if-no-files-found: warn
-          retention-days: 90
+          retention-days: 30
 
       - name: Dry-run publish
         shell: pwsh
         run: ./scripts/publish-nuget.ps1 -DryRun
-
-      - name: NuGet login
-        uses: NuGet/login@v1
-        id: nuget-login
-        with:
-          user: ${{ vars.NUGET_USER }}
-
-      - name: Publish
-        shell: pwsh
-        env:
-          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
-        run: ./scripts/publish-nuget.ps1 -Publish

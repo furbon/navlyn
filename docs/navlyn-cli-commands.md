@@ -193,6 +193,7 @@ Linked files are matched and emitted by physical repository-relative path. When 
 ## Workspace Lifecycle Commands
 
 `doctor` is the first setup command. It returns JSON on stdout even when the workspace path is missing or invalid enough to diagnose; setup failures are represented as `ok: false`, `workspace.error`, `checks`, and `nextAction`.
+When a workspace has `global.json` but its SDK cannot be resolved, workspace commands fail with `NAVLYN1201` before MSBuild starts; `doctor` keeps one valid JSON result and names the SDK repair. An invalid MCP auto-discovery working directory reports a startup error with a repair action on stderr and leaves stdout empty.
 
 ```powershell
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- doctor --workspace navlyn.slnx
@@ -1887,7 +1888,7 @@ Result shape:
 }
 ```
 
-When applicable, `symbol-info` may include `invocation`, `attribute`, `return`, and `lambda` objects. Invocation and object-creation entries include selected target facts and argument-to-parameter mapping, including target-typed `new` when Roslyn exposes the constructed type. Attribute entries distinguish attribute type from attribute constructor. Return entries distinguish declared return type from expression and converted types. Lambda entries include target type and inferred return type where Roslyn exposes them. Nullable flow-state is not reported.
+When applicable, `symbol-info` may include `invocation`, `attribute`, `return`, and `lambda` objects. Invocation and object-creation entries include selected target facts and argument-to-parameter mapping, including target-typed `new` when Roslyn exposes the constructed type. Attribute entries distinguish attribute type from attribute constructor. Return entries distinguish declared return type from expression and converted types. Lambda entries include target type and inferred return type where Roslyn exposes them. A primary-constructor parameter reports its constructor as `containingSymbol`. Nullable flow-state is not reported.
 
 ## `scope-at`
 
@@ -1981,7 +1982,7 @@ navlyn read --workspace path\to\consumer.csproj --file src\Caller.cs --line 42 -
 
 External result slices use the existing `textKind`, `path`, `startLine`, `startColumn`, `endLine`, `endColumn`, `lines`, and `truncated` fields. They also carry `origin` (`metadata` or `decompiled`) and `editable: false`; external results add `sourceOrigin` and `externalAssembly` with assembly identity, selected target framework, whether the reference or implementation PE supplied the result, and content hashes. A decompiled slice uses `navlyn-decompiled://<implementation-sha256>/<member-id-sha256>`; metadata uses `navlyn-metadata://<reference-sha256>/<member-id-sha256>`. Its line and column coordinates refer to the returned virtual member text starting at line 1. These URIs are display identifiers, not repository paths, and cannot be used as source-file or candidate-ID input. Existing `sym:v1:` candidate IDs retain their source-anchor meaning.
 
-Reconstructed C# is not the library's original source and does not prove runtime dispatch. The result distinguishes the compile-time reference PE from the selected implementation PE. NuGet `ref`/`lib` assets and direct local implementation DLL references are supported when the exact assembly and member can be matched. Framework/shared-framework metadata can be read, but a body is unavailable when Navlyn cannot identify one exact local implementation PE and runtime variant. Navlyn does not restore packages, fetch binaries, execute the dependency, or write source files for these reads; package assets must already be available locally.
+Reconstructed C# is not the library's original source and does not prove runtime dispatch. The result distinguishes the compile-time reference PE from the selected implementation PE. NuGet `ref`/`lib` assets and direct local implementation DLL references are supported when the exact assembly and member can be matched. When the restored assets declare one runtime identifier, Navlyn selects that framework/RID target; multiple runtime identifiers remain ambiguous. Package asset paths must stay inside their package directory. Framework/shared-framework metadata can be read, but a body is unavailable when Navlyn cannot identify one exact local implementation PE and runtime variant. Navlyn does not restore packages, fetch binaries, execute the dependency, or write source files for these reads; package assets must already be available locally.
 
 External reads limit each reference or implementation PE to 64 MiB, `project.assets.json` to 16 MiB, and the selected method IL to 1 MiB. Implementation selection and decompilation run in a disposable worker with a 10-second deadline.
 

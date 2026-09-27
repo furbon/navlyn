@@ -19,24 +19,24 @@ Navlyn は「`PaymentService` を直して」のような指示を、エージ�
 
 ## 3 分の最短導線
 
-現在の `0.8.0-preview.1` candidate は、公開前のローカル release rehearsal 用です。NuGet には公開されていません。Windows、PowerShell 7、.NET SDK 10 を用意し、[Windows 向けローカル feed quick start](docs/navlyn-first-10-minutes.md) に従って両ターゲットの package を作成し、`--tool-path` に隔離して install してください。install した絶対パスの `navlyn.exe` で最初の semantic fact を取得します。repository にある tool manifest もこの preview を指定しているため、対応するローカル feed を使って restore してください。
+NuGet から Navlyn 0.8.0 をインストールし、自分のリポジトリで最初の問い合わせを実行できます。[最初の 10 分](docs/navlyn-first-10-minutes.md)では、専用のツールディレクトリへのインストールと、実行ファイルの絶対パスを使った確認を説明します。リポジトリ用の [ツール manifest 例](examples/install/dotnet-tools.json)もあります。
 
-このプレビューでは、ローカルにある依存ライブラリのメソッドを `read --external-source decompiled` で調べられます。返る C# は逆コンパイルで再構成したもので、元のソースではありません。[実パッケージの評価結果](docs/evals/external-member-corpus.md)も参照してください。
+ローカルにある依存ライブラリのメソッドは `read --external-source decompiled` で調べられます。返る C# は逆コンパイルで再構成したもので、元のソースではありません。[実パッケージの評価結果](docs/evals/external-member-corpus.md)も参照してください。
 
-### 公開済みの 0.7.0
+### 0.8.0 をインストール
 
-以下のコマンドは公開済みの `0.7.0` 用です。`0.8.0-preview.1` candidate を試す場合は、上記のローカル feed quick start を使用してください。
+次のコマンドで両ツールをインストールできます。
 
 コーディングエージェント用の MCP server を install します。
 
 ```powershell
-dotnet tool install --global navlyn-mcp --version 0.7.0
+dotnet tool install --global navlyn-mcp --version 0.8.0
 ```
 
 shell や CI で JSON fact を使いたい場合は CLI も入れます。
 
 ```powershell
-dotnet tool install --global navlyn --version 0.7.0
+dotnet tool install --global navlyn --version 0.8.0
 ```
 
 次に、workspace と symbol を一つ確認します。通常の、トップレベルに `.slnx`、`.sln`、`.csproj`、`.vbproj` が一つあるリポジトリでは `auto` を使います。
@@ -62,18 +62,18 @@ navlyn review --workspace auto --profile evidence
 
 ### GitHub Copilot CLI
 
-ローカル preview を使う場合は、[Copilot CLI MCP 設定例](examples/install/copilot-cli-mcp.json)を repository ルートの `.mcp.json` または `.github/mcp.json` にコピーし、command を install 済み `navlyn-mcp.exe` の絶対パスに置き換えます。Copilot CLI の設定形式は `mcpServers` です。prompt session で repository MCP 設定を有効にするには、起動前に PowerShell で次を設定します。
+[Copilot CLI MCP 設定例](examples/install/copilot-cli-mcp.json)をリポジトリルートの `.mcp.json` または `.github/mcp.json` にコピーし、`command` にインストール済み `navlyn-mcp` の絶対パスを指定します。Copilot CLI の設定形式は `mcpServers` です。リポジトリの MCP 設定を有効にするには、起動前に PowerShell で次を設定します。
 
 ```powershell
 $env:GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP = 'true'
 copilot
 ```
 
-Windows 上の Copilot CLI `1.0.88` で、ローカル install した preview server の起動と `navlyn_target` の semantic call を明示的な追加設定で確認しました。この結果は当該 CLI/package の組み合わせに限られ、Codex skill が Copilot で使えることを示しません。現在の project config の opt-in 条件は公式の [Copilot CLI MCP guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers) を参照してください。
+Windows の Copilot CLI `1.0.88` から、0.8.0 の `navlyn-mcp` に対する `navlyn_target` 呼び出しと結果を確認しました。クライアントごとの確認範囲は [設定ガイド](docs/navlyn-client-setup.md)、リポジトリ設定の条件は公式の [Copilot CLI MCP guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers)を参照してください。
 
 ### GitHub Copilot in VS Code
 
-リポジトリのルートに `.vscode/mcp.json` を作成します。ローカル preview では、`navlyn-mcp` を install 済み実行ファイルの絶対パスに置き換えます。
+リポジトリのルートに `.vscode/mcp.json` を作成します。VS Code の PATH に実行ファイルがない場合は、`navlyn-mcp` を絶対パスに置き換えます。
 
 ```json
 {
@@ -87,11 +87,11 @@ Windows 上の Copilot CLI `1.0.88` で、ローカル install した preview se
 }
 ```
 
-VS Code は `.vscode/mcp.json` と `servers` 形式を使います。これは設定方法を記載したもので、この rehearsal では VS Code の動作確認はしていません。詳細は公式の [VS Code MCP guide](https://code.visualstudio.com/docs/agent-customization/mcp-servers) を参照してください。
+VS Code は `.vscode/mcp.json` と `servers` 形式を使います。Windows の VS Code 1.139.1 Copilot Chat から、インストールした 0.8.0 の `navlyn_target` を呼び出し、このリポジトリの型が返ることを確認しました。詳細は公式の [VS Code MCP guide](https://code.visualstudio.com/docs/agent-customization/mcp-servers) を参照してください。
 
 ### Codex
 
-公開済みの global install では、リポジトリのルートで次を実行します。ローカル preview では [quick start](docs/navlyn-first-10-minutes.md#mcp-client-setup) の絶対パスを使用します。
+グローバルインストールの場合は、リポジトリのルートで次を実行します。専用ディレクトリにインストールした場合は [最初の 10 分](docs/navlyn-first-10-minutes.md#mcp-client-setup) の絶対パスを使います。
 
 ```powershell
 codex mcp add navlyn -- navlyn-mcp
