@@ -15,18 +15,18 @@ internal static partial class ProjectContextFacts
             return targetFramework;
         }
 
+        string? fromSymbols = null;
         if (project.ParseOptions is CSharpParseOptions parseOptions)
         {
-            return parseOptions.PreprocessorSymbolNames
+            fromSymbols = parseOptions.PreprocessorSymbolNames
                 .Select(GetTargetFrameworkFromPreprocessorSymbol)
                 .Where(value => value is not null)
                 .OrderBy(value => value, StringComparer.Ordinal)
                 .FirstOrDefault();
         }
-
-        if (project.ParseOptions is VisualBasicParseOptions visualBasicParseOptions)
+        else if (project.ParseOptions is VisualBasicParseOptions visualBasicParseOptions)
         {
-            return visualBasicParseOptions.PreprocessorSymbols
+            fromSymbols = visualBasicParseOptions.PreprocessorSymbols
                 .Select(symbol => symbol.Key)
                 .Select(GetTargetFrameworkFromPreprocessorSymbol)
                 .Where(value => value is not null)
@@ -34,7 +34,7 @@ internal static partial class ProjectContextFacts
                 .FirstOrDefault();
         }
 
-        return null;
+        return fromSymbols ?? GetTargetFrameworkFromOutputPath(project.OutputFilePath);
     }
 
     public static string? GetLanguageVersion(Project project)
@@ -64,6 +64,23 @@ internal static partial class ProjectContextFacts
     {
         Match match = TargetFrameworkProjectNameRegex().Match(projectName);
         return match.Success ? match.Groups["tfm"].Value : null;
+    }
+
+    private static string? GetTargetFrameworkFromOutputPath(string? outputFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(outputFilePath))
+        {
+            return null;
+        }
+
+        string? directory = Path.GetDirectoryName(outputFilePath);
+        if (directory is null)
+        {
+            return null;
+        }
+
+        string finalDirectory = Path.GetFileName(Path.TrimEndingDirectorySeparator(directory));
+        return OutputTargetFrameworkRegex().IsMatch(finalDirectory) ? finalDirectory : null;
     }
 
     private static string? GetTargetFrameworkFromPreprocessorSymbol(string symbol)
@@ -98,6 +115,9 @@ internal static partial class ProjectContextFacts
 
     [GeneratedRegex(@"\((?<tfm>net[^)]+)\)$", RegexOptions.CultureInvariant)]
     private static partial Regex TargetFrameworkProjectNameRegex();
+
+    [GeneratedRegex(@"^net(?:standard|coreapp)?\d+(?:\.\d+)*(?:-[A-Za-z0-9][A-Za-z0-9.-]*)?$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex OutputTargetFrameworkRegex();
 
     [GeneratedRegex(@"^NET(?<major>\d+)_(?<minor>\d+)$", RegexOptions.CultureInvariant)]
     private static partial Regex NetTargetFrameworkSymbolRegex();
