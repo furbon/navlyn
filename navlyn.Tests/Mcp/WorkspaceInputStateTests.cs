@@ -157,6 +157,36 @@ public sealed class WorkspaceInputStateTests
         }
     }
 
+    [Fact]
+    public void Capture_AllowsInputsBelowSymlinkedAncestorOutsideSweepRoot()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using TemporaryDirectory directory = TemporaryDirectory.Create();
+        string realRoot = Path.Combine(directory.Path, "real");
+        string projectRoot = Path.Combine(realRoot, "project");
+        Directory.CreateDirectory(projectRoot);
+        string link = Path.Combine(directory.Path, "link");
+        Directory.CreateSymbolicLink(link, realRoot);
+        try
+        {
+            string linkedRoot = Path.Combine(link, "project");
+            string source = Write(linkedRoot, "Program.cs", "class Program {}\n");
+
+            WorkspaceInputState state = Capture(linkedRoot);
+
+            Assert.True(state.IsComplete, string.Join("\n", state.Errors));
+            Assert.Contains(source, state.DiscoveredPaths, PathComparer);
+        }
+        finally
+        {
+            Directory.Delete(link);
+        }
+    }
+
     private static WorkspaceInputState Capture(string root) => WorkspaceInputState.Capture(root, [], []);
 
     private static string Write(string directory, string name, string content)

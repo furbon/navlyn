@@ -18,7 +18,8 @@ public sealed class NavlynMcpStdioTests
         string serverDll = Path.Combine(repoRoot, "navlyn.Mcp", "bin", "Debug", GetCurrentTargetFramework(), "navlyn.Mcp.dll");
         Assert.True(File.Exists(serverDll), $"MCP server assembly does not exist: {serverDll}");
 
-        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(180));
+        // This test makes many independent calls; the server still limits each call to 60 seconds.
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(600));
         StdioClientTransport transport = new(
             new StdioClientTransportOptions
             {

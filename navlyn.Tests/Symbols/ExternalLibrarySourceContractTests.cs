@@ -1,6 +1,8 @@
 ﻿using System.Diagnostics;
 using System.Text.Json;
+using Microsoft.CodeAnalysis;
 using Navlyn.Tests.TestSupport;
+using Navlyn.Workspaces;
 
 namespace Navlyn.Tests.Symbols;
 
@@ -83,7 +85,19 @@ public sealed class ExternalLibrarySourceContractTests
         ExternalLibrarySourceFixture.CliResult response = await fixture.RunReadAsync(
             fixture.VisualBasicProject, fixture.VisualBasicSource, 6, 40, "decompiled");
 
-        Assert.True(response.ExitCode == 0, response.Stderr);
+        if (response.ExitCode != 0)
+        {
+            WorkspaceLoadResult loaded = await new WorkspaceLoader().LoadAsync(new FileInfo(fixture.VisualBasicProject), CancellationToken.None);
+            using LoadedWorkspace? workspace = loaded.Workspace;
+            Project? project = workspace?.Solution.Projects.SingleOrDefault();
+            Compilation? compilation = project is null ? null : await project.GetCompilationAsync();
+            string references = compilation is null ? "no compilation" : string.Join("; ", compilation.References
+                .OfType<PortableExecutableReference>()
+                .Where(reference => reference.FilePath?.Contains("ExternalFixture", StringComparison.OrdinalIgnoreCase) == true)
+                .Select(reference => $"{reference.FilePath} => {compilation.GetAssemblyOrModuleSymbol(reference)}"));
+            Assert.Fail($"{response.Stderr} Workspace error: {loaded.Error?.Message}; references: {references}");
+        }
+
         Assert.Contains("FIXTURE_NET10_INT_OVERLOAD_BODY", SliceText(response.Stdout), StringComparison.Ordinal);
     }
 

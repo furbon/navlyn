@@ -110,13 +110,10 @@ internal sealed class WorkspaceInputState
             return;
         }
 
-        for (DirectoryInfo? ancestor = new(root); ancestor is not null; ancestor = ancestor.Parent)
+        if (IsReparsePoint(new DirectoryInfo(root)))
         {
-            if (IsReparsePoint(ancestor))
-            {
-                inventoryErrors.Add($"{Normalize(ancestor.FullName)}: reparse directory cannot be inventoried safely");
-                return;
-            }
+            inventoryErrors.Add($"{Normalize(root)}: reparse directory cannot be inventoried safely");
+            return;
         }
 
         Stack<string> pending = new();
