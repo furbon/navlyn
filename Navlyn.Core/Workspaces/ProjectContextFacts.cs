@@ -1,4 +1,5 @@
 ﻿using System.Text.RegularExpressions;
+using System.Text.Json;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.VisualBasic;
@@ -7,6 +8,8 @@ namespace Navlyn.Workspaces;
 
 internal static partial class ProjectContextFacts
 {
+    private const long MaxAssetsBytes = 16L * 1024 * 1024;
+
     public static string? GetTargetFramework(Project project)
     {
         string? targetFramework = GetTargetFrameworkFromProjectName(project.Name);
@@ -15,18 +18,18 @@ internal static partial class ProjectContextFacts
             return targetFramework;
         }
 
+        string? fromSymbols = null;
         if (project.ParseOptions is CSharpParseOptions parseOptions)
         {
-            return parseOptions.PreprocessorSymbolNames
+            fromSymbols = parseOptions.PreprocessorSymbolNames
                 .Select(GetTargetFrameworkFromPreprocessorSymbol)
                 .Where(value => value is not null)
                 .OrderBy(value => value, StringComparer.Ordinal)
                 .FirstOrDefault();
         }
-
-        if (project.ParseOptions is VisualBasicParseOptions visualBasicParseOptions)
+        else if (project.ParseOptions is VisualBasicParseOptions visualBasicParseOptions)
         {
-            return visualBasicParseOptions.PreprocessorSymbols
+            fromSymbols = visualBasicParseOptions.PreprocessorSymbols
                 .Select(symbol => symbol.Key)
                 .Select(GetTargetFrameworkFromPreprocessorSymbol)
                 .Where(value => value is not null)
@@ -34,7 +37,7 @@ internal static partial class ProjectContextFacts
                 .FirstOrDefault();
         }
 
-        return null;
+        return fromSymbols ?? GetTargetFrameworkFromOutputPath(project);
     }
 
     public static string? GetLanguageVersion(Project project)
@@ -64,6 +67,56 @@ internal static partial class ProjectContextFacts
     {
         Match match = TargetFrameworkProjectNameRegex().Match(projectName);
         return match.Success ? match.Groups["tfm"].Value : null;
+    }
+
+    private static string? GetTargetFrameworkFromOutputPath(Project project)
+    {
+        string? outputFilePath = project.OutputFilePath;
+        if (string.IsNullOrWhiteSpace(outputFilePath))
+        {
+            return null;
+        }
+
+        string? directory = Path.GetDirectoryName(outputFilePath);
+        if (directory is null)
+        {
+            return null;
+        }
+
+        string finalDirectory = Path.GetFileName(Path.TrimEndingDirectorySeparator(directory));
+        if (!OutputTargetFrameworkRegex().IsMatch(finalDirectory) || project.FilePath is null)
+        {
+            return null;
+        }
+
+        string assetsPath = Path.Combine(Path.GetDirectoryName(project.FilePath)!, "obj", "project.assets.json");
+        try
+        {
+            using FileStream stream = new(assetsPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            if (stream.Length == 0 || stream.Length > MaxAssetsBytes)
+            {
+                return null;
+            }
+
+            byte[] bytes = new byte[checked((int)stream.Length)];
+            stream.ReadExactly(bytes);
+            using JsonDocument assets = JsonDocument.Parse(bytes);
+            if (!assets.RootElement.TryGetProperty("targets", out JsonElement targets) || targets.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            string[] frameworks = targets.EnumerateObject()
+                .Select(target => target.Name.Split('/')[0])
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            return frameworks.Length == 1 && string.Equals(frameworks[0], finalDirectory, StringComparison.OrdinalIgnoreCase)
+                ? frameworks[0] : null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
+        {
+            return null;
+        }
     }
 
     private static string? GetTargetFrameworkFromPreprocessorSymbol(string symbol)
@@ -98,6 +151,9 @@ internal static partial class ProjectContextFacts
 
     [GeneratedRegex(@"\((?<tfm>net[^)]+)\)$", RegexOptions.CultureInvariant)]
     private static partial Regex TargetFrameworkProjectNameRegex();
+
+    [GeneratedRegex(@"^net(?:standard|coreapp)?\d+(?:\.\d+)*(?:-[A-Za-z0-9][A-Za-z0-9.-]*)?$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex OutputTargetFrameworkRegex();
 
     [GeneratedRegex(@"^NET(?<major>\d+)_(?<minor>\d+)$", RegexOptions.CultureInvariant)]
     private static partial Regex NetTargetFrameworkSymbolRegex();

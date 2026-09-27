@@ -1,57 +1,49 @@
 # Navlyn Tool-Selection Eval
 
-This eval checks whether an agent chooses the smallest useful Navlyn surface for a request. It is a tool-choice policy eval, not a model benchmark.
+This evaluation measures whether an agent chooses the smallest useful Navlyn MCP tool or an ordinary repository action, passes the right arguments, uses returned evidence, and stops at the right time. It is a routing contract, not a model benchmark or a claim that static analysis proves runtime behavior.
 
-For executable wrong-symbol avoidance proof, see `docs/evals/wrong-symbol-avoidance.md`. For pre-edit anchors and post-edit changed-symbol verification, see `docs/evals/agent-evidence.md`. For fresh public-repository adoption evidence, see `docs/evals/external-adoption.md`.
-
-The machine-readable scenario file is `docs/evals/tool-selection.scenarios.json`. Run the baseline scorer from the repository root:
+Run the checked-in v2 baseline from the repository root:
 
 ```powershell
 ./scripts/test-tool-selection-eval.ps1 -UseBaselineTraces
-dotnet test navlyn.slnx --no-build --filter ToolSelection
+dotnet test navlyn.Tests/navlyn.Tests.csproj --no-restore --framework net10.0 --filter FullyQualifiedName~ToolSelectionEvalTests
 ```
 
-To score an actual agent trace, write a JSON file with `traces` entries containing `scenarioId`, `chosenSequence`, `stopCondition`, `stdoutJsonValid`, and `stderrClean`, then pass `-TraceFile`.
+To score an observed run, provide a trace file with schemaVersion `navlyn.tool-selection-eval.trace.v2` and one trace per scenario id. Each call records an explicit `kind` (`mcp` or `ordinary`), exact invoked name, actual arguments, and selected result fields. MCP names must be from the current 25-tool surface; ordinary actions are `file-read`, `rg`, `git`, `build`, or `test`. A CLI logical command is not an MCP tool name. Include skill activation, stop reason, semantic checks, claims, availability/freshness environment, stdout character count, latency, `outputValid`, and stderr cleanliness. `outputValid` means valid MCP JSON for MCP calls, or the expected captured output format for the named ordinary action; it does not mean every ordinary output is JSON. MCP selected-result evidence is nested under the actual envelope key, for example `result.command` for success or `error.message` for a reported failure; ordinary evidence names the selected action output, such as `stdout` or `exitCode`. The baseline traces are synthetic contract fixtures, not captured product telemetry.
 
-The v0.7.0 set has 21 executable scenarios covering the canonical agent workflow, text-only no-Navlyn prompts, overloads, partial classes, multi-target context, generated-file avoidance, stale candidate handling, route and DI advanced facts, output-budget partial results, and public API release checks.
+## Scoring contract
 
-## Scoring
+Every scenario scores eleven independent criteria: expected skill activation, first action kind/name, an exact accepted action sequence, avoidance of forbidden tools/sequences, required argument values, evidence-backed stop, semantic correctness checks, call/output/latency budgets, availability and freshness handling, unsupported-claim avoidance, and stdout/stderr behavior. Full score requires every criterion.
 
-Mark each scenario:
+A stop reason alone is insufficient. It must be accepted by that scenario and every typed predicate in one evidence alternative must match the selected result fields of the specified call. Predicate paths exactly cover the alternative's `requiredFields`; supported checks are exact deep equality, integer minimum, array minimum cardinality, nonblank string, and required/minimum object properties. Predicate types are limited to string, number, boolean, array, and object; unknown keys, mismatched operators, and command-only alternatives are invalid. This preserves explicit `false` and `0` evidence, while requiring nonempty source slices and candidate lists. For example, missing-workspace accepts `result.workspace.loaded == false`; generated-code avoidance accepts candidate count zero only with the accompanying no-candidates state.
 
-- `pass`: the chosen tools match the expected first step and stop condition.
-- `partial`: the tool is useful but broader than needed.
-- `fail`: the agent uses Navlyn when text/file reading is enough, skips Navlyn when C# or Visual Basic semantic identity matters, or runs broad workflows as a checklist.
+External v2 traces use strict JSON types: booleans remain booleans, measurements are nonnegative integer JSON numbers, calls/claims are arrays, and arguments, selected result fields, semantic checks, and environment are objects. Scenario-required semantic checks must be exactly boolean `true`; duplicate scenario IDs and numeric strings are rejected. `result.command` alone is not evidence that the requested fact was obtained: source reads should use fields such as `result.symbol.path` or `result.slices`, while a caller lookup should use `result.callers`. Unsupported claims are checked case-insensitively against scenario-declared fragments such as `runtime behavior` or `security guarantee`. Argument values, including arrays and objects, are compared structurally rather than as strings.
 
-Record the prompt, chosen tool sequence, stop condition, and any stdout/stderr issues.
+The scenario inventory covers all required routing classes:
 
-When evaluating MCP, assume the unified read-only tool surface with canonical tools first. `navlyn_target`, `navlyn_read`, `navlyn_prepare_edit`, `navlyn_verify_edit`, and `navlyn_review` are the primary workflow tools. Broad review, tests, public API, DI, context-pack, and batch tools are available but should not be chosen unless the prompt and returned evidence make them relevant.
+| Task class | Typical first action |
+| --- | --- |
+| Ambiguous symbol identity, ambiguity | `navlyn_target` list |
+| Exact position, overload, multi-project | `navlyn_target` or anchored `navlyn_read` |
+| Partial declaration, pre-edit | `navlyn_prepare_edit` |
+| References/callers, partial result | `navlyn_navigate` |
+| Known-file outline | `navlyn_file_outline` |
+| Multi-target, stale workspace | `navlyn_workspace_summary` / `navlyn_workspace_status` |
+| Linked file | `navlyn_read` |
+| Generated-code avoidance | `navlyn_target` with exclusion |
+| Post-edit, stale candidate | `navlyn_verify_edit` |
+| Actual diff review | `navlyn_review` |
+| Diagnostics, DI, routes, options, messages, EF, packages | Focused domain tool |
+| Context escalation | `navlyn_context_pack` |
+| Two-fact batch | `navlyn_batch` |
+| Comments, strings, Markdown, generated-artifact text, arbitrary text search | `rg` |
+| Configuration, simple file read | `file-read` |
+| Build/test execution | `build` or `test` |
+| Missing workspace | `navlyn_doctor` |
+| Unavailable MCP, explicit no-Navlyn override | Explicitly allowed ordinary fallback |
 
-Canonical scenarios score the canonical names as the correct first step. Older advanced aliases such as `navlyn_resolve_target`, `navlyn_symbol_source`, `navlyn_edit_preflight`, `navlyn_post_edit_guard`, and `navlyn_review_diff` remain supported compatibility tools, but a new agent trace should not receive full tool-selection credit for choosing them when the canonical tool answers the same question.
+Other scenarios cover stale identity and task-boundary cases. Each machine-readable row includes fixture and workspace, activation expectation, first action, accepted and forbidden sequences, required arguments, stop evidence, semantic checks, maximum calls, output and latency budgets, unsupported claims, availability/freshness setup, and a baseline trace with actual arguments and selected result fields.
 
-## Scenarios
+## Interpreting results
 
-| Scenario group | Expected First Step | Stop Condition | Avoid |
-| --- | --- | --- | --- |
-| Canonical symbol target/read/edit/review | `navlyn_target`, `navlyn_read`, `navlyn_prepare_edit`, `navlyn_verify_edit`, or `navlyn_review` matching the task | Candidate id, bounded source, pre-edit envelope, guard result, or review facts | Advanced tools as a checklist |
-| Text-only prompts | `rg` or file read | Text match or Markdown section found | Any Navlyn command |
-| Ambiguous/overloaded/partial/multi-target prompts | `navlyn_target` or `navlyn_prepare_edit` with narrowing fields | Ambiguity reported, selected project/overload, or partial context | Reading/editing from an ambiguous name alone |
-| Generated/stale/output-budget prompts | `navlyn_target`, `navlyn_verify_edit`, or scoped edge facts | Generated exclusion/warning, stale or guard risk, partial result with rerun hint | Silent broad search or source dump |
-| Domain/release prompts | `route-map`, `navlyn_di_impact`, or `navlyn_public_api_diff` | Domain-specific source facts with limitations | Runtime/security/API claims outside static evidence |
-
-## Manual Trace Template
-
-```text
-Date:
-Navlyn version:
-Repository/workspace:
-MCP surface, if any:
-Prompt:
-Chosen sequence:
-Expected sequence:
-Result: pass | partial | fail
-Reason:
-Follow-up change:
-```
-
-Use local performance reports for latency/output-size observations. Use this eval for tool choice and stopping behavior.
+A failed criterion is actionable evidence about the routing contract; inspect the per-scenario `criteria` object rather than relying only on the aggregate score. A high score does not establish semantic truth or application behavior: it only establishes that the trace followed the declared route and that its recorded evidence satisfies the contract. Refresh workspaces when freshness is stale or unknown, state unavailability honestly, and do not claim runtime, security, delivery, or execution facts that the selected static result does not contain.

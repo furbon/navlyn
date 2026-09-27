@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "tool": "navlyn_find_symbol",
+  "tool": "navlyn_target",
   "sourceCommand": {
     "command": "find",
     "arguments": [

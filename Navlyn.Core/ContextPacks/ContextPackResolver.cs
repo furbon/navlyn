@@ -780,16 +780,16 @@ internal sealed class ContextPackResolver
         return
         [
             new ContextPackNextAction(
-                "about",
+                "symbol-source",
                 workspace,
                 selected.Name,
                 null,
                 null,
                 null,
-                "Inspect full semantic summary for the selected symbol.",
+                "Read the bounded declaration source for the selected symbol.",
                 CandidateId: selected.CandidateId,
-                McpTool: "navlyn_about_symbol",
-                Arguments: CreateMcpArguments(("candidateId", selected.CandidateId))),
+                McpTool: "navlyn_read",
+                Arguments: CreateMcpArguments(("candidateId", selected.CandidateId), ("view", "declaration"))),
             new ContextPackNextAction(
                 "impact",
                 workspace,
@@ -810,7 +810,7 @@ internal sealed class ContextPackResolver
                 null,
                 "Inspect references omitted from the context pack.",
                 CandidateId: selected.CandidateId,
-                McpTool: "navlyn_exact_navigation",
+                McpTool: "navlyn_navigate",
                 Arguments: CreateMcpArguments(("operation", "references"), ("candidateId", selected.CandidateId)))
         ];
     }
@@ -828,16 +828,16 @@ internal sealed class ContextPackResolver
     private static ContextPackNextAction CreateQueryOmittedNextAction(string workspace, FuzzySymbolCandidate selected)
     {
         return new ContextPackNextAction(
-            "about",
+            "symbol-source",
             workspace,
             selected.Name,
             null,
             null,
             null,
-            "Inspect context material omitted from the context pack budget.",
+            "Read the bounded declaration source for the selected symbol.",
             CandidateId: selected.CandidateId,
-            McpTool: "navlyn_about_symbol",
-            Arguments: CreateMcpArguments(("candidateId", selected.CandidateId)));
+            McpTool: "navlyn_read",
+            Arguments: CreateMcpArguments(("candidateId", selected.CandidateId), ("view", "declaration")));
     }
 
     private static ContextPackNextAction CreateQueryOmittedNextAction(string workspace, string query)

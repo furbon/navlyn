@@ -30,8 +30,8 @@ Stop once the returned facts answer the question. Escalate only when the next fa
 | Situation | Minimal Navlyn Call | Escalate To |
 | --- | --- | --- |
 | Approximate symbol name | `target` via CLI or `navlyn_target` via MCP | `find` if candidates are ambiguous or the user needs alternatives |
-| Known symbol identity | `read` via CLI or `navlyn_read` via MCP; `navlyn_symbol_edges` when relationships are needed | `impact` for edit risk, `context-pack` for a reading queue |
-| Single-file review | `outline` via CLI or `navlyn_file_outline` / `navlyn_inspect_file` via MCP when semantic structure matters | `context-pack` only if the file does not contain enough context |
+| Known symbol identity | `read` via CLI or `navlyn_read` via MCP; `navlyn_navigate` when one relationship is needed | `impact` for edit risk, `context-pack` for a reading queue |
+| Single-file review | `outline` via CLI or `navlyn_file_outline` via MCP when semantic structure matters | `context-pack` only if the file does not contain enough context |
 | Agent edit preflight | `prepare-edit` via CLI or MCP `navlyn_prepare_edit` | `change-intent-pack`, `agent-handoff-pack`, or `confidence-ledger` when the work is handed off or audited |
 | Post-edit wrong-symbol check | `verify-edit` with the pre-edit `candidateId` or saved preflight | `wrong-symbol-guard` when the intended target should be re-resolved from query/source position |
 | Real Git diff review | `review` via CLI or `navlyn_review` via MCP | `tests-for-diff`, `public-api-diff`, `review-pack`, or `context-pack --diff` only when relevant |
@@ -93,7 +93,7 @@ MCP clients can use the same stop rules with dedicated file-first tools:
 ```text
 navlyn_file_outline(file: "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs")
 navlyn_read(candidateId: "sym:v1:...", view: "declaration")
-navlyn_symbol_edges(operation: "references", candidateId: "sym:v1:...", usageKinds: ["invoke"], groupBy: ["file"], limit: 50)
+navlyn_navigate(operation: "references", candidateId: "sym:v1:...", usageKinds: ["invoke"], groupBy: ["file"], limit: 50)
 ```
 
 ## Bounded Context Before Editing
@@ -246,16 +246,16 @@ Minimal MCP flow for a symbol investigation:
 navlyn_doctor()
 navlyn_target(query: "CheckCommand", assumeKind: "NamedType")
 navlyn_read(candidateId: "sym:v1:...", view: "declaration")
-navlyn_symbol_edges(operation: "references", candidateId: "sym:v1:...", usageKinds: ["invoke", "construct"], groupBy: ["file", "usage-kind"], limit: 50)
-navlyn_about_symbol(candidateId: "sym:v1:...")
+navlyn_navigate(operation: "references", candidateId: "sym:v1:...", usageKinds: ["invoke", "construct"], groupBy: ["file", "usage-kind"], limit: 50)
+navlyn_navigate(operation: "symbol_info", candidateId: "sym:v1:...")
 ```
 
 Escalate from that flow only when needed:
 
 ```text
 navlyn_workspace_summary(profile: "compact") // project/package/test context is needed
-navlyn_related_files(candidateId: "sym:v1:...", limit: 30) // file map is needed
-navlyn_context_pack(candidateId: "sym:v1:...", goal: "modify", changeKind: "signature", profile: "compact") // bounded reading queue is needed
+navlyn_context_pack(candidateId: "sym:v1:...", goal: "understand", profile: "compact") // file-first reading map is needed
+navlyn_context_pack(candidateId: "sym:v1:...", goal: "modify", changeKind: "signature", profile: "compact") // bounded edit reading queue is needed
 ```
 
 MCP flow for a non-trivial edit:

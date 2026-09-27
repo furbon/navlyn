@@ -25,7 +25,7 @@ Use `navlyn-mcp` when an agent needs a semantic C# or Visual Basic fact that tex
 | "Which symbol did the user mean?" | `navlyn_target` |
 | "What is in this C# or Visual Basic file?" | `navlyn_file_outline` |
 | "Show the exact source for this symbol." | `navlyn_read` |
-| "Who references or calls this selected symbol?" | `navlyn_symbol_edges` |
+| "Who references or calls this selected symbol?" | `navlyn_navigate` |
 | "What workspace/project context matters?" | `navlyn_workspace_summary` |
 | "What evidence should an agent gather before editing?" | `navlyn_prepare_edit` |
 | "Did the edit hit the intended symbol?" | `navlyn_verify_edit` |
@@ -106,11 +106,7 @@ Equivalent MCP client configuration for local development:
 }
 ```
 
-Local package smoke testing uses the standard .NET tool flow:
-
-```powershell
-./scripts/test-package-install.ps1
-```
+For the 0.8.0 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
 
 ## Server Options
 
@@ -126,20 +122,71 @@ Local package smoke testing uses the standard .NET tool flow:
 
 The server writes MCP protocol messages to stdout. Logs and diagnostics go to stderr.
 
+The in-process warm workspace tracks loaded source and project inputs, referenced assemblies and analyzers, and each loaded project's default `obj/project.assets.json` restore file before reusing a snapshot. Changed inputs retire the old generation; unreadable inputs fail closed instead of returning an old result. A restore that only changes assets at a custom location outside these tracked inputs may leave old bindings until `navlyn_workspace_refresh` is called. Run that refresh after restoring such a project.
+
 Default startup and explicit `--workspace auto` consider top-level `navlyn.workspace.json`, then `.code-workspace`, then `.slnx`, then `.sln`, then `.csproj` or `.vbproj` files. Navlyn chooses a single candidate at the best available priority and fails safely if none exist or if multiple best-priority candidates exist. In multi-solution repositories, pass `--workspace` explicitly.
 
 When `navlyn.workspace.json` is passed explicitly or selected by `auto`, Navlyn applies its `primaryWorkspace`, `workspaceCandidates`, exclusion, test inclusion, root policy, allow-list, and cache-hint fields before loading the selected MSBuild workspace. When a `.code-workspace` file is passed explicitly or selected by `auto`, Navlyn reads its `folders` array and looks for `.slnx`, `.sln`, `.csproj`, or `.vbproj` candidates in each folder. It loads the single best candidate and returns `NAVLYN1106` if the VS Code workspace contains multiple best-priority candidates. Under MCP's default `repo-relative` root policy, outside-root folders return `NAVLYN1110`; use `allow-listed` or `all` only when that broader scope is intentional.
 
 ## Stable Tool Surface
 
-The tool list is stable for normal MCP startup:
+Normal MCP startup exposes exactly 25 read-only tools:
 
-| Surface | Exposed Tools | Use It For |
-| --- | --- | --- |
-| Canonical agent workflow | `navlyn_target`, `navlyn_read`, `navlyn_prepare_edit`, `navlyn_verify_edit`, `navlyn_review` | The primary first-run path for target selection, bounded reading, one-edit preparation, post-edit verification, and diff review. |
-| Advanced compatibility surface | Existing specialized Navlyn MCP tools, including workspace, exact navigation, DI, public API, related-test, context, and `navlyn_batch` tools. | Use only when the current question needs that narrower semantic fact or an optimization after the agent already knows the needed facts. |
+```text
+navlyn_target
+navlyn_read
+navlyn_file_outline
+navlyn_navigate
+navlyn_prepare_edit
+navlyn_verify_edit
+navlyn_review
+navlyn_workspace_summary
+navlyn_workspace_status
+navlyn_workspace_refresh
+navlyn_doctor
+navlyn_impact
+navlyn_context_pack
+navlyn_entrypoints
+navlyn_tests_for_symbol
+navlyn_tests_for_diff
+navlyn_diagnostics
+navlyn_di
+navlyn_public_api_diff
+navlyn_routes
+navlyn_options
+navlyn_messages
+navlyn_ef
+navlyn_packages
+navlyn_batch
+```
 
-`--tool-profile reader|review|edit|full` and `NAVLYN_MCP_TOOL_PROFILE` are deprecated no-op compatibility aliases during migration. When supplied, the server starts with the same unified tool list and writes a deterministic stderr warning before serving MCP protocol messages on stdout.
+### v0.7.0 to v0.8.0 tool migration
+
+The 0.7.0 MCP surface predates the 0.8.0 consolidation. The 0.8.0 `tools/list` surface contains 25 tools (listed above). The consolidation retires these 16 names:
+
+| Retired v0.7 MCP name | v0.8 canonical starting point |
+| --- | --- |
+| `navlyn_resolve_target` | `navlyn_target` |
+| `navlyn_find_symbol` | `navlyn_target` |
+| `navlyn_inspect_file` | `navlyn_file_outline` |
+| `navlyn_symbol_source` | `navlyn_read` |
+| `navlyn_symbol_edges` | `navlyn_navigate` |
+| `navlyn_about_symbol` | `navlyn_target`, then `navlyn_read` for selected source |
+| `navlyn_related_files` | `navlyn_navigate` or `navlyn_context_pack`, depending on the needed evidence |
+| `navlyn_exact_navigation` | `navlyn_navigate` |
+| `navlyn_review_diff` | `navlyn_review` |
+| `navlyn_edit_preflight` | `navlyn_prepare_edit` |
+| `navlyn_post_edit_guard` | `navlyn_verify_edit` |
+| `navlyn_wrong_symbol_guard` | `navlyn_verify_edit` |
+| `navlyn_change_intent_pack` | `navlyn_prepare_edit` |
+| `navlyn_agent_handoff_pack` | `navlyn_context_pack` |
+| `navlyn_confidence_ledger` | `navlyn_context_pack`; report evidence and uncertainty in the consuming workflow |
+| `navlyn_di_impact` | `navlyn_di` |
+
+These are migration starting points, not guaranteed one-to-one schema aliases; review the current tool descriptions and supply their current arguments. This is an MCP-only breaking change: advanced CLI commands remain available. `--tool-profile reader|review|edit|full` and `NAVLYN_MCP_TOOL_PROFILE` remain accepted deprecated no-op aliases for older configurations; each accepted profile exposes the same unified 25-tool list. New configurations should omit them.
+For a retained tool name, `navlyn_verify_edit` adds optional symbol query and source-position selection fields (`query`, `file`, `line`, `column`, and related selection options). Pass the `candidateId` or saved anchor from `navlyn_prepare_edit` when checking an existing selection. The `navlyn_target.mode` and `navlyn_read.externalSource` inputs are also new in 0.8.0. Compare current `tools/list` schemas when migrating saved MCP calls.
+
+When a legacy profile alias is supplied, the server starts with the same unified tool list and writes a deterministic stderr warning before serving MCP protocol messages on stdout.
 
 ## Tool Selection
 
@@ -149,41 +196,45 @@ The MCP surface is deliberately need-triggered. Prefer the specific high-level t
 | --- | --- | --- |
 | `navlyn_target` | Canonical first symbol entry from query, `candidateId`, or source position; returns one target envelope and ambiguity/fail-closed guidance | `target` |
 | `navlyn_read` | Canonical bounded source reader for one selected symbol by `candidateId` or exact source position | `read` |
+| `navlyn_file_outline` | Semantic outline of one known C# or Visual Basic file, including reusable `candidateId` values | `outline` |
+| `navlyn_navigate` | One precise definition, reference, caller, call, implementation, hierarchy, or symbol-information fact from a `candidateId` or exact source position | `definition`, `references`, `callers`, `calls`, `implementations`, `type-hierarchy`, `symbol-info` |
 | `navlyn_prepare_edit` | Canonical one-call pre-edit anchor, source, bounded context, related tests, confidence, and next guard command | `prepare-edit` |
 | `navlyn_verify_edit` | Canonical post-edit guard comparing a saved preflight anchor or `candidateId` with the current diff | `verify-edit` |
 | `navlyn_review` | Canonical changed-symbol, impact, diagnostics, related-test, and review facts for an actual Git diff | `review` |
-| `navlyn_doctor` | Setup readiness, SDK/workspace diagnostics, and copyable first commands | `doctor` |
 | `navlyn_workspace_summary` | Project, target framework, package, test relationship, or MSBuild facts when workspace context matters | `repo-graph` |
 | `navlyn_workspace_status` | Workspace snapshot, freshness, document-index size, and optional `.navlyn/cache` manifest status | `workspace-status` |
 | `navlyn_workspace_refresh` | Explicitly refresh the warm workspace snapshot and optionally clear/write the lightweight cache manifest | `workspace-refresh` |
-| `navlyn_resolve_target` | Advanced compatibility target resolver; prefer `navlyn_target` for normal first symbol entry | `resolve-target` |
-| `navlyn_find_symbol` | Broader approximate symbol candidate lists and manual disambiguation | `find` |
-| `navlyn_file_outline` | Semantic outline of one known C# or Visual Basic file, including reusable `candidateId` values | `outline` |
-| `navlyn_symbol_source` | Advanced compatibility source reader; prefer `navlyn_read` for normal bounded source | `symbol-source` |
-| `navlyn_symbol_edges` | Direct relationship edges for one selected symbol: references, callers, calls, or implementations | `references`, `callers`, `calls`, `implementations` |
-| `navlyn_inspect_file` | Compact semantic inspection of one known C# or Visual Basic file without tests, impact, diagnostics, or raw file text | `outline` |
-| `navlyn_about_symbol` | Selected-symbol definition, member outline, reference summary, shallow relations | `about` |
-| `navlyn_related_files` | File-first investigation map around a selected symbol | `related` |
+| `navlyn_doctor` | Setup readiness, SDK/workspace diagnostics, and copyable first commands | `doctor` |
 | `navlyn_impact` | Static source impact before editing or reviewing a symbol | `impact` |
+| `navlyn_context_pack` | Escalation to bounded reading material for `review`, `modify`, or `understand` workflows | `context-pack` |
 | `navlyn_entrypoints` | Static caller chains or framework-aware entrypoint discovery | `entrypoints`, `framework-entrypoints` |
-| `navlyn_exact_navigation` | Precise source navigation from a `candidateId` or exact `file`/`line`/`column` target, including reference usage filtering and grouping | `definition`, `references`, `callers`, `calls`, `implementations`, `type-hierarchy`, `symbol-info` |
 | `navlyn_tests_for_symbol` | Static related test candidates for a selected symbol when edit planning or explicit test impact needs them | `tests-for-symbol` |
 | `navlyn_tests_for_diff` | Static related test candidates for changed symbols in a Git diff when review or CI planning needs them | `tests-for-diff` |
-| `navlyn_di_impact` | Source-level DI registrations, consumers, dependencies, and risk facts for a selected type | `di-impact` |
+| `navlyn_diagnostics` | Workspace, selected-symbol, or diagnostic-pack facts | `diagnostics`, `symbol-diagnostics`, `diagnostic-pack` |
+| `navlyn_di` | Source-level DI graph, registrations, consumers, dependencies, and risk facts | `di-graph`, `where-registered`, `di-impact` |
 | `navlyn_public_api_diff` | Source-level public/protected API changes between Git refs | `public-api-diff` |
-| `navlyn_review_diff` | Advanced compatibility diff review; prefer `navlyn_review` for normal Git diff facts | `review-diff` |
-| `navlyn_context_pack` | Escalation to bounded reading material for `review`, `modify`, or `understand` workflows | `context-pack` |
-| `navlyn_edit_preflight` | Advanced compatibility pre-edit anchor; prefer `navlyn_prepare_edit` | `edit-preflight` |
-| `navlyn_post_edit_guard` | Advanced compatibility post-edit guard; prefer `navlyn_verify_edit` | `post-edit-guard` |
-| `navlyn_wrong_symbol_guard` | Re-resolve intended target intent and compare it with changed symbols | `wrong-symbol-guard` |
-| `navlyn_change_intent_pack` | Compact intent record for agent memory or CI artifacts | `change-intent-pack` |
-| `navlyn_agent_handoff_pack` | Target anchors, reading queue, trusted evidence, open risks, and next checks for handoff | `agent-handoff-pack` |
-| `navlyn_confidence_ledger` | Evidence ledger explaining what raised or lowered target confidence | `confidence-ledger` |
+| `navlyn_routes` | Static route map or route-impact evidence | `route-map`, `route-impact` |
+| `navlyn_options` | Static options/configuration graph or impact evidence | `options-graph`, `config-impact` |
+| `navlyn_messages` | Static MediatR handler or message-flow evidence | `where-handled`, `message-flow` |
+| `navlyn_ef` | Static EF Core model or entity-impact evidence | `ef-model`, `entity-impact` |
+| `navlyn_packages` | Source package usage or package-impact evidence | `package-usage`, `package-impact` |
 | `navlyn_batch` | Optimization for multiple already-needed batch-supported CLI facts in one MCP tool call | `batch` |
 
-`navlyn_workspace_summary`, `navlyn_review_diff`, and `navlyn_context_pack` accept optional `profile` values of `compact`, `evidence`, or `full` and forward them to the CLI. `navlyn_workspace_status` and `navlyn_workspace_refresh` accept cache mode values `auto`, `on`, or `off`; refresh also accepts `clearCache` and `writeCache`. `navlyn_about_symbol` and `navlyn_impact` accept workflow `profile` values of `light` or `full`: use `light` for first-pass selected-symbol facts and local outgoing calls, and use `full` only when heavy reference/caller or impact facts are needed. `navlyn_context_pack`, `navlyn_edit_preflight`, `navlyn_change_intent_pack`, `navlyn_agent_handoff_pack`, and `navlyn_confidence_ledger` accept `changeKind` for edit-oriented ranking hints such as `signature`, `behavior`, `nullability`, `async`, `di-registration`, or `endpoint`. `navlyn_batch` accepts request-level `profile` fields for the matching CLI command family and `candidateIdFrom` dependencies when a later request should reuse an earlier result's `candidateId`. Use `compact` for small profiled workflow scans, `evidence` for review/CI facts, and `full` when compatibility with the rich CLI result is more important than output size.
+### Reading an external library member
 
-Source-position tool calls such as `navlyn_resolve_target`, `navlyn_symbol_source`, `navlyn_symbol_edges`, `navlyn_tests_for_symbol`, and `navlyn_di_impact` accept at most one project context and reject fuzzy selection-only options. Diff-mode `navlyn_context_pack` rejects fuzzy selection-only options because the diff, not a symbol query, selects the context.
+`navlyn_read` accepts `externalSource: "none" | "metadata" | "decompiled"`. It defaults to `none`, which keeps the existing source-only behavior. For a metadata-only symbol selected at an exact C# or Visual Basic call site, `metadata` returns a Roslyn declaration and `decompiled` can return reconstructed C# for one exact member from a matching local implementation PE. Existing workspace source always takes priority, and the 25-tool MCP surface is unchanged.
+
+Use `view: "signature"`, `"declaration"`, or `"body"`. The result keeps the call-site `file`, `line`, and `column`. External slices carry `origin` and `editable: false`, plus a `navlyn-metadata://<reference-sha256>/<member-id-sha256>` or `navlyn-decompiled://<implementation-sha256>/<member-id-sha256>` virtual path. Slice coordinates start at line 1 in the returned text; the URI is not a file path and cannot be reused as a source position or candidate ID. `externalAssembly` reports the assembly identity, selected target framework, reference-versus-implementation provenance, and PE content hashes. Reconstructed C# is not original library source and does not establish runtime dispatch.
+
+For `body`, Navlyn requires the exact bound member to have an implementation body in the exact local implementation PE. A reference-only NuGet package, abstract member, unresolved framework implementation or runtime variant, missing PE, malformed image, ambiguity, stale binary, unsupported view, or exceeded safety limit returns a deterministic error without a body. Framework reference metadata may still be returned in `metadata` mode. Navlyn does not restore/fetch packages, execute referenced assemblies, or write source files. The default `none` mode does not inspect dependency PEs.
+
+External reads limit each reference or implementation PE to 64 MiB, `project.assets.json` to 16 MiB, and the selected method IL to 1 MiB. Implementation selection and decompilation run in a disposable worker with a 10-second deadline.
+
+External diagnostics use the CLI IDs in the MCP error result: `NAVLYN1401` unsupported view, `NAVLYN1402` matching implementation unavailable, `NAVLYN1403` exact member has no body, `NAVLYN1404` ambiguous member or implementation, `NAVLYN1405` selected reference/assets/implementation changed during the read, `NAVLYN1406` a configured size/decompilation limit was exceeded, and `NAVLYN1407` malformed or undecompilable PE.
+
+Profiled tools accept the values documented by their logical CLI commands. Use `compact` for small workflow scans, `evidence` for review and CI facts, and `full` only when the richest result is required. `navlyn_workspace_status` and `navlyn_workspace_refresh` accept cache modes `auto`, `on`, or `off`; refresh also accepts `clearCache` and `writeCache`. `navlyn_impact` accepts `light` or `full`. `navlyn_context_pack` accepts edit-oriented `changeKind` hints. `navlyn_batch` accepts request-level profiles and `candidateIdFrom` dependencies when a later request should reuse an earlier result's `candidateId`.
+
+Source-position modes on `navlyn_target`, `navlyn_read`, `navlyn_navigate`, `navlyn_tests_for_symbol`, and selected domain tools accept at most one project context and reject fuzzy selection-only options. Diff-mode `navlyn_context_pack` rejects fuzzy selection-only options because the diff, not a symbol query, selects the context.
 
 All tools use MCP structured content and advertise the shared Navlyn MCP result envelope as their output schema. The inner `result` object remains the command-specific Navlyn JSON documented in [`navlyn-cli-commands.md`](navlyn-cli-commands.md). The published envelope schema is [`docs/schemas/navlyn-mcp-tool-result.schema.json`](schemas/navlyn-mcp-tool-result.schema.json). Direct tools can include additive `metadata` with `executionPath`, `workspaceCacheStatus`, `workspaceCacheHit`, `workspaceFingerprint`, `indexStatus`, `snapshotId`, `freshnessStatus`, `documentIndexDocumentCount`, `documentIndexEstimatedBytes`, and `costClass` so clients can see whether the warm MCP path was used and which workspace snapshot produced the result.
 
@@ -191,9 +242,9 @@ Decision rules for agents:
 
 1. Use `navlyn_doctor` first when setup, SDK, workspace loading, or first-command guidance is uncertain.
 2. Use `navlyn_workspace_summary(profile: "compact")` only when project, package, target framework, or test relationship context matters.
-3. For a known C# or Visual Basic file, use `navlyn_file_outline` or `navlyn_inspect_file` and reuse entry `candidateId` values.
+3. For a known C# or Visual Basic file, use `navlyn_file_outline` and reuse entry `candidateId` values.
 4. Resolve symbol intent with `navlyn_target(query: "...", assumeKind: "...")` and reuse `candidateId`.
-5. Use `navlyn_read` or `navlyn_symbol_edges` for one precise source or relationship fact before asking for broader context. `calls` is a cheap local outgoing-edge operation; `references` and `callers` are scoped expensive operations and should use `scope`/`maxDocuments` when broad.
+5. Use `navlyn_read` or `navlyn_navigate` for one precise source or relationship fact before asking for broader context. `calls` is a cheap local outgoing-edge operation; `references` and `callers` are scoped expensive operations and should use `scope`/`maxDocuments` when broad.
 6. Before a concrete edit, prefer `navlyn_prepare_edit`; after editing, run `navlyn_verify_edit` before widening scope.
 7. Use `navlyn_review` only for an actual Git diff, PR, staged changes, or working-tree changes.
 8. Use `navlyn_context_pack` only when a bounded reading queue is needed. Use `navlyn_batch` only after several batch-supported facts are already needed.
@@ -219,7 +270,7 @@ Navlyn exposes prompts that guide clients toward facts-only investigation flows:
 | --- | --- |
 | `navlyn_understand_symbol` | Resolve and inspect a symbol using `find`, `about`, source/edge facts, and context packs. |
 | `navlyn_prepare_edit` | Gather impact, references, related tests, and bounded reading material before editing. |
-| `navlyn_review_diff` | Collect deterministic review facts and diff context. |
+| `navlyn_review_changes` | Collect deterministic review facts and diff context. |
 | `navlyn_fix_diagnostic` | Investigate diagnostics with semantic facts before applying edits. |
 
 Prompts are guidance for the MCP client. They do not edit files, generate review conclusions, run tests, or convert static source facts into runtime proof.
@@ -231,8 +282,8 @@ Start a repository investigation:
 ```text
 navlyn_target(query: "PaymentService", assumeKind: "NamedType")
 navlyn_read(candidateId: "sym:v1:...", view: "declaration")
-navlyn_about_symbol(candidateId: "sym:v1:...", profile: "light")
-navlyn_related_files(candidateId: "sym:v1:...", limit: 30)
+navlyn_navigate(operation: "symbol_info", candidateId: "sym:v1:...")
+navlyn_navigate(operation: "references", candidateId: "sym:v1:...", groupBy: ["file"], limit: 30)
 ```
 
 Add `navlyn_workspace_summary(profile: "compact")` before that flow only when workspace structure affects the answer.
@@ -249,11 +300,11 @@ navlyn_verify_edit(candidateId: "sym:v1:...", failOnRisk: "high")
 
 ## Warm Cache And Freshness
 
-`navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, `navlyn_inspect_file`, and `navlyn_symbol_source` use a direct Core resolver path in the default in-process MCP server. The first direct call loads a session-local workspace cache and builds a `DocumentIndex` for path-to-document lookup; later direct calls reuse that workspace snapshot and index. `navlyn_workspace_refresh` evicts that snapshot and reloads it. `navlyn_file_outline` also records its entry `candidateId` targets in memory, so a follow-up `navlyn_symbol_source(candidateId: "...")` can avoid a broad candidate scan in the same server process.
+`navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, and `navlyn_read` use a direct Core resolver path in the default in-process MCP server. The first direct call loads a session-local workspace cache and builds a `DocumentIndex` for path-to-document lookup. Each later direct call checks workspace inputs by content before using the cached snapshot and again before returning success. A stable source or project edit causes a reload; an edit during a call causes one retry, then `NAVLYN_MCP_STALE_WORKSPACE` if inputs keep changing or cannot be inspected. No previous result is returned as a successful fallback. `navlyn_workspace_refresh` forces a reload even when inputs are unchanged. Concurrent calls hold snapshot leases so refresh does not dispose an in-use workspace. `navlyn_file_outline` records its entry `candidateId` targets only for that snapshot; after replacement, an old ID is resolved against the current solution or receives the existing candidate diagnostic.
 
 Fuzzy symbol tools use a workspace-scoped declaration index and candidate record map. Same-snapshot follow-ups that pass a returned `candidateId` can resolve through the recorded candidate when the solution fingerprint matches; unknown or stale IDs still return deterministic Navlyn candidate diagnostics. Heavy reference and caller operations use lexical document prefiltering plus scoped Roslyn document-set searches. Their inner results include `search` metadata with `scope`, `costClass`, searched counts, `partial`, and rerun hints when `maxDocuments` truncates the semantic search.
 
-The warm cache has no file watcher and is not shared across MCP server processes. Use `navlyn_workspace_refresh` or restart the MCP server after source, project, SDK, or package changes when fresh facts matter. The optional `.navlyn/cache` manifest is separate from the in-memory snapshot: it is opt-in via `cache: "on"` or `navlyn.workspace.json` `cacheHints.enabled`, stores no source text, records tracked file hashes/mtimes and project/document/declaration facts, and reports `fresh`, `missing`, `stale`, `invalid`, or `disabled`. Direct-path metadata reports `workspaceCacheStatus`, `indexStatus`, `freshnessStatus`, `snapshotId`, and document-index sizing. Adapter-backed tools and the legacy `--navlyn-executable` mode preserve the existing CLI execution path and may load workspaces independently.
+The warm cache has no file watcher and is not shared across MCP server processes. Its checked inputs include selected workspace files, loaded projects and documents (including linked files outside the workspace root), and source/build/configuration files in the workspace and loaded project trees. It detects additions, deletions, same-size edits, and restored timestamps. An unexcluded junction or symbolic-link directory in a swept tree returns `NAVLYN_MCP_STALE_WORKSPACE` because recursively following it could escape the checked tree or loop; direct calls do not silently skip it. Arbitrary dynamically imported build files outside these trees and not reported by the loaded workspace are outside this inventory; use explicit refresh when changing such an input. The optional `.navlyn/cache` manifest is separate from the in-memory snapshot: it is opt-in via `cache: "on"` or `navlyn.workspace.json` `cacheHints.enabled`, stores no source text, records tracked file hashes/mtimes and project/document/declaration facts, and reports `fresh`, `missing`, `stale`, `invalid`, or `disabled`. Direct-path `snapshotId` combines the graph-level `workspaceFingerprint` with the checked input content digest; an unchanged explicit refresh may keep the same `snapshotId`. Direct metadata also reports `workspaceCacheStatus`, `indexStatus`, `freshnessStatus`, and document-index sizing. Daemon-backed `navlyn_workspace_status` reports daemon state, while daemon-backed refresh also replaces the local direct snapshot. Adapter-backed tools and the legacy `--navlyn-executable` mode preserve the existing CLI execution path and may load workspaces independently.
 
 ## Diff And Domain Flows
 
@@ -269,7 +320,7 @@ Gather dedicated public API or DI facts:
 
 ```text
 navlyn_public_api_diff(base: "main", profile: "evidence")
-navlyn_di_impact(candidateId: "sym:v1:...", profile: "compact")
+navlyn_di(mode: "impact", candidateId: "sym:v1:...", profile: "compact")
 ```
 
 Gather .NET application domain facts through batch:
@@ -303,10 +354,10 @@ Success:
 ```json
 {
   "ok": true,
-  "tool": "navlyn_find_symbol",
+  "tool": "navlyn_target",
   "sourceCommand": {
-    "command": "find",
-    "arguments": ["find", "--workspace", "navlyn.slnx", "--query", "SymbolSourceResolver"]
+    "command": "target",
+    "arguments": ["target", "--workspace", "navlyn.slnx", "--query", "SymbolSourceResolver"]
   },
   "workspace": "navlyn.slnx",
   "recommendedNextAction": {
@@ -321,7 +372,7 @@ Success:
     "runByDefault": false
   },
   "result": {
-    "command": "find",
+    "command": "target",
     "nextActions": [
       {
         "command": "symbol-source",
@@ -339,7 +390,7 @@ Failure:
 ```json
 {
   "ok": false,
-  "tool": "navlyn_find_symbol",
+  "tool": "navlyn_target",
   "sourceCommand": null,
   "workspace": "navlyn.slnx",
   "error": {
@@ -380,11 +431,11 @@ For `navlyn_batch`, error layering is important:
 
 The MCP server is a standalone stdio frontend over the shared Navlyn engine plus MCP-native discovery surfaces. It does not add editing/refactoring tools, arbitrary command execution, file watching, network access, or a daemon.
 
-`navlyn_exact_navigation` and `navlyn_symbol_edges` are allowlist tools, not arbitrary command runners. `navlyn_exact_navigation.operation` is limited to `definition`, `references`, `callers`, `calls`, `implementations`, `type_hierarchy`, and `symbol_info`; `navlyn_symbol_edges.operation` is limited to `references`, `callers`, `calls`, and `implementations`. Their targets must be either a `candidateId` or an exact `file`/`line`/`column` source position. Reference usage filters (`usageKind`, `usageKinds`) and grouping (`groupBy`) are supported only for `operation: "references"`. `scope` and `maxDocuments` apply to `references` and `callers`; `calls` remains local to the containing member and reports `costClass: "local"`.
+`navlyn_navigate` is an allowlist tool, not an arbitrary command runner. Its `operation` is limited to `definition`, `references`, `callers`, `calls`, `implementations`, `type_hierarchy`, and `symbol_info`. Its target must be either a `candidateId` or an exact `file`/`line`/`column` source position. Reference usage filters (`usageKind`, `usageKinds`) and grouping (`groupBy`) are supported only for `operation: "references"`. `scope` and `maxDocuments` apply to `references` and `callers`; `calls` remains local to the containing member and reports `costClass: "local"`.
 
-`navlyn_tests_for_symbol`, `navlyn_tests_for_diff`, `navlyn_di_impact`, and `navlyn_public_api_diff` are allowlisted wrappers over their matching logical Navlyn commands. They do not run tests, edit files, publish packages, or execute arbitrary shell commands.
+`navlyn_tests_for_symbol`, `navlyn_tests_for_diff`, `navlyn_di`, and `navlyn_public_api_diff` are allowlisted wrappers over their matching logical Navlyn commands. They do not run tests, edit files, publish packages, or execute arbitrary shell commands.
 
-`navlyn_batch` wraps the existing Navlyn `batch` command only. Batch coverage includes `overview`, `diagnostics`, `symbols`, `symbols-in`, `outline`, `symbol-at`, `symbol-info`, `symbol-source`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, `calls`, `find`, `resolve-target`, `where-used`, `about`, `related`, `impact`, `entrypoints`, `review-diff`, `review-pack`, `context-pack`, `repo-graph`, `public-api-diff`, `tests-for-symbol`, `tests-for-diff`, `framework-entrypoints`, `di-graph`, `where-registered`, `di-impact`, `route-map`, `route-impact`, `options-graph`, `config-impact`, `where-handled`, `message-flow`, `ef-model`, `entity-impact`, `package-usage`, and `package-impact`. Batch requests can use `candidateIdFrom` to feed an earlier result's `candidateId` into later supported requests. Direct CLI-only facts such as `changed-symbols`, `impact-diff`, `diagnostics-diff`, `scope-at`, `signature`, `symbol-diagnostics`, `diagnostic-pack`, and agent guard commands are not exposed through `navlyn_batch`; use dedicated MCP tools for high-frequency facts such as `navlyn_file_outline`, `navlyn_symbol_source`, `navlyn_symbol_edges`, and the edit/review guard tools. Prefer `navlyn_batch` only when several batch-supported facts are already needed.
+`navlyn_batch` wraps the existing Navlyn `batch` command only. Batch coverage includes `overview`, `diagnostics`, `symbols`, `symbols-in`, `outline`, `symbol-at`, `symbol-info`, `symbol-source`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, `calls`, `find`, `resolve-target`, `where-used`, `about`, `related`, `impact`, `entrypoints`, `review-diff`, `review-pack`, `context-pack`, `repo-graph`, `public-api-diff`, `tests-for-symbol`, `tests-for-diff`, `framework-entrypoints`, `di-graph`, `where-registered`, `di-impact`, `route-map`, `route-impact`, `options-graph`, `config-impact`, `where-handled`, `message-flow`, `ef-model`, `entity-impact`, `package-usage`, and `package-impact`. These are logical CLI command names inside batch requests, not additional MCP tool names. Batch requests can use `candidateIdFrom` to feed an earlier result's `candidateId` into later supported requests. Direct CLI-only facts such as `changed-symbols`, `impact-diff`, `diagnostics-diff`, `scope-at`, `signature`, `symbol-diagnostics`, `diagnostic-pack`, and agent guard commands are not exposed through `navlyn_batch`; use dedicated MCP tools such as `navlyn_file_outline`, `navlyn_read`, `navlyn_navigate`, `navlyn_diagnostics`, and the canonical edit/review tools. Prefer `navlyn_batch` only when several batch-supported facts are already needed.
 
 Static impact, framework entrypoint, DI, application domain, and review-pack results are bounded source-level facts. They are useful evidence for agents and reviewers, but they are not complete runtime proofs, runtime route tables, authorization proofs, secret/config value reads, EF runtime models, package compatibility scans, security scans, or replacement review comments.
 
@@ -400,7 +451,7 @@ Use `./scripts/measure-navlyn-performance.ps1` from the repository root to compa
 ./scripts/measure-navlyn-performance.ps1 -Workspace navlyn.slnx -Scenario mcp -Profile compact -Iterations 1 -Warmup 0 -NoBuild
 ```
 
-The MCP scenario starts `navlyn-mcp`, initializes an MCP stdio session, and measures representative tool calls such as `navlyn_workspace_summary`, `navlyn_resolve_target`, `navlyn_find_symbol`, and `navlyn_context_pack`. Functional MCP behavior is covered by the MCP tests in the solution.
+The MCP scenario starts `navlyn-mcp`, initializes an MCP stdio session, and measures representative tool calls such as `navlyn_workspace_summary`, `navlyn_target`, `navlyn_navigate`, and `navlyn_context_pack`. Functional MCP behavior is covered by the MCP tests in the solution.
 
 See [`navlyn-performance.md`](navlyn-performance.md) for broader performance guidance and release-readiness measurement notes.
 

@@ -18,7 +18,26 @@ The installed tools are local .NET tools. They do not install a background servi
 
 Both tool packages include `net8.0` and `net10.0` assets. The .NET SDK selects the compatible tool asset during install or restore. Semantic workspace loading still requires an installed .NET SDK/MSBuild that can load the target repository.
 
-Release validation installs both .NET 8 and .NET 10 SDKs, runs the xUnit suite on both target frameworks, and runs package install smoke tests with `dotnet tool install --framework net8.0` and `--framework net10.0`.
+The Windows release lane installs both .NET 8 and .NET 10 SDKs, runs the xUnit suite on both target frameworks, and tests isolated package installation with `dotnet tool install --framework net8.0` and `--framework net10.0`.
+
+## Current Release State
+
+The current package identity is `0.8.0`; `0.7.0` remains the previous public release. The protected publish workflow, public NuGet indexing, tag, and GitHub Release are verified separately during the release sequence.
+
+To validate a candidate locally on Windows without changing global tools or real client settings, use .NET SDK 10 to build both target frameworks:
+
+```powershell
+$releaseOutput = "artifacts/candidate-$([guid]::NewGuid().ToString('N'))"
+$checks = "artifacts/candidate-checks-$([guid]::NewGuid().ToString('N'))"
+./scripts/test-release-contract.ps1
+./scripts/pack-release.ps1 -NoValidation -Output $releaseOutput
+$manifest = Join-Path $releaseOutput 'navlyn-release-pack.json'
+./scripts/test-package-contract.ps1 -Manifest $manifest
+New-Item -ItemType Directory -Path $checks | Out-Null
+./scripts/test-consumer-install.ps1 -Manifest $manifest -OutputReport (Join-Path $PWD "$checks/consumer-install.json")
+```
+
+The consumer harness installs into isolated `--tool-path` directories and tests both target frameworks. To install manually from a local feed, use `dotnet tool install --tool-path <isolated-tool-dir> --add-source <local-feed> navlyn --version 0.8.0` (repeat for `navlyn-mcp`). Run the installed executable by absolute path from a separate consumer workspace. Rollback can be exercised by passing an older package manifest with `-RollbackManifest`; uninstall and cleanup are included in the harness. Reports and packages are written under ignored `artifacts/` paths.
 
 ## User Install Shape
 
@@ -48,8 +67,8 @@ For teams and agent workspaces, prefer a repository-local .NET tool manifest whe
 
 ```powershell
 dotnet new tool-manifest
-dotnet tool install navlyn --version 0.7.0
-dotnet tool install navlyn-mcp --version 0.7.0
+dotnet tool install navlyn --version 0.8.0
+dotnet tool install navlyn-mcp --version 0.8.0
 dotnet tool restore
 dotnet tool run navlyn -- doctor --workspace auto
 ```
@@ -81,7 +100,7 @@ When an agent needs several facts from one workspace, prefer CLI `navlyn batch`,
 
 ## Release Identity
 
-The current public release target is `0.7.0`.
+The final release identity is `0.8.0`; both package IDs and the source tag use that version.
 
 Keep `navlyn` and `navlyn-mcp` versions synchronized for the initial public releases. Both packages should use the same repository URL, license expression, README, package icon, author, and release notes discipline.
 
@@ -108,23 +127,9 @@ The package icon must be a committed PNG or JPEG included in the package. Navlyn
 
 ## Local Package Smoke
 
-Run a local pack/install smoke before publishing:
+Run the unique-output commands in [Current Release State](#current-release-state) to pack and validate the candidate, then install it from its local feed into isolated tool paths and a separate consumer workspace.
 
-```powershell
-./scripts/test-package-install.ps1
-./scripts/test-package-install.ps1 -Frameworks net8.0
-./scripts/test-package-install.ps1 -Frameworks net10.0
-```
-
-The script packs both tools, installs them from a local package source, and verifies three install shapes for each requested target framework: `navlyn` only, `navlyn-mcp` only, and both tools together. It runs:
-
-- `navlyn --help`
-- `navlyn doctor --workspace navlyn.slnx`
-- `navlyn repo-graph --workspace navlyn.slnx --profile compact`
-- `navlyn-mcp --help`
-- a minimal installed-tool MCP stdio smoke without passing `--navlyn-executable`
-
-`artifacts/` is ignored and should not be committed.
+The consumer script verifies CLI-only, MCP-only, and combined installations for `net8.0` and `net10.0`, executes installed tools outside the Navlyn repository, checks the exact 25-tool MCP surface and a semantic call, and removes its isolated installation after the run. It never uses global tool installation. Pass `-RollbackManifest <previous-package-manifest>` to include an older package version in the update/rollback scenario. The release workflow also exercises the lifecycle and cleanup path. `artifacts/` is ignored and should not be committed.
 
 ## Release Pack
 
@@ -132,6 +137,8 @@ Create release packages and a manifest:
 
 ```powershell
 ./scripts/pack-release.ps1 -Output artifacts/packages
+./scripts/test-package-contract.ps1 -Manifest artifacts/packages/navlyn-release-pack.json
+./scripts/publish-nuget.ps1 -Manifest artifacts/packages/navlyn-release-pack.json -DryRun
 ```
 
 By default this runs release validation before packing. Use `-NoValidation` only when validation already ran in the same environment.
@@ -144,41 +151,29 @@ Publishing is opt-in. Dry-run is the default:
 ./scripts/publish-nuget.ps1 -DryRun
 ```
 
-To publish from GitHub Actions, use NuGet Trusted Publishing. The publish workflow exchanges the GitHub OIDC token for a short-lived NuGet API key shortly before pushing packages, then passes that temporary value to this script as `NUGET_API_KEY`.
-
-For local emergency publishing only, set `NUGET_API_KEY` manually and pass `-Publish`:
-
-```powershell
-$env:NUGET_API_KEY = '<key>'
-./scripts/publish-nuget.ps1 -Publish
-```
-
-The script reads `artifacts/packages/navlyn-release-pack.json` unless package paths are supplied explicitly.
-
-Avoid long-lived NuGet API keys for normal releases. If a fallback key is ever created, scope it as narrowly as possible for the package IDs and publish operation, keep it out of the repository, and delete it after use.
+Publish 0.8.0 only through the protected GitHub Actions workflow on the reviewed `main` commit. NuGet Trusted Publishing exchanges the GitHub OIDC token for a short-lived API key immediately before the push. The workflow uploads the manifest and both package bytes before that step. The script reads `artifacts/packages/navlyn-release-pack.json`, verifies both SHA-256 values, and stops if a selected version already exists on NuGet. A partial publication needs explicit inspection of the retained bytes before retrying only the missing package.
 
 ## GitHub Manual Publish Workflow
 
-The repository may include a guarded manual workflow at `.github/workflows/publish-nuget.yml`.
+The guarded manual workflow is at `.github/workflows/publish-nuget.yml`.
 
-Required repository setup before using it:
+The release requires these existing controls:
 
-- Create a GitHub environment named `nuget-production`.
-- Add required reviewers to the environment.
-- Add an environment variable named `NUGET_USER` with the nuget.org profile name, not an email address.
-- Configure nuget.org Trusted Publishing for the package-owning NuGet account, GitHub repository owner `furbon`, repository `navlyn`, workflow file `publish-nuget.yml`, and environment `nuget-production`.
+- The `nuget-production` environment allows only `main` and requires its listed reviewer.
+- `NUGET_USER` names the nuget.org profile, not an email address.
+- nuget.org Trusted Publishing identifies owner `furbon`, repository `navlyn`, workflow `publish-nuget.yml`, and environment `nuget-production`.
 - Keep the workflow trigger as `workflow_dispatch` only.
 
 The workflow must run release validation before packing and publishing. Normal `push` and `pull_request` CI must never publish packages.
 
 ## GitHub Release
 
-After packages are published and install smoke passes from NuGet:
+After both 0.8.0 packages are publicly indexed and independently installable:
 
-1. Create a `v0.7.0` tag.
-2. Create a GitHub Release using the `CHANGELOG.md` entry.
-3. Link to the NuGet install commands.
-4. Optionally attach `navlyn-release-pack.json` and package artifacts for traceability.
+1. Push an annotated `v0.8.0` tag on the exact reviewed and published `main` commit.
+2. Wait for tag-triggered release validation.
+3. Create the GitHub Release with concise English and Japanese notes, the package manifest, and retained package artifacts where available.
+4. Verify tag target, artifact hashes, NuGet installs, and release links.
 
 Do not create the public release before package smoke and dry-run publish have succeeded.
 
@@ -187,14 +182,14 @@ Do not create the public release before package smoke and dry-run publish have s
 After NuGet indexing completes, test installation from the public feed in a clean shell:
 
 ```powershell
-dotnet tool install --global navlyn --version 0.7.0
-dotnet tool install --global navlyn-mcp --version 0.7.0
+dotnet tool install --tool-path <clean-cli-tools> navlyn --version 0.8.0
+dotnet tool install --tool-path <clean-mcp-tools> navlyn-mcp --version 0.8.0
 navlyn --help
 navlyn-mcp --help
 navlyn doctor --workspace auto
 ```
 
-For local machines that already have the tools installed, use a temporary `--tool-path` instead of global install.
+For a local rehearsal, prefer the isolated `scripts/test-consumer-install.ps1` harness above. If testing manually, use a temporary `--tool-path` and invoke the installed executable by absolute path rather than changing global tools.
 
 ## Rollback / Unlist
 
@@ -213,7 +208,7 @@ NuGet packages are immutable after publication. If a bad package is published:
 - Update versions and release notes in both tool projects.
 - Update `CHANGELOG.md`.
 - Run `./scripts/test-release.ps1`.
-- Run `./scripts/test-package-install.ps1`.
+- Run the isolated candidate package smoke in [Local Package Smoke](#local-package-smoke).
 - Run `./scripts/pack-release.ps1`.
 - Dry-run `./scripts/publish-nuget.ps1 -DryRun`.
 - Publish with `-Publish` only from an intentional release environment.

@@ -16,15 +16,18 @@ Practical rule: use one precise fact first, reuse returned `candidateId` values,
 
 - CLI commands load the configured workspace for each process invocation.
 - `navlyn-mcp` is a read-only stdio server that runs Navlyn commands in-process by default through the shared engine.
-- MCP reader-path tools (`navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, `navlyn_inspect_file`, and `navlyn_symbol_source`) use a direct Core resolver path with a lazy per-server workspace cache and workspace-scoped `DocumentIndex`.
+- MCP reader-path tools (`navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, and `navlyn_read`) use a direct Core resolver path with a lazy per-server workspace cache and workspace-scoped `DocumentIndex`.
+- `navlyn_read` and CLI `read`/`symbol-source` default to `externalSource=none`; external metadata and reconstructed-member reads are explicit opt-ins.
 - `navlyn_batch` can reduce repeated workspace loads when several batch-supported facts should be collected together.
 - `navlyn serve` is an opt-in local read-only daemon for workspace status/refresh requests over stdio JSON lines or a local named pipe.
 - `.navlyn/cache/workspace-index.json` is an opt-in lightweight manifest for freshness and index facts, not a serialized Roslyn workspace.
 - `compact` and `evidence` profiles can reduce output size and downstream token pressure.
 
-Navlyn does not include a file watcher, telemetry pipeline, hosted service, network listener, or write surface. The MCP direct workspace cache, `DocumentIndex`, and declaration/candidate indexes are session-local and should be refreshed with `navlyn_workspace_refresh` or by restarting the MCP server after source or project changes when freshness matters. Adapter-backed tools still preserve the CLI execution path and may load the workspace independently. Use `navlyn_batch` when several batch-supported adapter-backed facts should share one workspace load.
+Navlyn does not include a file watcher, telemetry pipeline, hosted service, network listener, or write surface. The MCP direct workspace cache, `DocumentIndex`, and declaration/candidate indexes are session-local. Each direct call hashes checked workspace inputs before reuse and before returning success, so warm calls cost more than a cache lookup but detect content edits without relying on timestamps. A stable source or project edit reloads the snapshot automatically; `navlyn_workspace_refresh` remains available to force a reload. Adapter-backed tools still preserve the CLI execution path and may load the workspace independently. Use `navlyn_batch` when several batch-supported adapter-backed facts should share one workspace load.
 
 The on-disk cache is privacy-conscious and freshness-oriented. It stores workspace/version fingerprints, project graph facts, document-index facts, declaration syntax facts when written by `workspace-refresh --write-cache`, tracked file hashes/mtimes, and `candidateRecordsStored: false`. It does not store source text or semantic models. `workspace-status --cache on` reports `fresh`, `missing`, `stale`, `invalid`, or `disabled`; stale manifests are rejected rather than reused.
+
+External member decompilation is opt-in and uses a child process with a 10-second deadline so blocked decompilation can be terminated. Inputs are bounded to 64 MiB per PE and 1 MiB of IL for the selected method; the returned member is then bounded by `maxLines` and `budgetTokens`. A metadata read uses the selected reference PE without loading the decompiler worker. Decompiled results hash and validate the selected reference/assets/implementation around the worker and MCP response, so their latency is separate from ordinary warm `navlyn_read` and depends on local storage and package size. Package restore, network fetch, and target-assembly execution are not part of this read path.
 
 Reverse-edge operations are bounded. `references`, `callers`, `about`, and `impact` default heavy semantic search to `dependent-projects`, lexically prefilter documents by the selected symbol name, pass a document set to Roslyn where supported, and cap searched documents with `--max-documents`. Successful partial results report `search.partial`, searched counts, and rerun hints. `calls` stays local to the containing member and reports `search.costClass: "local"`.
 
@@ -100,7 +103,7 @@ For agent adoption decisions, inspect more than elapsed time:
 - JSON validity and top-level command/profile: whether automation can safely parse the result.
 - result counts: candidate count, changed symbol count, related files, tests, routes, or diagnostics.
 - truncation flags and warnings: whether the chosen profile or limits hid useful evidence.
-- MCP metadata: whether a tool used the direct path, whether the workspace cache was hit, which session-local `snapshotId` / `workspaceFingerprint` produced the result, and how large the in-memory document index is.
+- MCP metadata: whether a tool used the direct path, whether the workspace cache was hit, which content-sensitive `snapshotId` and graph-level `workspaceFingerprint` produced the result, and how large the in-memory document index is.
 - stage timings: whether startup, workspace load, project selection, resolver execution, serialization, or MCP path overhead dominates the measured workflow.
 - fuzzy/index behavior: whether repeated fuzzy or candidate-id flows reuse semantic enrichment in the same workspace snapshot.
 - expected files: whether the files a maintainer expects are present in related/context outputs.
@@ -143,8 +146,8 @@ Prefer this pattern for a file-first MCP loop:
 
 ```text
 navlyn_file_outline(file: "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs")
-navlyn_symbol_source(candidateId: "sym:v1:...", view: "declaration")
-navlyn_symbol_edges(operation: "calls", candidateId: "sym:v1:...", limit: 30)
+navlyn_read(candidateId: "sym:v1:...", view: "declaration")
+navlyn_navigate(operation: "calls", candidateId: "sym:v1:...", limit: 30)
 ```
 
 For CLI users, the comparable file-first facts are:
@@ -171,7 +174,7 @@ Get-Content examples/batch/investigation-loop.json | navlyn batch --workspace na
 
 For MCP clients, `navlyn_batch` remains useful after the agent already knows it needs several batch-supported facts. Prefer direct focused tools for workspace summary, a single known file, or a selected symbol because they reuse the MCP workspace cache and `DocumentIndex` without encouraging broad fact collection.
 
-For fuzzy symbol workflows, prefer reusing `candidateId` values returned by `find`, `resolve-target`, and MCP outline/source tools. Candidate records are validated against the current solution fingerprint, so same-snapshot follow-ups can skip broad declaration rediscovery while stale or unknown IDs still fall back to deterministic validation and diagnostics. Use `about --profile light` and `impact --profile light` for first-pass agent calls; expand to `full`, a broader `--scope`, or a larger `--max-documents` only when the returned facts show that the broader search is needed.
+For fuzzy symbol workflows, prefer reusing `candidateId` values returned by CLI `find` / `resolve-target` and MCP `navlyn_target` / `navlyn_file_outline`. Candidate records are validated against the current solution fingerprint, so same-snapshot follow-ups can skip broad declaration rediscovery while stale or unknown IDs still fall back to deterministic validation and diagnostics. Use CLI `about --profile light` or MCP `navlyn_navigate(operation: "symbol_info")` and `navlyn_impact` for first-pass selected-symbol facts; expand to a richer profile, a broader `scope`, or a larger `maxDocuments` only when the returned facts show that the broader search is needed.
 
 Do not interpret faster compact output as better semantic coverage. It is smaller by design. If a compact result warns about truncation or omits the expected file, rerun with higher limits, `evidence`, or `full`.
 

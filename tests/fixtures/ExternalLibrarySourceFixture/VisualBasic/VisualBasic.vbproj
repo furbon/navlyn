@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><RootNamespace></RootNamespace></PropertyGroup>
+  <ItemGroup><Reference Include="ExternalFixture"><HintPath>..\Library\bin\Release\net10.0\ExternalFixture.dll</HintPath></Reference></ItemGroup>
+</Project>

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <AssemblyName>ExternalFixture</AssemblyName>
+    <PackageId>Navlyn.ExternalLibrarySourceFixture.ReferenceOnly</PackageId>
+    <PackageVersion>1.0.0</PackageVersion>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Authors>Navlyn Tests</Authors>
+    <Description>Reference-only external member test fixture.</Description>
+    <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
+    <ProduceReferenceAssemblyInOutDir>true</ProduceReferenceAssemblyInOutDir>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\Library\FixtureLibrary.cs" Link="FixtureLibrary.cs" />
+  </ItemGroup>
+  <PropertyGroup>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);PackReferenceAssembly</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+  <Target Name="PackReferenceAssembly">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="$(TargetDir)ref\$(AssemblyName).dll">
+        <PackagePath>ref/$(TargetFramework)/$(AssemblyName).dll</PackagePath>
+      </TfmSpecificPackageFile>
+    </ItemGroup>
+  </Target>
+</Project>

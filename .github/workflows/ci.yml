@@ -2,6 +2,8 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 permissions:
@@ -11,15 +13,11 @@ jobs:
   build:
     name: Build and test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
-
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - windows-latest
-          - ubuntu-latest
-          - macos-latest
+        os: [windows-latest, ubuntu-latest, macos-latest]
 
     steps:
       - name: Checkout
@@ -39,9 +37,13 @@ jobs:
         run: dotnet build navlyn.slnx --no-restore
 
       - name: Test net8.0
+        env:
+          TMPDIR: ${{ runner.temp }}
         run: dotnet test navlyn.slnx --no-build --framework net8.0
 
       - name: Test net10.0
+        env:
+          TMPDIR: ${{ runner.temp }}
         run: dotnet test navlyn.slnx --no-build --framework net10.0
 
       - name: C# file format validation
@@ -49,9 +51,33 @@ jobs:
         run: ./scripts/test-csharp-file-format.ps1
 
       - name: Quick validation
+        if: matrix.os == 'windows-latest'
         shell: pwsh
         run: ./scripts/test-quick.ps1 -NoBuild -SkipDotnetTest
 
       - name: CLI contract core validation
+        if: matrix.os == 'windows-latest'
         shell: pwsh
         run: ./scripts/test-cli-contract.ps1 -NoBuild -Suite core
+
+      - name: Release contract validation
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: ./scripts/test-release-contract.ps1
+
+      - name: Pack candidate packages
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: ./scripts/pack-release.ps1 -NoValidation -Output artifacts/ci-candidate
+
+      - name: Candidate package contract validation
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: ./scripts/test-package-contract.ps1 -Manifest artifacts/ci-candidate/navlyn-release-pack.json
+
+      - name: Routing skill lifecycle validation
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts/ci-checks -Force | Out-Null
+          ./scripts/test-routing-skill-install.ps1 -OutputReport (Join-Path $PWD 'artifacts/ci-checks/skill-lifecycle.json')

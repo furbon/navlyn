@@ -107,6 +107,30 @@ internal sealed record NavlynToolResult(
             _ => metadata?.CostClass ?? "analysis"
         };
     }
+
+    public NavlynToolResult WithResultCommand(string command)
+    {
+        if (!Ok || Result is null)
+        {
+            return this;
+        }
+
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            throw new ArgumentException("A result command is required.", nameof(command));
+        }
+
+        System.Text.Json.Nodes.JsonObject result = System.Text.Json.Nodes.JsonNode.Parse(Result.Value.GetRawText()) as System.Text.Json.Nodes.JsonObject
+            ?? throw new InvalidOperationException("A successful Navlyn result must be a JSON object.");
+        if (!result.ContainsKey("command"))
+        {
+            throw new InvalidOperationException("A successful Navlyn result must contain a command property.");
+        }
+
+        result["command"] = command;
+        using JsonDocument document = JsonDocument.Parse(result.ToJsonString());
+        return this with { Result = document.RootElement.Clone() };
+    }
 }
 
 internal sealed record NavlynToolMetadata(

@@ -21,6 +21,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Verify main commit
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -ne 'refs/heads/main') { throw 'NuGet publication requires main.' }
+          if ((git rev-parse HEAD).Trim() -ne $env:GITHUB_SHA) { throw 'Checked-out commit differs from the dispatched commit.' }
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -29,13 +37,26 @@ jobs:
             8.0.x
             10.0.x
 
-      - name: Release validation
+      - name: Source validation
         shell: pwsh
-        run: ./scripts/test-release.ps1
+        run: ./scripts/test-publish-prerequisites.ps1
 
       - name: Pack release
         shell: pwsh
         run: ./scripts/pack-release.ps1 -NoValidation -Output artifacts/packages
+
+      - name: Validate package contract
+        shell: pwsh
+        run: ./scripts/test-package-contract.ps1 -Manifest artifacts/packages/navlyn-release-pack.json
+
+      - name: Retain package bytes before publication
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: navlyn-release-packages-prepush
+          path: artifacts/packages
+          if-no-files-found: warn
+          retention-days: 90
 
       - name: Dry-run publish
         shell: pwsh
@@ -52,9 +73,3 @@ jobs:
         env:
           NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: ./scripts/publish-nuget.ps1 -Publish
-
-      - name: Upload release packages
-        uses: actions/upload-artifact@v7
-        with:
-          name: navlyn-release-packages
-          path: artifacts/packages

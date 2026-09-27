@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://navlyn.dev/schemas/routing-skill-live-trace.v1.json",
+  "title": "Navlyn routing skill live A/B trace",
+  "type": "object",
+  "required": [
+    "schemaVersion", "collectedAtUtc", "scenarioFile", "scenarioSha256", "repository",
+    "client", "configuration", "skill", "runsPerCondition", "subset", "groupCounts",
+    "discovery", "runs"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "navlyn.routing-skill-live-trace.v1" },
+    "collectedAtUtc": { "type": "string", "format": "date-time" },
+    "scenarioFile": { "type": "string", "minLength": 1 },
+    "scenarioSha256": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+    "repository": {
+      "type": "object", "required": ["root", "head", "dirty"],
+      "properties": { "root": { "type": "string" }, "head": { "type": "string" }, "dirty": { "type": "boolean" } },
+      "additionalProperties": true
+    },
+    "client": {
+      "type": "object", "required": ["name", "version", "model", "reasoning"],
+      "properties": { "name": { "type": "string" }, "version": { "type": "string" }, "model": { "type": "string" }, "reasoning": { "type": "string" } },
+      "additionalProperties": true
+    },
+    "configuration": { "type": "object", "minProperties": 1 },
+    "skill": {
+      "type": "object", "required": ["name", "path", "sha256"],
+      "properties": { "name": { "type": "string" }, "path": { "type": "string" }, "sha256": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" } },
+      "additionalProperties": true
+    },
+    "runsPerCondition": { "type": "integer", "minimum": 1 },
+    "subset": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+    "groupCounts": { "type": "object", "required": ["semantic", "text", "safety"], "properties": { "semantic": { "type": "integer" }, "text": { "type": "integer" }, "safety": { "type": "integer" } } },
+    "discovery": { "type": "object", "required": ["offSkillVisible", "onSkillVisible", "mcpConfigured"], "properties": { "offSkillVisible": { "type": "boolean" }, "onSkillVisible": { "type": "boolean" }, "mcpConfigured": { "type": "boolean" } }, "additionalProperties": true },
+    "runs": { "type": "array", "items": { "$ref": "#/$defs/run" } }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "finalResponse": {
+      "type": "object",
+      "required": ["answer", "stopReason", "claims", "editAttempted", "anchorBeforeEdit", "ambiguityReported", "staleReported", "partialResult"],
+      "properties": {
+        "answer": { "type": "string", "minLength": 1 }, "stopReason": { "type": "string", "minLength": 1 },
+        "claims": { "type": "array", "items": { "type": "string" } },
+        "editAttempted": { "type": "boolean" }, "anchorBeforeEdit": { "type": "boolean" },
+        "ambiguityReported": { "type": "boolean" }, "staleReported": { "type": "boolean" }, "partialResult": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "call": {
+      "type": "object",
+      "required": ["kind", "name", "arguments", "selectedResultFields", "status", "startOffsetMs", "durationMs", "outputChars", "skillLoading", "writeAttempt"],
+      "properties": {
+        "kind": { "enum": ["mcp", "ordinary", "other"] }, "name": { "type": "string", "minLength": 1 },
+        "arguments": { "type": "object" }, "selectedResultFields": { "type": "object" },
+        "status": { "type": "string" }, "startOffsetMs": { "type": "integer", "minimum": 0 },
+        "durationMs": { "type": "integer", "minimum": 0 }, "outputChars": { "type": "integer", "minimum": 0 },
+        "rawType": { "type": "string" }, "skillLoading": { "type": "boolean" }, "writeAttempt": { "type": "boolean" }
+      }, "additionalProperties": true
+    },
+    "run": {
+      "type": "object",
+      "required": ["runId", "scenarioId", "taskClass", "group", "condition", "repetition", "prompt", "environment", "configuration", "startedAtUtc", "durationMs", "exitCode", "skill", "calls", "rawCallOrder", "stdoutChars", "canonicalOutputChars", "stderrChars", "diagnosticStderrChars", "tokenUsage", "final", "rawJsonl"],
+      "properties": {
+        "runId": { "type": "string" }, "scenarioId": { "type": "string" }, "taskClass": { "type": "string" },
+        "group": { "enum": ["semantic", "text", "safety"] }, "condition": { "enum": ["off", "on"] },
+        "repetition": { "type": "integer", "minimum": 1 }, "prompt": { "type": "object", "required": ["text", "scenarioPrompt", "workspace", "fixture"] },
+        "environment": { "type": "object" }, "configuration": { "type": "object", "minProperties": 1 }, "startedAtUtc": { "type": "string", "format": "date-time" },
+        "durationMs": { "type": "integer", "minimum": 0 }, "exitCode": { "type": ["integer", "null"] },
+        "skill": { "type": "object", "required": ["available", "activated", "path", "sha256", "readPaths"] },
+        "calls": { "type": "array", "items": { "$ref": "#/$defs/call" } }, "rawCallOrder": { "type": "array" },
+        "stdoutChars": { "type": "integer", "minimum": 0 }, "canonicalOutputChars": { "type": "integer", "minimum": 0 }, "stderrChars": { "type": "integer", "minimum": 0 }, "diagnosticStderrChars": { "type": "integer", "minimum": 0 },
+        "tokenUsage": { "type": ["object", "null"] },
+        "final": {
+          "type": "object",
+          "required": ["structuredResponse", "answer", "stopReason", "claims", "editAttempted", "anchorBeforeEdit", "ambiguityReported", "staleReported", "partialResult", "outputValid", "stderrClean"],
+          "properties": {
+            "structuredResponse": { "$ref": "#/$defs/finalResponse" },
+            "answer": { "type": "string", "minLength": 1 }, "stopReason": { "type": "string", "minLength": 1 },
+            "claims": { "type": "array", "items": { "type": "string" } },
+            "editAttempted": { "type": "boolean" }, "anchorBeforeEdit": { "type": "boolean" },
+            "ambiguityReported": { "type": "boolean" }, "staleReported": { "type": "boolean" }, "partialResult": { "type": "boolean" },
+            "outputValid": { "type": "boolean" }, "stderrClean": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "rawJsonl": { "type": "string" }
+      }, "additionalProperties": true
+    }
+  }
+}

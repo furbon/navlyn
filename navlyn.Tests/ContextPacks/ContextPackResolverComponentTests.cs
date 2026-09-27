@@ -22,7 +22,8 @@ public sealed class ContextPackResolverComponentTests(ResolverComponentTestFixtu
         Assert.Equal("definition", first.Kind);
         Assert.Equal("selected-symbol-definition", Assert.Single(first.ReasonCodes));
         Assert.NotNull(first.Content);
-        Assert.Contains(result.NextActions, action => action.Command == "references" && action.McpTool == "navlyn_exact_navigation");
+        Assert.Contains(result.NextActions, action => action.Command == "references" && action.McpTool == "navlyn_navigate");
+        Assert.Contains(result.NextActions, action => action.Command == "symbol-source" && action.McpTool == "navlyn_read" && Equals(action.Arguments!["view"], "declaration"));
     }
 
     [Fact]

@@ -10,6 +10,9 @@ public sealed class NavlynMcpPromptContractTests
         string understand = NavlynMcpPrompts.UnderstandSymbol(query: "CheckCommand");
         Assert.Contains("call navlyn_target", understand, StringComparison.Ordinal);
         Assert.Contains("Call navlyn_read", understand, StringComparison.Ordinal);
+        Assert.Contains("navlyn_navigate", understand, StringComparison.Ordinal);
+        Assert.DoesNotContain("navlyn_about_symbol", understand, StringComparison.Ordinal);
+        Assert.DoesNotContain("navlyn_symbol_edges", understand, StringComparison.Ordinal);
         Assert.Contains("navlyn_context_pack with goal understand only when", understand, StringComparison.Ordinal);
         Assert.Contains("only when normal file reads or smaller symbol facts are not enough", understand, StringComparison.Ordinal);
         Assert.DoesNotContain("navlyn_resolve_target", understand, StringComparison.Ordinal);
@@ -19,6 +22,8 @@ public sealed class NavlynMcpPromptContractTests
         string edit = NavlynMcpPrompts.PrepareEdit(query: "CheckCommand", changeKind: "behavior");
         Assert.Contains("unified read-only MCP surface", edit, StringComparison.Ordinal);
         Assert.Contains("Call navlyn_prepare_edit", edit, StringComparison.Ordinal);
+        Assert.Contains("navlyn_navigate", edit, StringComparison.Ordinal);
+        Assert.DoesNotContain("navlyn_symbol_edges", edit, StringComparison.Ordinal);
         Assert.Contains("only when a bounded reading queue is still needed", edit, StringComparison.Ordinal);
         Assert.DoesNotContain("navlyn_resolve_target", edit, StringComparison.Ordinal);
         Assert.DoesNotContain("navlyn_edit_preflight", edit, StringComparison.Ordinal);
@@ -32,8 +37,12 @@ public sealed class NavlynMcpPromptContractTests
         Assert.DoesNotContain("--tool-profile", review, StringComparison.Ordinal);
 
         string diagnostic = NavlynMcpPrompts.FixDiagnostic(file: "Sample.cs", line: 1, column: 1, diagnosticId: "CS8602");
-        Assert.Contains("Use navlyn_batch only", diagnostic, StringComparison.Ordinal);
-        Assert.Contains("after deciding several facts are needed", diagnostic, StringComparison.Ordinal);
+        Assert.Contains("navlyn_diagnostics", diagnostic, StringComparison.Ordinal);
+        Assert.Contains("mode symbol", diagnostic, StringComparison.Ordinal);
+        Assert.Contains("mode pack", diagnostic, StringComparison.Ordinal);
+        Assert.Contains("Do not use navlyn_batch for one diagnostic fact", diagnostic, StringComparison.Ordinal);
+        Assert.DoesNotContain("symbol-diagnostics", diagnostic, StringComparison.Ordinal);
+        Assert.DoesNotContain("diagnostic-pack", diagnostic, StringComparison.Ordinal);
         Assert.DoesNotContain("--tool-profile", diagnostic, StringComparison.Ordinal);
     }
 }

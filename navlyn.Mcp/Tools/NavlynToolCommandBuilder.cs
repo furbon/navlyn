@@ -8,6 +8,7 @@ internal static class NavlynToolCommandBuilder
 {
     private static readonly string[] MatchValues = ["smart", "exact", "contains", "regex"];
     private static readonly string[] CandidatePolicyValues = ["fail", "select", "group"];
+    private static readonly string[] MessageCandidatePolicyValues = ["fail", "select"];
     private static readonly string[] MinConfidenceValues = ["high", "medium", "low"];
     private static readonly string[] GoalValues = ["review", "modify", "understand"];
     private static readonly string[] ChangeKindValues = ["behavior", "signature", "rename", "constructor", "nullability", "async", "public-api", "di-registration", "endpoint"];
@@ -19,6 +20,9 @@ internal static class NavlynToolCommandBuilder
     private static readonly string[] NavigationScopeValues = ["file", "project", "dependent-projects", "workspace-set", "solution"];
     private static readonly string[] CacheModeValues = ["auto", "on", "off"];
     private static readonly string[] ExactNavigationOperations = ["definition", "references", "callers", "calls", "implementations", "type_hierarchy", "symbol_info"];
+    private static readonly string[] DiagnosticSeverityValues = ["Hidden", "Info", "Warning", "Error"];
+    private static readonly string[] EndpointKindValues = ["any", "controller-action", "minimal-api"];
+    private static readonly string[] RouteAuthValues = ["any", "required", "anonymous", "unknown"];
     private static readonly string[] FilteredExactNavigationOperations = ["references", "callers", "calls", "implementations"];
     private static readonly string[] SymbolEdgeOperations = ["references", "callers", "calls", "implementations"];
     private static readonly string[] SourceViewValues = ["signature", "declaration", "body", "members", "xml-doc", "attributes"];
@@ -46,7 +50,7 @@ internal static class NavlynToolCommandBuilder
         AddOptionalBoolValue(args, "--include-preprocessor-symbols", includePreprocessorSymbols);
         AddOptionalBoolValue(args, "--classification", classification);
         if (!TryAddPositiveInt(args, "--relationship-limit", relationshipLimit, out error) ||
-            !TryAddAllowedValue(args, "--profile", profile, ProfileValues, out error))
+            !TryAddProfile(args, profile, "compact", ProfileValues, out error))
         {
             return CommandBuildResult.Invalid(error);
         }
@@ -89,7 +93,120 @@ internal static class NavlynToolCommandBuilder
         return CommandBuildResult.Valid("doctor", []);
     }
 
+    public static CommandBuildResult Diagnostics(
+        string? mode,
+        string? project,
+        string[]? projects,
+        bool? excludeGenerated,
+        string? severity,
+        string[]? severities,
+        int? limit,
+        string? diagnosticId,
+        string[]? diagnosticIds,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column)
+    {
+        if (mode is not ("workspace" or "symbol" or "pack"))
+        {
+            return CommandBuildResult.Invalid("mode must be workspace, symbol, or pack.");
+        }
+
+        List<string> args = [];
+        string? error;
+        string command;
+
+        switch (mode)
+        {
+            case "workspace":
+                if (HasAnyTargetInput(candidateId, file, line, column))
+                {
+                    return CommandBuildResult.Invalid("workspace mode does not accept candidateId or source-position inputs.");
+                }
+
+                if (!TryAddProjects(args, project, projects, out error))
+                {
+                    return CommandBuildResult.Invalid(error);
+                }
+
+                command = "diagnostics";
+                break;
+
+            case "symbol":
+                if (projects is not null)
+                {
+                    return CommandBuildResult.Invalid("projects is supported only in workspace mode; use project for symbol mode.");
+                }
+
+                if (!TryAddExactNavigationTarget(args, candidateId, file, line, column, out error))
+                {
+                    return CommandBuildResult.Invalid(error);
+                }
+
+                AddOptionalValue(args, "--project", project);
+                command = "symbol-diagnostics";
+                break;
+
+            case "pack":
+                if (projects is not null)
+                {
+                    return CommandBuildResult.Invalid("projects is supported only in workspace mode; use project for pack mode.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(candidateId))
+                {
+                    return CommandBuildResult.Invalid("candidateId is not supported in pack mode.");
+                }
+
+                if (diagnosticIds is not null)
+                {
+                    return CommandBuildResult.Invalid("diagnosticIds is not supported in pack mode; provide diagnosticId as the pack input.");
+                }
+
+                bool hasDiagnosticId = !string.IsNullOrWhiteSpace(diagnosticId);
+                bool hasAnyPosition = HasAnyPosition(file, line, column);
+                bool hasCompletePosition = !string.IsNullOrWhiteSpace(file) && line is not null && column is not null;
+                if (hasDiagnosticId == hasAnyPosition || hasAnyPosition && !hasCompletePosition)
+                {
+                    return CommandBuildResult.Invalid("pack mode requires exactly one input: diagnosticId or file with line and column.");
+                }
+
+                if (hasDiagnosticId)
+                {
+                    AddOptionalValue(args, "--id", diagnosticId);
+                }
+                else if (!TryAddExactNavigationTarget(args, candidateId: null, file, line, column, out error))
+                {
+                    return CommandBuildResult.Invalid(error);
+                }
+
+                AddOptionalValue(args, "--project", project);
+                command = "diagnostic-pack";
+                break;
+
+            default:
+                return CommandBuildResult.Invalid("mode must be workspace, symbol, or pack.");
+        }
+
+        AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+        if (!TryAddDiagnosticSeverities(args, severity, severities, out error) ||
+            !TryAddPositiveInt(args, "--limit", limit, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        if ((mode is "workspace" or "symbol") &&
+            !TryAddSingleOrMany(args, "--id", diagnosticId, diagnosticIds, "diagnosticId", "diagnosticIds", out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        return CommandBuildResult.Valid(command, args);
+    }
+
     public static CommandBuildResult Target(
+        string? mode,
         string? query,
         string? candidateId,
         string? file,
@@ -107,6 +224,35 @@ internal static class NavlynToolCommandBuilder
         string? minConfidence,
         bool? explainSelection)
     {
+        string effectiveMode = mode ?? "select";
+        if (effectiveMode == "list")
+        {
+            if (candidatePolicy is not null && candidatePolicy != "group")
+            {
+                return CommandBuildResult.Invalid("candidatePolicy in list mode must be omitted or group.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(candidateId) ||
+                !string.IsNullOrWhiteSpace(file) ||
+                line is not null ||
+                column is not null)
+            {
+                return CommandBuildResult.Invalid("list mode accepts query and fuzzy filters only; candidateId and source-position inputs are not valid.");
+            }
+
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                return CommandBuildResult.Invalid("query is required in list mode.");
+            }
+
+            return FindSymbol(query, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, limit, "group", minConfidence, explainSelection);
+        }
+
+        if (effectiveMode != "select")
+        {
+            return CommandBuildResult.Invalid("mode must be select or list.");
+        }
+
         CommandBuildResult result = ResolveTarget(query, candidateId, file, line, column, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, limit, candidatePolicy, minConfidence, explainSelection);
         return result.IsValid ? result with { Command = "target" } : result;
     }
@@ -120,9 +266,10 @@ internal static class NavlynToolCommandBuilder
         bool? excludeGenerated,
         string? view,
         int? maxLines,
-        int? budgetTokens)
+        int? budgetTokens,
+        string? externalSource = null)
     {
-        CommandBuildResult result = SymbolSource(candidateId, file, line, column, project, excludeGenerated, view, maxLines, budgetTokens);
+        CommandBuildResult result = SymbolSource(candidateId, file, line, column, project, excludeGenerated, view, maxLines, budgetTokens, externalSource);
         return result.IsValid ? result with { Command = "read" } : result;
     }
 
@@ -154,8 +301,16 @@ internal static class NavlynToolCommandBuilder
     }
 
     public static CommandBuildResult VerifyEdit(
+        string? query,
         string? candidateId,
         string? preflight,
+        string? file,
+        int? line,
+        int? column,
+        string? assumeKind,
+        string[]? assumeKinds,
+        string? match,
+        bool? caseSensitive,
         string? baseRef,
         string? head,
         bool? staged,
@@ -164,10 +319,57 @@ internal static class NavlynToolCommandBuilder
         string[]? projects,
         bool? excludeGenerated,
         int? symbolLimit,
-        string? failOnRisk)
+        string? failOnRisk,
+        int? candidateLimit,
+        string? candidatePolicy,
+        string? minConfidence,
+        bool? explainSelection)
     {
-        CommandBuildResult result = PostEditGuard(candidateId, preflight, baseRef, head, staged, includeUnstaged, project, projects, excludeGenerated, symbolLimit, failOnRisk);
-        return result.IsValid ? result with { Command = "verify-edit" } : result;
+        bool hasPreflight = !string.IsNullOrWhiteSpace(preflight);
+        bool hasCandidateId = !string.IsNullOrWhiteSpace(candidateId);
+        bool hasQuery = !string.IsNullOrWhiteSpace(query);
+        bool hasAnySourcePosition = !string.IsNullOrWhiteSpace(file) || line is not null || column is not null;
+        int intentCount = (hasPreflight ? 1 : 0) + (hasCandidateId ? 1 : 0) + (hasQuery ? 1 : 0) + (hasAnySourcePosition ? 1 : 0);
+        if (intentCount != 1)
+        {
+            return CommandBuildResult.Invalid("Specify exactly one verify intent: preflight, candidateId, query, or file with line and column.");
+        }
+
+        if (hasPreflight || hasCandidateId)
+        {
+            if (HasFuzzySelectionOptions(assumeKind, assumeKinds, match, caseSensitive, candidateLimit, candidatePolicy, minConfidence, explainSelection))
+            {
+                return CommandBuildResult.Invalid("Fuzzy selection options are supported only with query mode.");
+            }
+
+            CommandBuildResult anchorResult = PostEditGuard(candidateId, preflight, baseRef, head, staged, includeUnstaged, project, projects, excludeGenerated, symbolLimit, failOnRisk);
+            return anchorResult.IsValid ? anchorResult with { Command = "verify-edit", ResultCommand = "verify-edit" } : anchorResult;
+        }
+
+        CommandBuildResult symbolResult = WrongSymbolGuard(
+            query,
+            null,
+            file,
+            line,
+            column,
+            assumeKind,
+            assumeKinds,
+            match,
+            caseSensitive,
+            project,
+            projects,
+            excludeGenerated,
+            baseRef,
+            head,
+            staged,
+            includeUnstaged,
+            symbolLimit,
+            failOnRisk,
+            candidateLimit,
+            candidatePolicy,
+            minConfidence,
+            explainSelection);
+        return symbolResult.IsValid ? symbolResult with { ResultCommand = "verify-edit" } : symbolResult;
     }
 
     public static CommandBuildResult Review(
@@ -360,8 +562,19 @@ internal static class NavlynToolCommandBuilder
             !TryAddNonNegativeInt(args, "--depth", depth, out error) ||
             !TryAddNonNegativeInt(args, "--snippet-lines", snippetLines, out error) ||
             !TryAddAllowedValue(args, "--scope", scope, NavigationScopeValues, out error) ||
-            !TryAddPositiveInt(args, "--max-documents", maxDocuments, out error) ||
-            !TryAddAllowedValue(args, "--profile", profile, WorkflowProfileValues, out error))
+            !TryAddPositiveInt(args, "--max-documents", maxDocuments, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        if (cliCommand == "impact")
+        {
+            if (!TryAddProfile(args, profile, "light", WorkflowProfileValues, out error))
+            {
+                return CommandBuildResult.Invalid(error);
+            }
+        }
+        else if (!TryAddAllowedValue(args, "--profile", profile, WorkflowProfileValues, out error))
         {
             return CommandBuildResult.Invalid(error);
         }
@@ -486,7 +699,7 @@ internal static class NavlynToolCommandBuilder
             !TryAddPositiveInt(args, "--related-test-limit", relatedTestLimit, out error) ||
             !TryAddNonNegativeInt(args, "--depth", depth, out error) ||
             !TryAddNonNegativeInt(args, "--snippet-lines", snippetLines, out error) ||
-            !TryAddAllowedValue(args, "--profile", profile, ProfileValues, out error))
+            !TryAddProfile(args, profile, "evidence", ProfileValues, out error))
         {
             return CommandBuildResult.Invalid(error);
         }
@@ -624,7 +837,7 @@ internal static class NavlynToolCommandBuilder
             !TryAddPositiveInt(args, "--impact-limit", impactLimit, out error) ||
             !TryAddPositiveInt(args, "--related-test-limit", relatedTestLimit, out error) ||
             !TryAddNonNegativeInt(args, "--depth", depth, out error) ||
-            !TryAddAllowedValue(args, "--profile", profile, ProfileValues, out error))
+            !TryAddProfile(args, profile, "compact", ProfileValues, out error))
         {
             return CommandBuildResult.Invalid(error);
         }
@@ -657,11 +870,13 @@ internal static class NavlynToolCommandBuilder
         bool? excludeGenerated,
         string? view,
         int? maxLines,
-        int? budgetTokens)
+        int? budgetTokens,
+        string? externalSource = null)
     {
         List<string> args = [];
         if (!TryAddExactNavigationTarget(args, candidateId, file, line, column, out string? error) ||
             !TryAddAllowedValue(args, "--view", view, SourceViewValues, out error) ||
+            !TryAddAllowedValue(args, "--external-source", externalSource, ["none", "metadata", "decompiled"], out error) ||
             !TryAddPositiveInt(args, "--max-lines", maxLines, out error) ||
             !TryAddPositiveInt(args, "--budget-tokens", budgetTokens, out error))
         {
@@ -842,6 +1057,12 @@ internal static class NavlynToolCommandBuilder
             return CommandBuildResult.Invalid("usageKind, usageKinds, and groupBy are supported only for references.");
         }
 
+        bool hasSearchBudgetOptions = !string.IsNullOrWhiteSpace(scope) || maxDocuments is not null;
+        if (hasSearchBudgetOptions && normalizedOperation is not ("references" or "callers"))
+        {
+            return CommandBuildResult.Invalid("scope and maxDocuments are supported only for references and callers.");
+        }
+
         if (!TryAddSingleOrMany(args, "--result-project", resultProject, resultProjects, "resultProject", "resultProjects", out error) ||
             !TryAddSingleOrMany(args, "--result-path", resultPath, resultPaths, "resultPath", "resultPaths", out error) ||
             !TryAddSingleOrMany(args, "--result-kind", resultKind, resultKinds, "resultKind", "resultKinds", out error) ||
@@ -854,13 +1075,67 @@ internal static class NavlynToolCommandBuilder
             return CommandBuildResult.Invalid(error);
         }
 
-        if (includeMetadata == true && normalizedOperation is not ("definition" or "calls"))
+        if (includeMetadata is not null && normalizedOperation is not ("definition" or "calls"))
         {
             return CommandBuildResult.Invalid("includeMetadata is supported only for definition and calls.");
         }
 
         AddOptionalFlag(args, "--include-metadata", includeMetadata);
         return CommandBuildResult.Valid(ToCliExactNavigationCommand(normalizedOperation), args);
+    }
+
+    public static CommandBuildResult Navigate(
+        string operation,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        string? project,
+        bool? excludeGenerated,
+        string? resultProject,
+        string[]? resultProjects,
+        string? resultPath,
+        string[]? resultPaths,
+        string? resultKind,
+        string[]? resultKinds,
+        string? usageKind,
+        string[]? usageKinds,
+        string[]? groupBy,
+        int? limit,
+        string? scope,
+        int? maxDocuments,
+        bool? includeMetadata)
+    {
+        return ExactNavigation(
+            operation, candidateId, file, line, column, project, excludeGenerated,
+            resultProject, resultProjects, resultPath, resultPaths, resultKind, resultKinds,
+            usageKind, usageKinds, groupBy, limit, scope, maxDocuments, includeMetadata);
+    }
+
+    public static CommandBuildResult Navigate(
+        string operation,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        string? project,
+        bool? excludeGenerated,
+        string? resultProject,
+        string[]? resultProjects,
+        string? resultPath,
+        string[]? resultPaths,
+        string? resultKind,
+        string[]? resultKinds,
+        string? usageKind,
+        string[]? usageKinds,
+        string[]? groupBy,
+        int? limit,
+        bool? includeMetadata)
+    {
+        return Navigate(
+            operation, candidateId, file, line, column, project, excludeGenerated,
+            resultProject, resultProjects, resultPath, resultPaths, resultKind, resultKinds,
+            usageKind, usageKinds, groupBy, limit, scope: null, maxDocuments: null, includeMetadata);
     }
 
     public static CommandBuildResult ExactNavigation(
@@ -968,7 +1243,7 @@ internal static class NavlynToolCommandBuilder
             !TryAddPositiveInt(args, "--test-limit", testLimit, out error) ||
             !TryAddPositiveInt(args, "--reference-limit", referenceLimit, out error) ||
             !TryAddNonNegativeInt(args, "--snippet-lines", snippetLines, out error) ||
-            !TryAddAllowedValue(args, "--profile", profile, ProfileValues, out error))
+            !TryAddProfile(args, profile, "compact", ProfileValues, out error))
         {
             return CommandBuildResult.Invalid(error);
         }
@@ -1002,7 +1277,7 @@ internal static class NavlynToolCommandBuilder
             !TryAddPositiveInt(args, "--test-limit", testLimit, out error) ||
             !TryAddPositiveInt(args, "--reference-limit", referenceLimit, out error) ||
             !TryAddNonNegativeInt(args, "--snippet-lines", snippetLines, out error) ||
-            !TryAddAllowedValue(args, "--profile", profile, ProfileValues, out error))
+            !TryAddProfile(args, profile, "compact", ProfileValues, out error))
         {
             return CommandBuildResult.Invalid(error);
         }
@@ -1010,6 +1285,628 @@ internal static class NavlynToolCommandBuilder
         AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
         AddOptionalFlag(args, "--include-snippets", includeSnippets);
         return CommandBuildResult.Valid("tests-for-diff", args);
+    }
+
+    public static CommandBuildResult Di(
+        string? mode,
+        string? query,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        string? assumeKind,
+        string[]? assumeKinds,
+        string? match,
+        bool? caseSensitive,
+        string? candidatePolicy,
+        string? minConfidence,
+        bool? explainSelection,
+        int? candidateLimit,
+        string? project,
+        string[]? projects,
+        bool? excludeGenerated,
+        int? registrationLimit,
+        int? dependencyLimit,
+        int? riskLimit,
+        int? consumerLimit,
+        int? depth,
+        bool? includeOptions,
+        bool? includeHostedServices,
+        bool? includeRisks,
+        bool? includeSnippets,
+        int? snippetLines,
+        string? profile)
+    {
+        if (mode is not ("graph" or "registrations" or "impact"))
+        {
+            return CommandBuildResult.Invalid("mode must be graph, registrations, or impact.");
+        }
+
+        List<string> args = [];
+        string command;
+        string? error;
+
+        switch (mode)
+        {
+            case "graph":
+                if (!string.IsNullOrWhiteSpace(query) ||
+                    !string.IsNullOrWhiteSpace(candidateId) ||
+                    HasAnyPosition(file, line, column) ||
+                    HasFuzzySelectionOptions(assumeKind, assumeKinds, match, caseSensitive, candidateLimit, candidatePolicy, minConfidence, explainSelection) ||
+                    consumerLimit is not null ||
+                    depth is not null)
+                {
+                    return CommandBuildResult.Invalid("graph mode does not accept target, fuzzy, candidateLimit, consumerLimit, or depth inputs.");
+                }
+
+                if (!TryAddProjects(args, project, projects, out error))
+                {
+                    return CommandBuildResult.Invalid(error);
+                }
+
+                AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+                if (!TryAddPositiveInt(args, "--registration-limit", registrationLimit, out error) ||
+                    !TryAddPositiveInt(args, "--dependency-limit", dependencyLimit, out error) ||
+                    !TryAddPositiveInt(args, "--risk-limit", riskLimit, out error))
+                {
+                    return CommandBuildResult.Invalid(error);
+                }
+
+                AddOptionalBoolValue(args, "--include-options", includeOptions);
+                AddOptionalBoolValue(args, "--include-hosted-services", includeHostedServices);
+                AddOptionalBoolValue(args, "--include-risks", includeRisks);
+                command = "di-graph";
+                break;
+
+            case "registrations":
+                if (consumerLimit is not null || riskLimit is not null || depth is not null)
+                {
+                    return CommandBuildResult.Invalid("registrations mode does not accept consumerLimit, riskLimit, or depth.");
+                }
+
+                if (includeOptions is not null || includeHostedServices is not null || includeRisks is not null)
+                {
+                    return CommandBuildResult.Invalid("registrations mode does not accept graph-only includeOptions, includeHostedServices, or includeRisks.");
+                }
+
+                if (!TryAddSymbolOrPositionInput(args, query, candidateId, file, line, column, out args, out error))
+                {
+                    return CommandBuildResult.Invalid(error);
+                }
+
+                bool registrationsSourcePosition = HasAnyPosition(file, line, column);
+                if (registrationsSourcePosition)
+                {
+                    if (!TryAddSourcePositionOptions(args, "where-registered", assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, candidateLimit, candidatePolicy, minConfidence, explainSelection, out error))
+                    {
+                        return CommandBuildResult.Invalid(error);
+                    }
+                }
+                else
+                {
+                    if (!string.IsNullOrWhiteSpace(candidateId) && HasQueryOnlyDiFuzzyOptions(assumeKind, assumeKinds, match, caseSensitive))
+                    {
+                        return CommandBuildResult.Invalid("candidateId mode does not accept assumeKind, assumeKinds, match, or caseSensitive.");
+                    }
+
+                    if (!TryAddFuzzyOptions(args, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, limit: null, candidatePolicy, minConfidence, explainSelection, allowGroupPolicy: false, out error) ||
+                        !TryAddPositiveInt(args, "--candidate-limit", candidateLimit, out error))
+                    {
+                        return CommandBuildResult.Invalid(error);
+                    }
+                }
+
+                if (!TryAddPositiveInt(args, "--registration-limit", registrationLimit, out error) ||
+                    !TryAddPositiveInt(args, "--dependency-limit", dependencyLimit, out error))
+                {
+                    return CommandBuildResult.Invalid(error);
+                }
+
+                command = "where-registered";
+                break;
+
+            case "impact":
+                if (includeOptions is not null || includeHostedServices is not null || includeRisks is not null)
+                {
+                    return CommandBuildResult.Invalid("impact mode does not accept graph-only includeOptions, includeHostedServices, or includeRisks.");
+                }
+
+                if (!TryAddSymbolOrPositionInput(args, query, candidateId, file, line, column, out args, out error))
+                {
+                    return CommandBuildResult.Invalid(error);
+                }
+
+                bool impactSourcePosition = HasAnyPosition(file, line, column);
+                if (impactSourcePosition)
+                {
+                    if (!TryAddSourcePositionOptions(args, "di-impact", assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, candidateLimit, candidatePolicy, minConfidence, explainSelection, out error))
+                    {
+                        return CommandBuildResult.Invalid(error);
+                    }
+                }
+                else
+                {
+                    if (!string.IsNullOrWhiteSpace(candidateId) && HasQueryOnlyDiFuzzyOptions(assumeKind, assumeKinds, match, caseSensitive))
+                    {
+                        return CommandBuildResult.Invalid("candidateId mode does not accept assumeKind, assumeKinds, match, or caseSensitive.");
+                    }
+
+                    if (!TryAddFuzzyOptions(args, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, limit: null, candidatePolicy, minConfidence, explainSelection, allowGroupPolicy: false, out error) ||
+                        !TryAddPositiveInt(args, "--candidate-limit", candidateLimit, out error))
+                    {
+                        return CommandBuildResult.Invalid(error);
+                    }
+                }
+
+                if (!TryAddPositiveInt(args, "--registration-limit", registrationLimit, out error) ||
+                    !TryAddPositiveInt(args, "--dependency-limit", dependencyLimit, out error) ||
+                    !TryAddPositiveInt(args, "--risk-limit", riskLimit, out error) ||
+                    !TryAddPositiveInt(args, "--consumer-limit", consumerLimit, out error) ||
+                    !TryAddNonNegativeInt(args, "--depth", depth, out error))
+                {
+                    return CommandBuildResult.Invalid(error);
+                }
+
+                command = "di-impact";
+                break;
+
+            default:
+                return CommandBuildResult.Invalid("mode must be graph, registrations, or impact.");
+        }
+
+        AddOptionalFlag(args, "--include-snippets", includeSnippets);
+        if (!TryAddNonNegativeInt(args, "--snippet-lines", snippetLines, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        if (profile is not null && string.IsNullOrWhiteSpace(profile))
+        {
+            return CommandBuildResult.Invalid("profile must be one of: compact, evidence, full.");
+        }
+
+        string effectiveProfile = profile ?? "compact";
+        if (!TryAddAllowedValue(args, "--profile", effectiveProfile, ProfileValues, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        return CommandBuildResult.Valid(command, args);
+    }
+
+    public static CommandBuildResult Routes(
+        string? mode,
+        string? route,
+        string[]? routes,
+        string[]? endpointKinds,
+        string? auth,
+        string? project,
+        string[]? projects,
+        bool? excludeGenerated,
+        int? routeLimit,
+        int? evidenceLimit,
+        bool? includeSnippets,
+        int? snippetLines,
+        string? profile)
+    {
+        if (mode is not ("map" or "impact"))
+        {
+            return CommandBuildResult.Invalid("mode must be map or impact.");
+        }
+
+        List<string> args = [];
+        string? error;
+        string command;
+
+        if (mode == "map")
+        {
+            if (route is not null)
+            {
+                return CommandBuildResult.Invalid("map mode does not accept route; use routes.");
+            }
+
+            string? invalidKind = endpointKinds?.FirstOrDefault(value => string.IsNullOrWhiteSpace(value) || !EndpointKindValues.Contains(value, StringComparer.Ordinal));
+            if (invalidKind is not null)
+            {
+                return CommandBuildResult.Invalid($"endpointKinds values must be one of: {string.Join(", ", EndpointKindValues)}.");
+            }
+
+            if (auth is not null && !RouteAuthValues.Contains(auth, StringComparer.Ordinal))
+            {
+                return CommandBuildResult.Invalid($"auth must be one of: {string.Join(", ", RouteAuthValues)}.");
+            }
+
+            if (!TryAddProjects(args, project, projects, out error) ||
+                !TryAddPositiveInt(args, "--route-limit", routeLimit, out error) ||
+                !TryAddPositiveInt(args, "--evidence-limit", evidenceLimit, out error) ||
+                !TryAddAllowedValue(args, "--auth", auth, RouteAuthValues, out error))
+            {
+                return CommandBuildResult.Invalid(error);
+            }
+
+            AddOptionalRepeated(args, "--route", NormalizeValues(routes));
+            AddOptionalRepeated(args, "--endpoint-kind", NormalizeValues(endpointKinds));
+            AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+            command = "route-map";
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(route))
+            {
+                return CommandBuildResult.Invalid("impact mode requires a nonblank route.");
+            }
+
+            if (routes is not null || endpointKinds is not null || auth is not null)
+            {
+                return CommandBuildResult.Invalid("impact mode accepts route only; routes, endpointKinds, and auth are map-only.");
+            }
+
+            if (!TryAddProjects(args, project, projects, out error) ||
+                !TryAddPositiveInt(args, "--route-limit", routeLimit, out error) ||
+                !TryAddPositiveInt(args, "--evidence-limit", evidenceLimit, out error))
+            {
+                return CommandBuildResult.Invalid(error);
+            }
+
+            args.Add("--route");
+            args.Add(route.Trim());
+            AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+            command = "route-impact";
+        }
+
+        AddOptionalFlag(args, "--include-snippets", includeSnippets);
+        if (!TryAddNonNegativeInt(args, "--snippet-lines", snippetLines, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        if (profile is not null && string.IsNullOrWhiteSpace(profile))
+        {
+            return CommandBuildResult.Invalid("profile must be one of: compact, evidence, full.");
+        }
+
+        if (!TryAddAllowedValue(args, "--profile", profile ?? "compact", ProfileValues, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        return CommandBuildResult.Valid(command, args);
+    }
+
+    public static CommandBuildResult Options(
+        string? mode,
+        string? query,
+        string? project,
+        string[]? projects,
+        bool? excludeGenerated,
+        int? optionLimit,
+        int? consumerLimit,
+        int? bindingLimit,
+        int? evidenceLimit,
+        bool? includeSnippets,
+        int? snippetLines,
+        string? profile)
+    {
+        if (mode is not ("graph" or "impact"))
+        {
+            return CommandBuildResult.Invalid("mode must be graph or impact.");
+        }
+
+        if (mode == "impact" && string.IsNullOrWhiteSpace(query))
+        {
+            return CommandBuildResult.Invalid("impact mode requires a nonblank query.");
+        }
+
+        List<string> args = [];
+        string? error;
+        if (!TryAddProjects(args, project, projects, out error) ||
+            !TryAddPositiveInt(args, "--option-limit", optionLimit, out error) ||
+            !TryAddPositiveInt(args, "--consumer-limit", consumerLimit, out error) ||
+            !TryAddPositiveInt(args, "--binding-limit", bindingLimit, out error) ||
+            !TryAddPositiveInt(args, "--evidence-limit", evidenceLimit, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        AddOptionalValue(args, "--query", query);
+        AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+        AddOptionalFlag(args, "--include-snippets", includeSnippets);
+        if (!TryAddNonNegativeInt(args, "--snippet-lines", snippetLines, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        if (profile is not null && string.IsNullOrWhiteSpace(profile))
+        {
+            return CommandBuildResult.Invalid("profile must be one of: compact, evidence, full.");
+        }
+
+        if (!TryAddAllowedValue(args, "--profile", profile ?? "compact", ProfileValues, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        return CommandBuildResult.Valid(mode == "graph" ? "options-graph" : "config-impact", args);
+    }
+
+    public static CommandBuildResult Messages(
+        string? mode,
+        string? query,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        string? assumeKind,
+        string[]? assumeKinds,
+        string? match,
+        bool? caseSensitive,
+        string? candidatePolicy,
+        string? minConfidence,
+        bool? explainSelection,
+        string? project,
+        string[]? projects,
+        bool? excludeGenerated,
+        int? candidateLimit,
+        int? handlerLimit,
+        int? callSiteLimit,
+        int? evidenceLimit,
+        bool? includeSnippets,
+        int? snippetLines,
+        string? profile)
+    {
+        if (mode is not ("handlers" or "flow"))
+        {
+            return CommandBuildResult.Invalid("mode must be handlers or flow.");
+        }
+
+        if (mode == "handlers" && callSiteLimit is not null)
+        {
+            return CommandBuildResult.Invalid("handlers mode does not accept callSiteLimit.");
+        }
+
+        List<string> args = [];
+        string command = mode == "handlers" ? "where-handled" : "message-flow";
+        string? error;
+        if (!TryAddSymbolOrPositionInput(args, query, candidateId, file, line, column, out args, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        bool sourcePosition = HasAnyPosition(file, line, column);
+        if (sourcePosition)
+        {
+            if (!TryAddSourcePositionOptions(args, command, assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, candidateLimit, candidatePolicy, minConfidence, explainSelection, out error))
+            {
+                return CommandBuildResult.Invalid(error);
+            }
+        }
+        else
+        {
+            if (!string.IsNullOrWhiteSpace(candidateId) && HasQueryOnlyDiFuzzyOptions(assumeKind, assumeKinds, match, caseSensitive))
+            {
+                return CommandBuildResult.Invalid("candidateId mode does not accept assumeKind, assumeKinds, match, or caseSensitive.");
+            }
+
+            if (match is not null && !MatchValues.Contains(match, StringComparer.Ordinal) ||
+                candidatePolicy is not null && !MessageCandidatePolicyValues.Contains(candidatePolicy, StringComparer.Ordinal) ||
+                minConfidence is not null && !MinConfidenceValues.Contains(minConfidence, StringComparer.Ordinal))
+            {
+                return CommandBuildResult.Invalid("match, candidatePolicy, and minConfidence must use their exact allowed values.");
+            }
+
+            if (!TryAddSingleOrMany(args, "--assume-kind", assumeKind, assumeKinds, "assumeKind", "assumeKinds", out error) ||
+                !TryAddProjects(args, project, projects, out error) ||
+                !TryAddAllowedValue(args, "--match", match, MatchValues, out error) ||
+                !TryAddAllowedValue(args, "--candidate-policy", candidatePolicy, MessageCandidatePolicyValues, out error) ||
+                !TryAddAllowedValue(args, "--min-confidence", minConfidence, MinConfidenceValues, out error))
+            {
+                return CommandBuildResult.Invalid(error);
+            }
+
+            AddOptionalFlag(args, "--case-sensitive", caseSensitive);
+            AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+            AddOptionalFlag(args, "--explain-selection", explainSelection);
+        }
+
+        if (!TryAddPositiveInt(args, "--candidate-limit", sourcePosition ? null : candidateLimit, out error) ||
+            !TryAddPositiveInt(args, "--handler-limit", handlerLimit, out error) ||
+            !TryAddPositiveInt(args, "--call-site-limit", mode == "flow" ? callSiteLimit : null, out error) ||
+            !TryAddPositiveInt(args, "--evidence-limit", evidenceLimit, out error) ||
+            !TryAddNonNegativeInt(args, "--snippet-lines", snippetLines, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        AddOptionalFlag(args, "--include-snippets", includeSnippets);
+
+        if (profile is not null && string.IsNullOrWhiteSpace(profile))
+        {
+            return CommandBuildResult.Invalid("profile must be one of: compact, evidence, full.");
+        }
+
+        if (!TryAddAllowedValue(args, "--profile", profile ?? "compact", ProfileValues, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        return CommandBuildResult.Valid(command, args);
+    }
+
+    public static CommandBuildResult Ef(
+        string? mode,
+        string? entity,
+        string? dbcontext,
+        string? query,
+        string? candidateId,
+        string? file,
+        int? line,
+        int? column,
+        string? assumeKind,
+        string[]? assumeKinds,
+        string? match,
+        bool? caseSensitive,
+        string? candidatePolicy,
+        string? minConfidence,
+        bool? explainSelection,
+        string? project,
+        string[]? projects,
+        bool? excludeGenerated,
+        int? candidateLimit,
+        int? entityLimit,
+        int? querySiteLimit,
+        int? evidenceLimit,
+        bool? includeSnippets,
+        int? snippetLines,
+        string? profile)
+    {
+        if (mode is not ("model" or "impact"))
+        {
+            return CommandBuildResult.Invalid("mode must be model or impact.");
+        }
+
+        List<string> args = [];
+        string? error;
+        string command;
+        bool sourcePosition = false;
+
+        if (mode == "model")
+        {
+            if (query is not null || candidateId is not null || file is not null || line is not null || column is not null ||
+                assumeKind is not null || assumeKinds is not null || match is not null || caseSensitive is not null ||
+                candidatePolicy is not null || minConfidence is not null || explainSelection is not null || candidateLimit is not null)
+            {
+                return CommandBuildResult.Invalid("model mode accepts entity/dbcontext filters, not selected-target or fuzzy fields.");
+            }
+
+            AddOptionalValue(args, "--entity", entity);
+            AddOptionalValue(args, "--dbcontext", dbcontext);
+            if (!TryAddProjects(args, project, projects, out error))
+            {
+                return CommandBuildResult.Invalid(error);
+            }
+
+            AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+            command = "ef-model";
+        }
+        else
+        {
+            if (entity is not null || dbcontext is not null)
+            {
+                return CommandBuildResult.Invalid("impact mode does not accept entity or dbcontext filters.");
+            }
+
+            if (!TryAddSymbolOrPositionInput(args, query, candidateId, file, line, column, out args, out error))
+            {
+                return CommandBuildResult.Invalid(error);
+            }
+
+            sourcePosition = HasAnyPosition(file, line, column);
+            if (sourcePosition)
+            {
+                if (!TryAddSourcePositionOptions(args, "entity-impact", assumeKind, assumeKinds, match, caseSensitive, project, projects, excludeGenerated, candidateLimit, candidatePolicy, minConfidence, explainSelection, out error))
+                {
+                    return CommandBuildResult.Invalid(error);
+                }
+            }
+            else
+            {
+                if (!string.IsNullOrWhiteSpace(candidateId) && HasQueryOnlyDiFuzzyOptions(assumeKind, assumeKinds, match, caseSensitive))
+                {
+                    return CommandBuildResult.Invalid("candidateId mode does not accept assumeKind, assumeKinds, match, or caseSensitive.");
+                }
+
+                if (match is not null && !MatchValues.Contains(match, StringComparer.Ordinal) ||
+                    candidatePolicy is not null && !MessageCandidatePolicyValues.Contains(candidatePolicy, StringComparer.Ordinal) ||
+                    minConfidence is not null && !MinConfidenceValues.Contains(minConfidence, StringComparer.Ordinal))
+                {
+                    return CommandBuildResult.Invalid("match, candidatePolicy, and minConfidence must use their exact allowed values.");
+                }
+
+                if (!TryAddSingleOrMany(args, "--assume-kind", assumeKind, assumeKinds, "assumeKind", "assumeKinds", out error) ||
+                    !TryAddProjects(args, project, projects, out error) ||
+                    !TryAddAllowedValue(args, "--match", match, MatchValues, out error) ||
+                    !TryAddAllowedValue(args, "--candidate-policy", candidatePolicy, MessageCandidatePolicyValues, out error) ||
+                    !TryAddAllowedValue(args, "--min-confidence", minConfidence, MinConfidenceValues, out error))
+                {
+                    return CommandBuildResult.Invalid(error);
+                }
+
+                AddOptionalFlag(args, "--case-sensitive", caseSensitive);
+                AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+                AddOptionalFlag(args, "--explain-selection", explainSelection);
+            }
+
+            command = "entity-impact";
+        }
+
+        if (!TryAddPositiveInt(args, "--candidate-limit", mode == "impact" && !sourcePosition ? candidateLimit : null, out error) ||
+            !TryAddPositiveInt(args, "--entity-limit", entityLimit, out error) ||
+            !TryAddPositiveInt(args, "--query-site-limit", querySiteLimit, out error) ||
+            !TryAddPositiveInt(args, "--evidence-limit", evidenceLimit, out error) ||
+            !TryAddNonNegativeInt(args, "--snippet-lines", snippetLines, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        AddOptionalFlag(args, "--include-snippets", includeSnippets);
+
+        if (profile is not null && string.IsNullOrWhiteSpace(profile))
+        {
+            return CommandBuildResult.Invalid("profile must be one of: compact, evidence, full.");
+        }
+
+        if (!TryAddAllowedValue(args, "--profile", profile ?? "compact", ProfileValues, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        return CommandBuildResult.Valid(command, args);
+    }
+
+    public static CommandBuildResult Packages(
+        string? mode,
+        string? package,
+        string[]? namespaces,
+        string? project,
+        string[]? projects,
+        bool? includeTests,
+        bool? excludeGenerated,
+        int? usageLimit,
+        int? referenceLimit,
+        string? profile)
+    {
+        if (mode is not ("usage" or "impact"))
+        {
+            return CommandBuildResult.Invalid("mode must be usage or impact.");
+        }
+
+        if (string.IsNullOrWhiteSpace(package))
+        {
+            return CommandBuildResult.Invalid("package is required and must be nonblank.");
+        }
+
+        List<string> args = ["--package", package.Trim()];
+        AddOptionalRepeated(args, "--namespace", NormalizeValues(namespaces));
+        if (!TryAddProjects(args, project, projects, out string? error) ||
+            !TryAddPositiveInt(args, "--usage-limit", usageLimit, out error) ||
+            !TryAddPositiveInt(args, "--reference-limit", referenceLimit, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        AddOptionalBoolValue(args, "--include-tests", includeTests);
+        AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+        if (profile is not null && string.IsNullOrWhiteSpace(profile))
+        {
+            return CommandBuildResult.Invalid("profile must be one of: compact, evidence, full.");
+        }
+
+        if (!TryAddAllowedValue(args, "--profile", profile ?? "compact", ProfileValues, out error))
+        {
+            return CommandBuildResult.Invalid(error);
+        }
+
+        return CommandBuildResult.Valid(mode == "usage" ? "package-usage" : "package-impact", args);
     }
 
     public static CommandBuildResult DiImpact(
@@ -1108,7 +2005,7 @@ internal static class NavlynToolCommandBuilder
         if (!TryAddProjects(args, project, projects, out string? error) ||
             !TryAddPositiveInt(args, "--symbol-limit", symbolLimit, out error) ||
             !TryAddPositiveInt(args, "--change-limit", changeLimit, out error) ||
-            !TryAddAllowedValue(args, "--profile", profile, ProfileValues, out error))
+            !TryAddProfile(args, profile, "evidence", ProfileValues, out error))
         {
             return CommandBuildResult.Invalid(error);
         }
@@ -1126,6 +2023,13 @@ internal static class NavlynToolCommandBuilder
             return CommandBuildResult.Invalid("requests is required and must be a non-empty array.");
         }
 
+        if (requests.Value.GetArrayLength() == 1)
+        {
+            string? command = TryGetBatchRequestCommand(requests.Value[0]);
+            string guidance = GetSingleBatchRequestGuidance(command);
+            return CommandBuildResult.Invalid($"navlyn_batch requires at least two requests. {guidance}");
+        }
+
         JsonObject input = [];
         if (defaults is not null && defaults.Value.ValueKind != JsonValueKind.Null)
         {
@@ -1134,6 +2038,56 @@ internal static class NavlynToolCommandBuilder
 
         input["requests"] = JsonNode.Parse(requests.Value.GetRawText());
         return CommandBuildResult.Valid("batch", [], input.ToJsonString(new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+    }
+
+    private static string? TryGetBatchRequestCommand(JsonElement request)
+    {
+        return request.ValueKind == JsonValueKind.Object &&
+            request.TryGetProperty("command", out JsonElement command) &&
+            command.ValueKind == JsonValueKind.String
+                ? command.GetString()?.Trim()
+                : null;
+    }
+
+    private static string GetSingleBatchRequestGuidance(string? command)
+    {
+        string? focusedTool = command switch
+        {
+            "overview" or "repo-graph" => "navlyn_workspace_summary",
+            "diagnostics" => "navlyn_diagnostics",
+            "symbols" or "symbols-in" or "symbol-at" or "find" or "resolve-target" => "navlyn_target",
+            "outline" => "navlyn_file_outline",
+            "symbol-info" or "definition" or "references" or "implementations" or "type-hierarchy" or "callers" or "calls" => "navlyn_navigate",
+            "symbol-source" => "navlyn_read",
+            "where-used" => "navlyn_navigate",
+            "about" => "navlyn_read",
+            "related" or "impact" => "navlyn_impact",
+            "entrypoints" or "framework-entrypoints" => "navlyn_entrypoints",
+            "review-diff" => "navlyn_review",
+            "context-pack" => "navlyn_context_pack",
+            "public-api-diff" => "navlyn_public_api_diff",
+            "tests-for-symbol" => "navlyn_tests_for_symbol",
+            "tests-for-diff" => "navlyn_tests_for_diff",
+            "route-map" or "route-impact" => "navlyn_routes",
+            "di-graph" or "where-registered" or "di-impact" => "navlyn_di",
+            "options-graph" or "config-impact" => "navlyn_options",
+            "where-handled" or "message-flow" => "navlyn_messages",
+            "ef-model" or "entity-impact" => "navlyn_ef",
+            "package-usage" or "package-impact" => "navlyn_packages",
+            _ => null
+        };
+
+        if (focusedTool is not null)
+        {
+            return $"Use focused MCP tool {focusedTool} directly for this single fact.";
+        }
+
+        if (!string.IsNullOrWhiteSpace(command))
+        {
+            return $"Use the matching Navlyn CLI command `navlyn {command}` directly instead of batch.";
+        }
+
+        return "Use the matching Navlyn CLI command directly instead of batch.";
     }
 
     public static CommandBuildResult AgentTargetPack(
@@ -1432,6 +2386,24 @@ internal static class NavlynToolCommandBuilder
         return true;
     }
 
+    private static bool HasAnyTargetInput(string? candidateId, string? file, int? line, int? column)
+    {
+        return !string.IsNullOrWhiteSpace(candidateId) || HasAnyPosition(file, line, column);
+    }
+
+    private static bool HasAnyPosition(string? file, int? line, int? column)
+    {
+        return !string.IsNullOrWhiteSpace(file) || line is not null || column is not null;
+    }
+
+    private static bool HasQueryOnlyDiFuzzyOptions(string? assumeKind, string[]? assumeKinds, string? match, bool? caseSensitive)
+    {
+        return !string.IsNullOrWhiteSpace(assumeKind) ||
+            NormalizeValues(assumeKinds).Count > 0 ||
+            !string.IsNullOrWhiteSpace(match) ||
+            caseSensitive is not null;
+    }
+
     private static bool TryAddSymbolInput(
         List<string> args,
         string? query,
@@ -1685,6 +2657,31 @@ internal static class NavlynToolCommandBuilder
         return true;
     }
 
+    private static bool TryAddDiagnosticSeverities(
+        List<string> args,
+        string? severity,
+        string[]? severities,
+        out string? error)
+    {
+        if (severity is not null && severities is not null)
+        {
+            error = "severity and severities are mutually exclusive.";
+            return false;
+        }
+
+        IReadOnlyList<string> values = severity is not null ? [severity] : severities ?? [];
+        string? invalid = values.FirstOrDefault(value => !DiagnosticSeverityValues.Contains(value, StringComparer.Ordinal));
+        if (invalid is not null)
+        {
+            error = $"severity values must be one of: {string.Join(", ", DiagnosticSeverityValues)}.";
+            return false;
+        }
+
+        AddOptionalRepeated(args, "--severity", values);
+        error = null;
+        return true;
+    }
+
     private static bool TryAddAllowedValue(
         List<string> args,
         string option,
@@ -1709,6 +2706,22 @@ internal static class NavlynToolCommandBuilder
         args.Add(trimmed);
         error = null;
         return true;
+    }
+
+    private static bool TryAddProfile(
+        List<string> args,
+        string? profile,
+        string defaultProfile,
+        IReadOnlyList<string> allowed,
+        out string? error)
+    {
+        if (profile is not null && string.IsNullOrWhiteSpace(profile))
+        {
+            error = $"profile must be one of: {string.Join(", ", allowed)}.";
+            return false;
+        }
+
+        return TryAddAllowedValue(args, "--profile", profile ?? defaultProfile, allowed, out error);
     }
 
     private static bool TryAddPositiveInt(List<string> args, string option, int? value, out string? error)
@@ -1821,9 +2834,18 @@ internal sealed record CommandBuildResult(
     string? StandardInput,
     string? Error)
 {
-    public static CommandBuildResult Valid(string command, IReadOnlyList<string> arguments, string? standardInput = null)
+    public string? ResultCommand { get; init; }
+
+    public static CommandBuildResult Valid(
+        string command,
+        IReadOnlyList<string> arguments,
+        string? standardInput = null,
+        string? resultCommand = null)
     {
-        return new CommandBuildResult(IsValid: true, command, arguments, standardInput, Error: null);
+        return new CommandBuildResult(IsValid: true, command, arguments, standardInput, Error: null)
+        {
+            ResultCommand = resultCommand
+        };
     }
 
     public static CommandBuildResult Invalid(string? error)

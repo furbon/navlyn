@@ -67,6 +67,13 @@ internal sealed class SymbolInfoResolver
         string projectName = sourceDocument.Document.Project.Name;
         SyntaxNode? expression = SourceLanguageFacts.FindContainingExpression(token, position);
         ISymbol? containingSymbol = semanticModel.GetEnclosingSymbol(position, cancellationToken);
+        if (symbol is IParameterSymbol { ContainingSymbol: IMethodSymbol constructor } &&
+            constructor.MethodKind == MethodKind.Constructor &&
+            containingSymbol is INamespaceSymbol or INamedTypeSymbol)
+        {
+            containingSymbol = constructor;
+        }
+
         if (containingSymbol is not null)
         {
             containingSymbol = SymbolNavigationFacts.NormalizeSourceNavigationSymbol(containingSymbol);

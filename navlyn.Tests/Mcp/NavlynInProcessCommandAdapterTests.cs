@@ -58,7 +58,7 @@ public sealed class NavlynInProcessCommandAdapterTests
         NavlynInProcessCommandAdapter adapter = new(CreateOptions(maxJsonChars: NavlynMcpServerOptions.DefaultMaxJsonChars));
 
         NavlynToolResult result = await adapter.RunAsync(
-            NavlynMcpTools.FindSymbolTool,
+            NavlynMcpTools.TargetTool,
             "find",
             ["--query", "CheckCommand", "--assume-kind", "NotAKind"],
             standardInput: null,

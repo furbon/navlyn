@@ -1,6 +1,6 @@
 # Navlyn Architecture
 
-Navlyn 0.7.0 is split into shared implementation assemblies and two tool frontends. The split is meant to keep the public promise boring and inspectable: one engine, deterministic JSON, read-only facts, and no hidden edit or network surface.
+Navlyn is split into shared implementation assemblies and two tool frontends. This architecture description is version-neutral; release identity belongs to the package and release documentation. The split keeps the public promise inspectable: one engine, deterministic JSON, read-only facts, and no hidden edit or network surface.
 
 ## Projects
 
@@ -24,9 +24,11 @@ MCP default:
 
 1. `navlyn.Mcp` receives an MCP tool, resource, or prompt request.
 2. MCP arguments are validated and mapped to an allowlisted logical Navlyn command.
-3. Reader-path tools such as `navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, `navlyn_inspect_file`, and `navlyn_symbol_source` use direct Core resolver paths with a lazy per-server workspace cache and `DocumentIndex`.
+3. Reader-path tools such as `navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, and `navlyn_read` use direct Core resolver paths with a lazy per-server workspace cache and `DocumentIndex`.
 4. Other tools use `NavlynInProcessCommandAdapter`, which runs the shared command runtime in-process.
 5. The MCP result envelope returns `sourceCommand` for traceability and the command JSON under `result`.
+
+The `read`/`symbol-source` path can opt into `metadata` or `decompiled` external-member reads. It retains Roslyn's exact call-site binding and selected project target framework, matches the compile-time reference PE to local package/runtime assets or a direct implementation reference, and decompiles one exact member in a separate killable worker. It reports reference and implementation content hashes and validates the selected inputs before returning. The default `externalSource: "none"` path keeps the existing behavior and does not inspect external binaries. External slices use non-editable `navlyn-metadata://` or `navlyn-decompiled://` paths and contain reconstructed text, not a claim of original source.
 
 MCP legacy external CLI:
 
@@ -36,9 +38,9 @@ MCP legacy external CLI:
 
 ## Cache Boundary
 
-The MCP server reuses its process, loaded assemblies, command runtime, MSBuildLocator registration, a lazy workspace cache, and a workspace-scoped `DocumentIndex` for direct reader tools. `navlyn_file_outline` seeds an in-memory candidate target map for the current server process, so immediate `navlyn_symbol_source(candidateId: "...")` follow-ups can avoid a broad candidate scan. Tools that still run through the command adapter preserve the existing CLI behavior and may load the workspace independently.
+The MCP server reuses its process, loaded assemblies, command runtime, MSBuildLocator registration, a lazy workspace cache, and a workspace-scoped `DocumentIndex` for direct reader tools. `navlyn_file_outline` seeds an in-memory candidate target map for the current server process, so immediate `navlyn_read(candidateId: "...", view: "declaration")` follow-ups can avoid a broad candidate scan. Tools that still run through the command adapter preserve the existing CLI behavior and may load the workspace independently.
 
-The direct cache is session-local and has no file watcher. Use `navlyn_workspace_refresh` or restart the MCP server after source or project changes when freshness matters. Use `navlyn_batch` when several batch-supported adapter-backed facts should share one workspace load. Navlyn does not add an editing surface, network access, or arbitrary command execution.
+The direct cache is session-local and has no file watcher. It hashes selected workspace, loaded project/document, and workspace-tree source/build inputs before leasing a snapshot and before returning a successful direct result. Stable changes reload the workspace; changes during a call receive one retry and then a deterministic stale-workspace error. Each snapshot generation owns its candidate-position map and remains alive until overlapping calls release their leases. An explicit refresh replaces the local generation even if a configured daemon answers its refresh request. The content-sensitive `snapshotId` identifies checked inputs as well as the graph; `workspaceFingerprint` remains the graph identity. Adapter-backed tools may load independently, and a later direct call checks its own inputs. Use `navlyn_batch` when several batch-supported adapter-backed facts should share one workspace load. Navlyn does not add an editing surface, network access, or arbitrary command execution.
 
 `navlyn serve` is an opt-in local read-only daemon for workspace lifecycle requests. It accepts newline-delimited JSON over stdin/stdout, or a local named pipe when `--pipe` is supplied. CLI `workspace-status` / `workspace-refresh` and MCP `navlyn_workspace_status` / `navlyn_workspace_refresh` can connect to that pipe only when explicitly configured. If a configured daemon is unavailable, callers fall back to the normal stateless or in-process path.
 
@@ -50,7 +52,7 @@ Expensive reverse-edge operations use `SymbolNavigationSearchOptions` and `Symbo
 
 ## Release Hardening Ledger
 
-These are known architecture pressure points for future releases. They are not required for the v0.7.0 public contract because the current implementation is covered by focused tests, schemas, and CLI/MCP contract checks.
+These are known architecture pressure points for future releases. They are not requirements of the current public contract because the implementation is covered by focused tests, schemas, and CLI/MCP contract checks.
 
 | Area | Current Boundary | Future Split Trigger |
 | --- | --- | --- |

@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "navlyn": {
+      "type": "local",
+      "command": "C:\\path\\to\\navlyn-mcp.exe",
+      "args": [
+        "--working-directory",
+        "."
+      ],
+      "tools": [
+        "*"
+      ]
+    }
+  }
+}

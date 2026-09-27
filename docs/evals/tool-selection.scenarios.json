@@ -1,373 +1,5100 @@
 {
-  "schemaVersion": "navlyn.tool-selection-eval.v1",
-  "description": "Machine-readable scenarios for scoring whether an agent chooses the smallest useful Navlyn surface.",
+  "schemaVersion": "navlyn.tool-selection-eval.v2",
+  "description": "Trace schema v2 records nested MCP envelope result fields or ordinary action output, exact arguments, environment, and claim boundaries.",
   "scoring": {
-    "maxPointsPerScenario": 5,
+    "maxCriteria": 11,
     "criteria": [
-      "correctSmallestUsefulTool",
-      "wrongSymbolAvoidance",
-      "overBroadChecklistAvoidance",
-      "stopCondition",
-      "stdoutStderrJsonBehavior"
+      "skillActivation",
+      "firstAction",
+      "acceptedSequence",
+      "forbiddenAvoidance",
+      "requiredArguments",
+      "evidenceBackedStop",
+      "semanticCorrectness",
+      "callAndOutputBudgets",
+      "availabilityFreshness",
+      "unsupportedClaims",
+      "stdoutStderrBehavior"
     ]
   },
   "scenarios": [
     {
-      "id": "target-known-symbol",
-      "prompt": "What does `CheckCommand` refer to?",
-      "surface": "canonical",
-      "expectedFirstSteps": [ "navlyn_target", "target" ],
-      "avoidTools": [ "navlyn_review", "navlyn_review_diff", "navlyn_context_pack", "navlyn_tests_for_symbol", "navlyn_public_api_diff", "navlyn_batch" ],
-      "acceptedStopConditions": [ "candidate-id-or-ambiguity" ],
-      "maxToolCount": 2,
-      "semanticIdentityRequired": true,
-      "navlynExpected": true,
+      "id": "ambiguous-symbol-identity-01",
+      "taskClass": "ambiguous-symbol-identity",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "List the two `Widget.Format` overloads so I can choose the intended signature.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_target"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_target"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "mode",
+          "equals": "list"
+        },
+        {
+          "callIndex": 0,
+          "path": "query",
+          "equals": "Format"
+        },
+        {
+          "callIndex": 0,
+          "path": "assumeKind",
+          "equals": "Method"
+        },
+        {
+          "callIndex": 0,
+          "path": "match",
+          "equals": "exact"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "candidate-list-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.candidateCount",
+              "result.candidates"
+            ],
+            "predicates": [
+              {
+                "path": "result.candidateCount",
+                "type": "number",
+                "minimum": 1
+              },
+              {
+                "path": "result.candidates",
+                "type": "array",
+                "minItems": 1
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "ambiguityReported"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_target" ],
-        "stopCondition": "candidate-id-or-ambiguity",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_target",
+            "arguments": {
+              "mode": "list",
+              "query": "Format",
+              "assumeKind": "Method",
+              "match": "exact"
+            },
+            "selectedResultFields": {
+              "result": {
+                "query": "Format",
+                "intent": "find",
+                "match": "exact",
+                "assumptions": {
+                  "kinds": [
+                    "Method"
+                  ]
+                },
+                "confidence": "ambiguous",
+                "candidateCount": 2,
+                "totalCandidates": 2,
+                "candidates": [
+                  {
+                    "name": "Format",
+                    "kind": "Method",
+                    "container": "SymbolNavigationFixture.Widget",
+                    "fullyQualifiedName": "SymbolNavigationFixture.Widget.Format(int)",
+                    "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                    "line": 15,
+                    "column": 19,
+                    "candidateId": "sym:v1:2a7fcf78e81aeed3dd9f4acc98b9f620"
+                  },
+                  {
+                    "name": "Format",
+                    "kind": "Method",
+                    "container": "SymbolNavigationFixture.Widget",
+                    "fullyQualifiedName": "SymbolNavigationFixture.Widget.Format(string)",
+                    "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                    "line": 20,
+                    "column": 19,
+                    "candidateId": "sym:v1:7403458d577914ce0107298031635a28"
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "stopReason": "candidate-list-returned",
+        "semanticChecks": {
+          "ambiguityReported": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
     },
     {
-      "id": "read-known-source-position",
-      "prompt": "Open the declaration for this known file position.",
-      "surface": "canonical",
-      "expectedFirstSteps": [ "navlyn_read", "read" ],
-      "avoidTools": [ "navlyn_workspace_summary", "repo-graph", "navlyn_review", "navlyn_review_diff", "navlyn_context_pack" ],
-      "acceptedStopConditions": [ "bounded-source-returned" ],
-      "maxToolCount": 1,
-      "semanticIdentityRequired": true,
-      "navlynExpected": true,
+      "id": "exact-position-02",
+      "taskClass": "exact-position",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "Read the declaration at this known source position in FixtureCode.cs.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_read"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_read"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "file",
+          "equals": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs"
+        },
+        {
+          "callIndex": 0,
+          "path": "line",
+          "equals": 6
+        },
+        {
+          "callIndex": 0,
+          "path": "column",
+          "equals": 1
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "source-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.slices"
+            ],
+            "predicates": [
+              {
+                "path": "result.slices",
+                "type": "array",
+                "minItems": 1
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "targetAnchored"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_read" ],
-        "stopCondition": "bounded-source-returned",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_read",
+            "arguments": {
+              "file": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+              "line": 6,
+              "column": 1
+            },
+            "selectedResultFields": {
+              "result": {
+                "file": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                "line": 6,
+                "column": 1,
+                "symbol": {
+                  "name": "Widget",
+                  "kind": "NamedType",
+                  "container": "SymbolNavigationFixture"
+                },
+                "slices": [
+                  {
+                    "textKind": "declaration",
+                    "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                    "startLine": 6,
+                    "endLine": 24,
+                    "lines": [
+                      "public partial class Widget"
+                    ],
+                    "truncated": false
+                  }
+                ],
+                "truncated": false
+              }
+            }
+          }
+        ],
+        "stopReason": "source-returned",
+        "semanticChecks": {
+          "targetAnchored": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
     },
     {
-      "id": "ambiguous-symbol-name",
-      "prompt": "There are several `PaymentService` symbols. Which one should be edited?",
-      "surface": "canonical",
-      "expectedFirstSteps": [ "navlyn_target", "target" ],
-      "avoidTools": [ "navlyn_read", "navlyn_symbol_source", "navlyn_prepare_edit", "navlyn_edit_preflight", "navlyn_review", "navlyn_batch" ],
-      "acceptedStopConditions": [ "candidate-id-or-ambiguity" ],
-      "maxToolCount": 2,
-      "semanticIdentityRequired": true,
-      "navlynExpected": true,
+      "id": "overload-03",
+      "taskClass": "overload",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "List the `Widget.Format` overloads so I can choose the string overload.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_target"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_target"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "mode",
+          "equals": "list"
+        },
+        {
+          "callIndex": 0,
+          "path": "query",
+          "equals": "Format"
+        },
+        {
+          "callIndex": 0,
+          "path": "assumeKind",
+          "equals": "Method"
+        },
+        {
+          "callIndex": 0,
+          "path": "match",
+          "equals": "exact"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "candidate-list-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.candidateCount",
+              "result.candidates"
+            ],
+            "predicates": [
+              {
+                "path": "result.candidateCount",
+                "type": "number",
+                "minimum": 1
+              },
+              {
+                "path": "result.candidates",
+                "type": "array",
+                "minItems": 1
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "ambiguityReported"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_target" ],
-        "stopCondition": "candidate-id-or-ambiguity",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_target",
+            "arguments": {
+              "mode": "list",
+              "query": "Format",
+              "assumeKind": "Method",
+              "match": "exact"
+            },
+            "selectedResultFields": {
+              "result": {
+                "query": "Format",
+                "intent": "find",
+                "match": "exact",
+                "assumptions": {
+                  "kinds": [
+                    "Method"
+                  ]
+                },
+                "confidence": "ambiguous",
+                "candidateCount": 2,
+                "totalCandidates": 2,
+                "candidates": [
+                  {
+                    "name": "Format",
+                    "kind": "Method",
+                    "container": "SymbolNavigationFixture.Widget",
+                    "fullyQualifiedName": "SymbolNavigationFixture.Widget.Format(int)",
+                    "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                    "line": 15,
+                    "column": 19,
+                    "candidateId": "sym:v1:fixture-format-1"
+                  },
+                  {
+                    "name": "Format",
+                    "kind": "Method",
+                    "container": "SymbolNavigationFixture.Widget",
+                    "fullyQualifiedName": "SymbolNavigationFixture.Widget.Format(string)",
+                    "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                    "line": 20,
+                    "column": 19,
+                    "candidateId": "sym:v1:fixture-format-2"
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "stopReason": "candidate-list-returned",
+        "semanticChecks": {
+          "ambiguityReported": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
     },
     {
-      "id": "prepare-edit-one-target",
-      "prompt": "Before changing `PaymentService`, gather the evidence an agent should use.",
-      "surface": "canonical",
-      "expectedFirstSteps": [ "navlyn_prepare_edit", "prepare-edit" ],
-      "avoidTools": [ "navlyn_review", "navlyn_review_diff", "navlyn_batch", "navlyn_public_api_diff" ],
-      "acceptedStopConditions": [ "pre-edit-anchor-or-ambiguity" ],
-      "maxToolCount": 1,
-      "semanticIdentityRequired": true,
-      "navlynExpected": true,
+      "id": "partial-declaration-04",
+      "taskClass": "partial-declaration",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "Prepare the declaration at the known position in FixtureCode.cs before editing.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_prepare_edit"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_prepare_edit"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "file",
+          "equals": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs"
+        },
+        {
+          "callIndex": 0,
+          "path": "line",
+          "equals": 6
+        },
+        {
+          "callIndex": 0,
+          "path": "column",
+          "equals": 1
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "preflight-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.anchor.path",
+              "result.confidence.overall"
+            ],
+            "predicates": [
+              {
+                "path": "result.anchor.path",
+                "type": "string",
+                "nonBlank": true
+              },
+              {
+                "path": "result.confidence.overall",
+                "type": "string",
+                "nonBlank": true
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "partialContextIncluded"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_prepare_edit" ],
-        "stopCondition": "pre-edit-anchor-or-ambiguity",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_prepare_edit",
+            "arguments": {
+              "file": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+              "line": 6,
+              "column": 1
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "prepare-edit",
+                "anchor": {
+                  "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs"
+                },
+                "confidence": {
+                  "overall": "high"
+                }
+              }
+            }
+          }
+        ],
+        "stopReason": "preflight-returned",
+        "semanticChecks": {
+          "partialContextIncluded": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
     },
     {
-      "id": "verify-edit-after-change",
-      "prompt": "I edited the file. Check whether the diff still matches the intended target.",
-      "surface": "canonical",
-      "expectedFirstSteps": [ "navlyn_verify_edit", "verify-edit" ],
-      "avoidTools": [ "navlyn_target", "navlyn_read", "navlyn_context_pack", "navlyn_batch" ],
-      "acceptedStopConditions": [ "guard-pass-or-fail-closed" ],
-      "maxToolCount": 1,
-      "semanticIdentityRequired": true,
-      "navlynExpected": true,
+      "id": "references-callers-05",
+      "taskClass": "references-callers",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "Who calls `Widget.Format` in this fixture?",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_navigate"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_navigate"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "operation",
+          "equals": "callers"
+        },
+        {
+          "callIndex": 0,
+          "path": "file",
+          "equals": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs"
+        },
+        {
+          "callIndex": 0,
+          "path": "line",
+          "equals": 15
+        },
+        {
+          "callIndex": 0,
+          "path": "column",
+          "equals": 5
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "callers-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.callers"
+            ],
+            "predicates": [
+              {
+                "path": "result.callers",
+                "type": "array",
+                "minItems": 1
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "targetAnchored"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_verify_edit" ],
-        "stopCondition": "guard-pass-or-fail-closed",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_navigate",
+            "arguments": {
+              "operation": "callers",
+              "file": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+              "line": 15,
+              "column": 5
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "callers",
+                "callers": [
+                  {
+                    "symbol": {
+                      "name": "Run",
+                      "kind": "Method",
+                      "container": "SymbolNavigationFixture.Runner",
+                      "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                      "line": 114,
+                      "column": 19
+                    },
+                    "locations": [
+                      {
+                        "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                        "line": 117,
+                        "column": 35
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "stopReason": "callers-returned",
+        "semanticChecks": {
+          "targetAnchored": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
     },
     {
-      "id": "review-pr",
-      "prompt": "Review this PR.",
-      "surface": "canonical",
-      "expectedFirstSteps": [ "navlyn_review", "review" ],
-      "avoidTools": [ "navlyn_file_outline", "navlyn_read", "navlyn_batch" ],
-      "acceptedStopConditions": [ "review-facts-available" ],
-      "maxToolCount": 2,
-      "semanticIdentityRequired": false,
-      "navlynExpected": true,
+      "id": "known-file-outline-06",
+      "taskClass": "known-file-outline",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "Outline this known C# file.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_file_outline"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_file_outline"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "file",
+          "equals": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "outline-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.entries"
+            ],
+            "predicates": [
+              {
+                "path": "result.entries",
+                "type": "array",
+                "minItems": 1
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "fileScoped"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_review" ],
-        "stopCondition": "review-facts-available",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_file_outline",
+            "arguments": {
+              "file": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs"
+            },
+            "selectedResultFields": {
+              "result": {
+                "file": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                "entries": [
+                  {
+                    "name": "Widget",
+                    "kind": "NamedType",
+                    "container": "SymbolNavigationFixture",
+                    "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                    "line": 6,
+                    "column": 1,
+                    "endLine": 24,
+                    "endColumn": 2
+                  },
+                  {
+                    "name": "Format",
+                    "kind": "Method",
+                    "container": "SymbolNavigationFixture.Widget",
+                    "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                    "line": 15,
+                    "column": 19,
+                    "endLine": 15,
+                    "endColumn": 25
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "stopReason": "outline-returned",
+        "semanticChecks": {
+          "fileScoped": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
     },
     {
-      "id": "readme-install-instructions",
-      "prompt": "Find install instructions in README.",
-      "surface": "none",
-      "expectedFirstSteps": [ "file-read", "rg" ],
-      "avoidTools": [ "navlyn_workspace_summary", "navlyn_target", "navlyn_resolve_target", "navlyn_find_symbol", "repo-graph", "find" ],
-      "acceptedStopConditions": [ "markdown-section-found" ],
-      "maxToolCount": 1,
-      "semanticIdentityRequired": false,
-      "navlynExpected": false,
+      "id": "multi-project-07",
+      "taskClass": "multi-project",
+      "workspace": "tests/fixtures/MultiProjectFixture/MultiProjectFixture.slnx",
+      "prompt": "Find `CrossProjectRunner` in the App project.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_target"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_target"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "mode",
+          "equals": "select"
+        },
+        {
+          "callIndex": 0,
+          "path": "query",
+          "equals": "CrossProjectRunner"
+        },
+        {
+          "callIndex": 0,
+          "path": "project",
+          "equals": "App"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "candidate-selected"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.selectedTarget",
+              "result.candidateId"
+            ],
+            "predicates": [
+              {
+                "path": "result.selectedTarget",
+                "type": "object",
+                "requiredProperties": [
+                  "name",
+                  "kind",
+                  "path"
+                ]
+              },
+              {
+                "path": "result.candidateId",
+                "type": "string",
+                "nonBlank": true
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "projectScoped"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "rg" ],
-        "stopCondition": "markdown-section-found",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_target",
+            "arguments": {
+              "mode": "select",
+              "query": "CrossProjectRunner",
+              "project": "App"
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "target",
+                "selectedTarget": {
+                  "name": "CrossProjectRunner",
+                  "kind": "NamedType",
+                  "container": "MultiProjectFixture.App",
+                  "facts": {
+                    "displayName": "MultiProjectFixture.App.CrossProjectRunner",
+                    "fullyQualifiedName": "MultiProjectFixture.App.CrossProjectRunner",
+                    "kind": "NamedType",
+                    "isSource": true,
+                    "isMetadata": false
+                  },
+                  "path": "tests/fixtures/MultiProjectFixture/App/CrossProjectRunner.cs",
+                  "line": 5,
+                  "column": 21,
+                  "endLine": 12,
+                  "endColumn": 2
+                },
+                "candidateId": "sym:v1:88ec12f443b7e475e67411835cfbcc69"
+              }
+            }
+          }
+        ],
+        "stopReason": "candidate-selected",
+        "semanticChecks": {
+          "projectScoped": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/MultiProjectFixture/MultiProjectFixture.slnx"
     },
     {
-      "id": "comments-only-task",
-      "prompt": "Find marker comments mentioning retries.",
-      "surface": "none",
-      "expectedFirstSteps": [ "rg", "file-read" ],
-      "avoidTools": [ "navlyn_target", "navlyn_find_symbol", "navlyn_workspace_summary", "navlyn_context_pack" ],
-      "acceptedStopConditions": [ "text-match-found" ],
-      "maxToolCount": 1,
-      "semanticIdentityRequired": false,
-      "navlynExpected": false,
+      "id": "multi-target-08",
+      "taskClass": "multi-target",
+      "workspace": "tests/fixtures/WorkspaceSemanticsFixture/WorkspaceSemanticsFixture.slnx",
+      "prompt": "Show the workspace target frameworks.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_workspace_summary"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_workspace_summary"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "profile",
+          "equals": "full"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "workspace-summary-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.projects.items",
+              "result.projects"
+            ],
+            "predicates": [
+              {
+                "path": "result.projects.items",
+                "type": "array",
+                "minItems": 1
+              },
+              {
+                "path": "result.projects",
+                "type": "object",
+                "requiredProperties": [
+                  "totalProjects",
+                  "items"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "targetFrameworkFacts"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "rg" ],
-        "stopCondition": "text-match-found",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_workspace_summary",
+            "arguments": {
+              "profile": "full"
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "repo-graph",
+                "projects": {
+                  "totalProjects": 5,
+                  "items": [
+                    {
+                      "name": "Conditional",
+                      "targetFramework": "net10.0",
+                      "targetFrameworks": [
+                        "net10.0"
+                      ]
+                    },
+                    {
+                      "name": "LinkedAlpha",
+                      "targetFramework": "net10.0",
+                      "targetFrameworks": [
+                        "net10.0"
+                      ]
+                    },
+                    {
+                      "name": "LinkedBeta",
+                      "targetFramework": "net10.0",
+                      "targetFrameworks": [
+                        "net10.0"
+                      ]
+                    },
+                    {
+                      "name": "MultiTarget(net10.0)",
+                      "targetFramework": "net10.0",
+                      "targetFrameworks": [
+                        "net10.0",
+                        "netstandard2.0"
+                      ]
+                    },
+                    {
+                      "name": "MultiTarget(netstandard2.0)",
+                      "targetFramework": "netstandard2.0",
+                      "targetFrameworks": [
+                        "net10.0",
+                        "netstandard2.0"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ],
+        "stopReason": "workspace-summary-returned",
+        "semanticChecks": {
+          "targetFrameworkFacts": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/WorkspaceSemanticsFixture/WorkspaceSemanticsFixture.slnx"
     },
     {
-      "id": "callers-question",
-      "prompt": "Who calls this method?",
-      "surface": "canonical-plus-edge",
-      "expectedFirstSteps": [ "navlyn_target", "target" ],
-      "avoidTools": [ "navlyn_context_pack", "navlyn_review", "navlyn_batch" ],
-      "acceptedStopConditions": [ "callers-answer-or-rerun-hint" ],
-      "maxToolCount": 3,
-      "semanticIdentityRequired": true,
-      "navlynExpected": true,
+      "id": "linked-file-09",
+      "taskClass": "linked-file",
+      "workspace": "tests/fixtures/WorkspaceSemanticsFixture/WorkspaceSemanticsFixture.slnx",
+      "prompt": "Read the linked `LinkedContext` declaration in the LinkedAlpha project.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_read"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_read"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "file",
+          "equals": "tests/fixtures/WorkspaceSemanticsFixture/Shared/LinkedContext.cs"
+        },
+        {
+          "callIndex": 0,
+          "path": "line",
+          "equals": 3
+        },
+        {
+          "callIndex": 0,
+          "path": "column",
+          "equals": 1
+        },
+        {
+          "callIndex": 0,
+          "path": "project",
+          "equals": "LinkedAlpha"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "source-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.project",
+              "result.slices"
+            ],
+            "predicates": [
+              {
+                "path": "result.project",
+                "type": "object",
+                "requiredProperties": [
+                  "filter",
+                  "name",
+                  "path",
+                  "targetFramework"
+                ]
+              },
+              {
+                "path": "result.slices",
+                "type": "array",
+                "minItems": 1
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "linkedProjectContext"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_target", "navlyn_symbol_edges" ],
-        "stopCondition": "callers-answer-or-rerun-hint",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_read",
+            "arguments": {
+              "file": "tests/fixtures/WorkspaceSemanticsFixture/Shared/LinkedContext.cs",
+              "line": 3,
+              "column": 1,
+              "project": "LinkedAlpha"
+            },
+            "selectedResultFields": {
+              "result": {
+                "file": "tests/fixtures/WorkspaceSemanticsFixture/Shared/LinkedContext.cs",
+                "line": 3,
+                "column": 1,
+                "project": {
+                  "filter": "LinkedAlpha",
+                  "name": "LinkedAlpha",
+                  "path": "tests/fixtures/WorkspaceSemanticsFixture/LinkedAlpha/LinkedAlpha.csproj",
+                  "targetFramework": "net10.0"
+                },
+                "symbol": {
+                  "name": "LinkedContext",
+                  "kind": "NamedType",
+                  "container": "WorkspaceSemantics.Linked"
+                },
+                "slices": [
+                  {
+                    "textKind": "declaration",
+                    "path": "tests/fixtures/WorkspaceSemanticsFixture/Shared/LinkedContext.cs",
+                    "startLine": 3,
+                    "endLine": 6,
+                    "lines": [
+                      "public sealed class LinkedContext"
+                    ],
+                    "truncated": false
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "stopReason": "source-returned",
+        "semanticChecks": {
+          "linkedProjectContext": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/WorkspaceSemanticsFixture/WorkspaceSemanticsFixture.slnx"
     },
     {
-      "id": "overload-specific-edit",
-      "prompt": "Change only the `Process(string)` overload, not the `Process(int)` overload.",
-      "surface": "canonical",
-      "expectedFirstSteps": [ "navlyn_target", "target", "navlyn_read", "read" ],
-      "avoidTools": [ "navlyn_find_symbol", "navlyn_context_pack", "navlyn_batch" ],
-      "acceptedStopConditions": [ "overload-anchored" ],
-      "maxToolCount": 3,
-      "semanticIdentityRequired": true,
-      "navlynExpected": true,
+      "id": "generated-code-avoidance-10",
+      "taskClass": "generated-code-avoidance",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "Locate `GeneratedThing`, excluding the generated file unless no source candidate remains.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_target"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_target"
+          }
+        ],
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_target"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_target"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "mode",
+          "equals": "select"
+        },
+        {
+          "callIndex": 0,
+          "path": "query",
+          "equals": "GeneratedThing"
+        },
+        {
+          "callIndex": 0,
+          "path": "excludeGenerated",
+          "equals": true
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "generated-candidate-excluded"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.candidateCount",
+              "result.ambiguityReason",
+              "result.confidence"
+            ],
+            "predicates": [
+              {
+                "path": "result.candidateCount",
+                "type": "number",
+                "equals": 0
+              },
+              {
+                "path": "result.ambiguityReason",
+                "type": "string",
+                "equals": "no-candidates"
+              },
+              {
+                "path": "result.confidence",
+                "type": "string",
+                "equals": "none"
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "generatedCandidateExcluded"
+      ],
+      "maxCalls": 2,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_target", "navlyn_read" ],
-        "stopCondition": "overload-anchored",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_target",
+            "arguments": {
+              "mode": "select",
+              "query": "GeneratedThing",
+              "excludeGenerated": true
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "target",
+                "confidence": "none",
+                "ambiguityReason": "no-candidates",
+                "ambiguitySummary": {
+                  "isAmbiguous": true,
+                  "primaryReason": "no-candidates",
+                  "reasonCodes": [
+                    "no-candidates"
+                  ],
+                  "groups": [],
+                  "recommendedAction": "Check the query, source position, workspace, project filter, or assume-kind before retrying."
+                },
+                "candidateCount": 0,
+                "totalCandidates": 0,
+                "candidates": []
+              }
+            }
+          }
+        ],
+        "stopReason": "generated-candidate-excluded",
+        "semanticChecks": {
+          "generatedCandidateExcluded": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
     },
     {
-      "id": "partial-class-edit",
-      "prompt": "Before editing a partial class, show the relevant declaration and related partial context.",
-      "surface": "canonical",
-      "expectedFirstSteps": [ "navlyn_prepare_edit", "prepare-edit", "navlyn_target", "target" ],
-      "avoidTools": [ "navlyn_review", "navlyn_batch", "navlyn_public_api_diff" ],
-      "acceptedStopConditions": [ "partial-context-or-ambiguity" ],
-      "maxToolCount": 2,
-      "semanticIdentityRequired": true,
-      "navlynExpected": true,
+      "id": "pre-edit-11",
+      "taskClass": "pre-edit",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "Prepare the declaration at the known position in FixtureCode.cs before editing.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_prepare_edit"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_prepare_edit"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "file",
+          "equals": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs"
+        },
+        {
+          "callIndex": 0,
+          "path": "line",
+          "equals": 6
+        },
+        {
+          "callIndex": 0,
+          "path": "column",
+          "equals": 1
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "prepare-edit-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.anchor.path",
+              "result.confidence.overall"
+            ],
+            "predicates": [
+              {
+                "path": "result.anchor.path",
+                "type": "string",
+                "nonBlank": true
+              },
+              {
+                "path": "result.confidence.overall",
+                "type": "string",
+                "nonBlank": true
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "targetAnchored",
+        "partialContextIncluded"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_prepare_edit" ],
-        "stopCondition": "partial-context-or-ambiguity",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_prepare_edit",
+            "arguments": {
+              "file": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+              "line": 6,
+              "column": 1
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "prepare-edit",
+                "anchor": {
+                  "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs"
+                },
+                "confidence": {
+                  "overall": "high"
+                }
+              }
+            }
+          }
+        ],
+        "stopReason": "prepare-edit-returned",
+        "semanticChecks": {
+          "targetAnchored": true,
+          "partialContextIncluded": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
     },
     {
-      "id": "multi-target-project",
-      "prompt": "This project targets net8.0 and net10.0; inspect the net10.0 target only.",
-      "surface": "canonical",
-      "expectedFirstSteps": [ "navlyn_target", "target", "navlyn_workspace_summary" ],
-      "avoidTools": [ "navlyn_batch", "navlyn_review" ],
-      "acceptedStopConditions": [ "project-target-selected" ],
-      "maxToolCount": 2,
-      "semanticIdentityRequired": true,
-      "navlynExpected": true,
+      "id": "post-edit-12",
+      "taskClass": "post-edit",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "Verify the selected Widget candidate against the actual diff.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_verify_edit"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_verify_edit"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "file",
+          "equals": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs"
+        },
+        {
+          "callIndex": 0,
+          "path": "line",
+          "equals": 15
+        },
+        {
+          "callIndex": 0,
+          "path": "column",
+          "equals": 5
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "post-edit-guard-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.anchor.path"
+            ],
+            "predicates": [
+              {
+                "path": "result.anchor.path",
+                "type": "string",
+                "nonBlank": true
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "postEditGuard"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_target" ],
-        "stopCondition": "project-target-selected",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_verify_edit",
+            "arguments": {
+              "file": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+              "line": 15,
+              "column": 5
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "verify-edit",
+                "anchor": {
+                  "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs"
+                }
+              }
+            }
+          }
+        ],
+        "stopReason": "post-edit-guard-returned",
+        "semanticChecks": {
+          "postEditGuard": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
     },
     {
-      "id": "generated-file-avoidance",
-      "prompt": "Find the source declaration, but do not edit generated files.",
-      "surface": "canonical",
-      "expectedFirstSteps": [ "navlyn_target", "target" ],
-      "avoidTools": [ "navlyn_read", "navlyn_context_pack", "navlyn_batch" ],
-      "acceptedStopConditions": [ "generated-candidate-excluded-or-warned" ],
-      "maxToolCount": 2,
-      "semanticIdentityRequired": true,
-      "navlynExpected": true,
+      "id": "actual-diff-review-13",
+      "taskClass": "actual-diff-review",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "Review the actual working-tree diff.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_review"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_review"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "profile",
+          "equals": "evidence"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "diff-review-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.changedSymbols",
+              "result.findings"
+            ],
+            "predicates": [
+              {
+                "path": "result.changedSymbols",
+                "type": "object",
+                "requiredProperties": [
+                  "totalSymbols",
+                  "symbols"
+                ]
+              },
+              {
+                "path": "result.findings",
+                "type": "array",
+                "minItems": 1
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "actualDiffReviewed"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_target" ],
-        "stopCondition": "generated-candidate-excluded-or-warned",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_review",
+            "arguments": {
+              "profile": "evidence"
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "review-diff",
+                "changedSymbols": {
+                  "totalSymbols": 1,
+                  "limit": 20,
+                  "truncated": false,
+                  "symbols": [
+                    {
+                      "name": "Format",
+                      "kind": "Method",
+                      "container": "SymbolNavigationFixture.Widget",
+                      "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                      "line": 15
+                    }
+                  ]
+                },
+                "findings": [
+                  {
+                    "category": "changed-symbol",
+                    "message": "Widget.Format changed"
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "stopReason": "diff-review-returned",
+        "semanticChecks": {
+          "actualDiffReviewed": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
     },
     {
-      "id": "stale-candidate-after-edit",
-      "prompt": "The file changed after I copied this candidate id. Check whether the id is still safe.",
-      "surface": "canonical",
-      "expectedFirstSteps": [ "navlyn_verify_edit", "verify-edit", "navlyn_workspace_status", "navlyn_workspace_refresh" ],
-      "avoidTools": [ "navlyn_context_pack", "navlyn_batch" ],
-      "acceptedStopConditions": [ "stale-or-guard-risk-reported" ],
-      "maxToolCount": 2,
-      "semanticIdentityRequired": true,
-      "navlynExpected": true,
+      "id": "diagnostics-14",
+      "taskClass": "diagnostics",
+      "workspace": "tests/fixtures/DiagnosticFixture/DiagnosticFixture.csproj",
+      "prompt": "Show workspace diagnostics.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_diagnostics"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_diagnostics"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "mode",
+          "equals": "workspace"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "workspace-diagnostics-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.totalDiagnostics",
+              "result.diagnostics"
+            ],
+            "predicates": [
+              {
+                "path": "result.totalDiagnostics",
+                "type": "number",
+                "minimum": 1
+              },
+              {
+                "path": "result.diagnostics",
+                "type": "array",
+                "minItems": 1
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "staticDiagnosticsOnly"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_verify_edit" ],
-        "stopCondition": "stale-or-guard-risk-reported",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_diagnostics",
+            "arguments": {
+              "mode": "workspace"
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "diagnostics",
+                "totalDiagnostics": 17,
+                "diagnostics": [
+                  {
+                    "severity": "Error",
+                    "id": "CS0246",
+                    "path": "tests/fixtures/DiagnosticFixture/BrokenCode.cs",
+                    "line": 5,
+                    "column": 12
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "stopReason": "workspace-diagnostics-returned",
+        "semanticChecks": {
+          "staticDiagnosticsOnly": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/DiagnosticFixture/DiagnosticFixture.csproj"
     },
     {
-      "id": "route-handler-question",
-      "prompt": "Is this ASP.NET route protected?",
-      "surface": "advanced-domain",
-      "expectedFirstSteps": [ "route-map", "route-impact" ],
-      "avoidTools": [ "navlyn_review", "navlyn_context_pack", "navlyn_tests_for_diff" ],
-      "acceptedStopConditions": [ "route-auth-source-facts" ],
-      "maxToolCount": 2,
-      "semanticIdentityRequired": false,
-      "navlynExpected": true,
+      "id": "di-15",
+      "taskClass": "di",
+      "workspace": "tests/fixtures/DependencyInjectionFixture/DependencyInjectionFixture.csproj",
+      "prompt": "Where is `IWidgetStore` registered in the fixture?",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_di"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_di"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "mode",
+          "equals": "registrations"
+        },
+        {
+          "callIndex": 0,
+          "path": "query",
+          "equals": "IWidgetStore"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "registrations-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.registrations",
+              "result.registrations.items"
+            ],
+            "predicates": [
+              {
+                "path": "result.registrations",
+                "type": "object",
+                "requiredProperties": [
+                  "totalRegistrations",
+                  "items"
+                ]
+              },
+              {
+                "path": "result.registrations.items",
+                "type": "array",
+                "minItems": 1
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "registrationSourceFacts"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "route-map" ],
-        "stopCondition": "route-auth-source-facts",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_di",
+            "arguments": {
+              "mode": "registrations",
+              "query": "IWidgetStore"
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "where-registered",
+                "registrations": {
+                  "totalRegistrations": 1,
+                  "limit": 20,
+                  "truncated": false,
+                  "items": [
+                    {
+                      "serviceType": {
+                        "name": "IWidgetStore"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ],
+        "stopReason": "registrations-returned",
+        "semanticChecks": {
+          "registrationSourceFacts": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/DependencyInjectionFixture/DependencyInjectionFixture.csproj"
     },
     {
-      "id": "di-registration-impact",
-      "prompt": "Before changing this service implementation, inspect DI registrations and consumers.",
-      "surface": "advanced-domain",
-      "expectedFirstSteps": [ "navlyn_target", "target", "navlyn_di_impact" ],
-      "avoidTools": [ "navlyn_review", "navlyn_public_api_diff", "navlyn_batch" ],
-      "acceptedStopConditions": [ "di-risk-facts-returned" ],
-      "maxToolCount": 3,
-      "semanticIdentityRequired": true,
-      "navlynExpected": true,
+      "id": "routes-16",
+      "taskClass": "routes",
+      "workspace": "tests/fixtures/ApplicationDomainFixture/ApplicationDomainFixture.csproj",
+      "prompt": "Map the application routes.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_routes"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_routes"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "mode",
+          "equals": "map"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "route-map-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.routes",
+              "result.routes.items"
+            ],
+            "predicates": [
+              {
+                "path": "result.routes",
+                "type": "object",
+                "requiredProperties": [
+                  "totalItems",
+                  "items"
+                ]
+              },
+              {
+                "path": "result.routes.items",
+                "type": "array",
+                "minItems": 1
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "staticRouteFacts"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_target", "navlyn_di_impact" ],
-        "stopCondition": "di-risk-facts-returned",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_routes",
+            "arguments": {
+              "mode": "map"
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "route-map",
+                "routes": {
+                  "totalItems": 4,
+                  "limit": 100,
+                  "truncated": false,
+                  "items": [
+                    {
+                      "endpointKind": "controller-action",
+                      "routePattern": "orders/{id}",
+                      "normalizedRoutePattern": "/orders/{id}",
+                      "path": "tests/fixtures/ApplicationDomainFixture/FixtureCode.cs",
+                      "line": 168
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ],
+        "stopReason": "route-map-returned",
+        "semanticChecks": {
+          "staticRouteFacts": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/ApplicationDomainFixture/ApplicationDomainFixture.csproj"
     },
     {
-      "id": "workspace-projects",
-      "prompt": "What projects and target frameworks are in this repo?",
-      "surface": "workspace",
-      "expectedFirstSteps": [ "navlyn_workspace_summary", "repo-graph" ],
-      "avoidTools": [ "navlyn_find_symbol", "navlyn_read", "navlyn_symbol_source", "navlyn_review", "navlyn_context_pack" ],
-      "acceptedStopConditions": [ "project-target-facts-returned" ],
-      "maxToolCount": 1,
-      "semanticIdentityRequired": false,
-      "navlynExpected": true,
+      "id": "options-17",
+      "taskClass": "options",
+      "workspace": "tests/fixtures/ApplicationDomainFixture/ApplicationDomainFixture.csproj",
+      "prompt": "Show the options graph for PaymentOptions.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_options"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_options"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "mode",
+          "equals": "graph"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "options-registrations-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.options",
+              "result.bindings",
+              "result.options.items",
+              "result.bindings.items"
+            ],
+            "predicates": [
+              {
+                "path": "result.options",
+                "type": "object",
+                "requiredProperties": [
+                  "totalItems",
+                  "items"
+                ]
+              },
+              {
+                "path": "result.bindings",
+                "type": "object",
+                "requiredProperties": [
+                  "totalItems",
+                  "items"
+                ]
+              },
+              {
+                "path": "result.options.items",
+                "type": "array",
+                "minItems": 1
+              },
+              {
+                "path": "result.bindings.items",
+                "type": "array",
+                "minItems": 1
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "staticOptionFacts"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_workspace_summary" ],
-        "stopCondition": "project-target-facts-returned",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_options",
+            "arguments": {
+              "mode": "graph"
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "options-graph",
+                "options": {
+                  "totalItems": 1,
+                  "limit": 100,
+                  "truncated": false,
+                  "items": [
+                    {
+                      "type": {
+                        "name": "PaymentOptions"
+                      }
+                    }
+                  ]
+                },
+                "bindings": {
+                  "totalItems": 3,
+                  "limit": 100,
+                  "truncated": false,
+                  "items": [
+                    {
+                      "optionType": {
+                        "name": "PaymentOptions"
+                      },
+                      "configurationKey": "Payments",
+                      "bindingKind": "configure"
+                    }
+                  ]
+                },
+                "consumers": {
+                  "totalItems": 2,
+                  "limit": 100,
+                  "truncated": false,
+                  "items": [
+                    {
+                      "consumerType": {
+                        "name": "OrdersController"
+                      },
+                      "optionType": {
+                        "name": "PaymentOptions"
+                      },
+                      "consumerKind": "IOptions"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ],
+        "stopReason": "options-registrations-returned",
+        "semanticChecks": {
+          "staticOptionFacts": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/ApplicationDomainFixture/ApplicationDomainFixture.csproj"
     },
     {
-      "id": "known-file-inspection",
-      "prompt": "Inspect this known C# or Visual Basic file before deciding if more facts are needed.",
-      "surface": "file-first",
-      "expectedFirstSteps": [ "navlyn_file_outline", "navlyn_inspect_file", "outline" ],
-      "avoidTools": [ "navlyn_batch", "navlyn_review", "navlyn_tests_for_diff", "navlyn_public_api_diff", "navlyn_di_impact" ],
-      "acceptedStopConditions": [ "file-outline-or-follow-up" ],
-      "maxToolCount": 2,
-      "semanticIdentityRequired": true,
-      "navlynExpected": true,
+      "id": "messages-18",
+      "taskClass": "messages",
+      "workspace": "tests/fixtures/ApplicationDomainFixture/ApplicationDomainFixture.csproj",
+      "prompt": "Where is this message handled?",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_messages"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_messages"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "mode",
+          "equals": "handlers"
+        },
+        {
+          "callIndex": 0,
+          "path": "query",
+          "equals": "OrderCreatedNotification"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "message-handlers-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.handlers",
+              "result.handlers.items"
+            ],
+            "predicates": [
+              {
+                "path": "result.handlers",
+                "type": "object",
+                "requiredProperties": [
+                  "totalItems",
+                  "items"
+                ]
+              },
+              {
+                "path": "result.handlers.items",
+                "type": "array",
+                "minItems": 1
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "staticHandlerFacts"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_file_outline" ],
-        "stopCondition": "file-outline-or-follow-up",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_messages",
+            "arguments": {
+              "mode": "handlers",
+              "query": "OrderCreatedNotification"
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "where-handled",
+                "handlers": {
+                  "totalItems": 1,
+                  "limit": 20,
+                  "truncated": false,
+                  "items": [
+                    {
+                      "messageType": {
+                        "name": "OrderCreatedNotification"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ],
+        "stopReason": "message-handlers-returned",
+        "semanticChecks": {
+          "staticHandlerFacts": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/ApplicationDomainFixture/ApplicationDomainFixture.csproj"
     },
     {
-      "id": "output-budget-partial-result",
-      "prompt": "Find references, but keep output small and give a rerun hint if the search is partial.",
-      "surface": "advanced-edge",
-      "expectedFirstSteps": [ "navlyn_target", "target", "navlyn_symbol_edges", "references" ],
-      "avoidTools": [ "navlyn_context_pack", "navlyn_batch" ],
-      "acceptedStopConditions": [ "partial-with-rerun-hint" ],
-      "maxToolCount": 3,
-      "semanticIdentityRequired": true,
-      "navlynExpected": true,
+      "id": "ef-19",
+      "taskClass": "ef",
+      "workspace": "tests/fixtures/ApplicationDomainFixture/ApplicationDomainFixture.csproj",
+      "prompt": "Show the EF model for this workspace.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_ef"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_ef"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "mode",
+          "equals": "model"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "ef-model-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.entities",
+              "result.entities.items"
+            ],
+            "predicates": [
+              {
+                "path": "result.entities",
+                "type": "object",
+                "requiredProperties": [
+                  "totalItems",
+                  "items"
+                ]
+              },
+              {
+                "path": "result.entities.items",
+                "type": "array",
+                "minItems": 1
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "staticModelFacts"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_target", "navlyn_symbol_edges" ],
-        "stopCondition": "partial-with-rerun-hint",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_ef",
+            "arguments": {
+              "mode": "model"
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "ef-model",
+                "entities": {
+                  "totalItems": 1,
+                  "limit": 200,
+                  "truncated": false,
+                  "items": [
+                    {
+                      "type": {
+                        "name": "Order"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ],
+        "stopReason": "ef-model-returned",
+        "semanticChecks": {
+          "staticModelFacts": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/ApplicationDomainFixture/ApplicationDomainFixture.csproj"
     },
     {
-      "id": "broad-reading-queue",
-      "prompt": "What files should be read before changing this selected symbol?",
-      "surface": "escalation",
-      "expectedFirstSteps": [ "navlyn_prepare_edit", "prepare-edit", "navlyn_target", "target" ],
-      "avoidTools": [ "navlyn_batch", "navlyn_review", "navlyn_tests_for_diff" ],
-      "acceptedStopConditions": [ "bounded-reading-queue" ],
-      "maxToolCount": 3,
-      "semanticIdentityRequired": true,
-      "navlynExpected": true,
+      "id": "packages-20",
+      "taskClass": "packages",
+      "workspace": "tests/fixtures/ApplicationDomainFixture/ApplicationDomainFixture.csproj",
+      "prompt": "Show package usage in this project.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_packages"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_packages"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "mode",
+          "equals": "usage"
+        },
+        {
+          "callIndex": 0,
+          "path": "package",
+          "equals": "Microsoft.Extensions.Options"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "package-usage-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.packageReferences",
+              "result.packageReferences.items"
+            ],
+            "predicates": [
+              {
+                "path": "result.packageReferences",
+                "type": "object",
+                "requiredProperties": [
+                  "totalItems",
+                  "items"
+                ]
+              },
+              {
+                "path": "result.packageReferences.items",
+                "type": "array",
+                "minItems": 1
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "staticPackageUsage"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_prepare_edit" ],
-        "stopCondition": "bounded-reading-queue",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_packages",
+            "arguments": {
+              "mode": "usage",
+              "package": "Microsoft.Extensions.Options"
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "package-usage",
+                "packageReferences": {
+                  "totalItems": 1,
+                  "limit": 100,
+                  "truncated": false,
+                  "items": [
+                    {
+                      "name": "Microsoft.Extensions.Options"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ],
+        "stopReason": "package-usage-returned",
+        "semanticChecks": {
+          "staticPackageUsage": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/ApplicationDomainFixture/ApplicationDomainFixture.csproj"
     },
     {
-      "id": "public-api-release-check",
-      "prompt": "For release prep, compare public API changes against the previous tag.",
-      "surface": "release",
-      "expectedFirstSteps": [ "navlyn_public_api_diff", "public-api-diff" ],
-      "avoidTools": [ "navlyn_target", "navlyn_read", "navlyn_context_pack", "navlyn_batch" ],
-      "acceptedStopConditions": [ "api-diff-facts-returned" ],
-      "maxToolCount": 1,
-      "semanticIdentityRequired": false,
-      "navlynExpected": true,
+      "id": "context-escalation-21",
+      "taskClass": "context-escalation",
+      "workspace": "tests/fixtures/MultiProjectFixture/MultiProjectFixture.slnx",
+      "prompt": "Prepare bounded context for changing `SharedWidget` across App and Library.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_context_pack"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "query",
+          "equals": "SharedWidget"
+        },
+        {
+          "callIndex": 0,
+          "path": "candidatePolicy",
+          "equals": "select"
+        },
+        {
+          "callIndex": 0,
+          "path": "assumeKind",
+          "equals": "NamedType"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "context-pack-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.summary",
+              "result.summary.selection.candidateCount",
+              "result.summary.selection.totalCandidates",
+              "result.summary.budget.truncated",
+              "result.summary.truncated"
+            ],
+            "predicates": [
+              {
+                "path": "result.summary",
+                "type": "object",
+                "requiredProperties": [
+                  "budget",
+                  "selection",
+                  "truncated"
+                ]
+              },
+              {
+                "path": "result.summary.selection.candidateCount",
+                "type": "number",
+                "minimum": 1
+              },
+              {
+                "path": "result.summary.selection.totalCandidates",
+                "type": "number",
+                "minimum": 1
+              },
+              {
+                "path": "result.summary.budget.truncated",
+                "type": "boolean",
+                "equals": false
+              },
+              {
+                "path": "result.summary.truncated",
+                "type": "boolean",
+                "equals": false
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "boundedContext"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
       "baselineTrace": {
-        "chosenSequence": [ "navlyn_public_api_diff" ],
-        "stopCondition": "api-diff-facts-returned",
-        "stdoutJsonValid": true,
-        "stderrClean": true
-      }
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack",
+            "arguments": {
+              "query": "SharedWidget",
+              "candidatePolicy": "select",
+              "assumeKind": "NamedType"
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "context-pack",
+                "summary": {
+                  "budget": {
+                    "truncated": false
+                  },
+                  "selection": {
+                    "candidateCount": 1,
+                    "totalCandidates": 1
+                  },
+                  "truncated": false
+                }
+              }
+            }
+          }
+        ],
+        "stopReason": "context-pack-returned",
+        "semanticChecks": {
+          "boundedContext": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/MultiProjectFixture/MultiProjectFixture.slnx"
+    },
+    {
+      "id": "two-fact-batch-22",
+      "taskClass": "two-fact-batch",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "In one batch, resolve Widget and outline the fixture source file.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_batch"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_context_pack"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "requests",
+          "equals": [
+            {
+              "id": "widget-target",
+              "command": "resolve-target",
+              "query": "WidgetRecord",
+              "assumeKind": "NamedType"
+            },
+            {
+              "id": "source-outline",
+              "command": "outline",
+              "file": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs"
+            }
+          ]
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "batch-results-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.totalRequests",
+              "result.results",
+              "result.succeededRequests",
+              "result.failedRequests"
+            ],
+            "predicates": [
+              {
+                "path": "result.totalRequests",
+                "type": "number",
+                "equals": 2
+              },
+              {
+                "path": "result.results",
+                "type": "array",
+                "minItems": 2
+              },
+              {
+                "path": "result.succeededRequests",
+                "type": "number",
+                "equals": 2
+              },
+              {
+                "path": "result.failedRequests",
+                "type": "number",
+                "equals": 0
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "twoIndependentRequests"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
+      "baselineTrace": {
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch",
+            "arguments": {
+              "requests": [
+                {
+                  "id": "widget-target",
+                  "command": "resolve-target",
+                  "query": "WidgetRecord",
+                  "assumeKind": "NamedType"
+                },
+                {
+                  "id": "source-outline",
+                  "command": "outline",
+                  "file": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs"
+                }
+              ]
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "batch",
+                "totalRequests": 2,
+                "succeededRequests": 2,
+                "failedRequests": 0,
+                "results": [
+                  {
+                    "id": "widget-target",
+                    "ok": true,
+                    "result": {
+                      "candidateId": "sym:v1:widget-record"
+                    }
+                  },
+                  {
+                    "id": "source-outline",
+                    "ok": true,
+                    "result": {
+                      "entries": []
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "stopReason": "batch-results-returned",
+        "semanticChecks": {
+          "twoIndependentRequests": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
+    },
+    {
+      "id": "comments-23",
+      "taskClass": "comments",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "Find the existing `// Factory members` comment.",
+      "expectedSkillActivation": false,
+      "expectedFirstAction": {
+        "kind": "ordinary",
+        "name": "rg"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "ordinary",
+            "name": "rg"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_target"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "pattern",
+          "equals": "Factory members"
+        },
+        {
+          "callIndex": 0,
+          "path": "glob",
+          "equals": "*.cs"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "text-match-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "stdout"
+            ],
+            "predicates": [
+              {
+                "path": "stdout",
+                "type": "string",
+                "nonBlank": true
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "textOnly"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
+      "baselineTrace": {
+        "skillActivated": false,
+        "calls": [
+          {
+            "kind": "ordinary",
+            "name": "rg",
+            "arguments": {
+              "pattern": "Factory members",
+              "glob": "*.cs"
+            },
+            "selectedResultFields": {
+              "stdout": "// Factory members"
+            }
+          }
+        ],
+        "stopReason": "text-match-returned",
+        "semanticChecks": {
+          "textOnly": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
+    },
+    {
+      "id": "strings-24",
+      "taskClass": "strings",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "Find the exact `\"extension\"` string literal in the fixture.",
+      "expectedSkillActivation": false,
+      "expectedFirstAction": {
+        "kind": "ordinary",
+        "name": "rg"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "ordinary",
+            "name": "rg"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_target"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "pattern",
+          "equals": "\"extension\""
+        },
+        {
+          "callIndex": 0,
+          "path": "glob",
+          "equals": "*.cs"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "text-match-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "stdout"
+            ],
+            "predicates": [
+              {
+                "path": "stdout",
+                "type": "string",
+                "nonBlank": true
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "textOnly"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
+      "baselineTrace": {
+        "skillActivated": false,
+        "calls": [
+          {
+            "kind": "ordinary",
+            "name": "rg",
+            "arguments": {
+              "pattern": "\"extension\"",
+              "glob": "*.cs"
+            },
+            "selectedResultFields": {
+              "stdout": "return widget.Format(\"extension\");"
+            }
+          }
+        ],
+        "stopReason": "text-match-returned",
+        "semanticChecks": {
+          "textOnly": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
+    },
+    {
+      "id": "markdown-25",
+      "taskClass": "markdown",
+      "workspace": "navlyn.slnx",
+      "prompt": "Find the exact heading in the tool-selection documentation.",
+      "expectedSkillActivation": false,
+      "expectedFirstAction": {
+        "kind": "ordinary",
+        "name": "rg"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "ordinary",
+            "name": "rg"
+          }
+        ],
+        [
+          {
+            "kind": "ordinary",
+            "name": "file-read"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_target"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "pattern",
+          "equals": "^# Navlyn Tool-Selection Eval$"
+        },
+        {
+          "callIndex": 0,
+          "path": "path",
+          "equals": "docs/evals/tool-selection.md"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "heading-found"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "stdout"
+            ],
+            "predicates": [
+              {
+                "path": "stdout",
+                "type": "string",
+                "nonBlank": true
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "textOnly"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
+      "baselineTrace": {
+        "skillActivated": false,
+        "calls": [
+          {
+            "kind": "ordinary",
+            "name": "rg",
+            "arguments": {
+              "pattern": "^# Navlyn Tool-Selection Eval$",
+              "path": "docs/evals/tool-selection.md"
+            },
+            "selectedResultFields": {
+              "stdout": "# Navlyn Tool-Selection Eval"
+            }
+          }
+        ],
+        "stopReason": "heading-found",
+        "semanticChecks": {
+          "textOnly": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
+    },
+    {
+      "id": "configuration-26",
+      "taskClass": "configuration",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "Read the fixture project target framework setting.",
+      "expectedSkillActivation": false,
+      "expectedFirstAction": {
+        "kind": "ordinary",
+        "name": "file-read"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "ordinary",
+            "name": "file-read"
+          }
+        ],
+        [
+          {
+            "kind": "ordinary",
+            "name": "rg"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_target"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "path",
+          "equals": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "configuration-read"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "stdout"
+            ],
+            "predicates": [
+              {
+                "path": "stdout",
+                "type": "string",
+                "nonBlank": true
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "configurationOnly"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
+      "baselineTrace": {
+        "skillActivated": false,
+        "calls": [
+          {
+            "kind": "ordinary",
+            "name": "file-read",
+            "arguments": {
+              "path": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
+            },
+            "selectedResultFields": {
+              "stdout": "<TargetFramework>net10.0</TargetFramework>"
+            }
+          }
+        ],
+        "stopReason": "configuration-read",
+        "semanticChecks": {
+          "configurationOnly": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
+    },
+    {
+      "id": "generated-artifact-text-27",
+      "taskClass": "generated-artifact-text",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "Search the generated fixture artifact for the `GeneratedThing` declaration.",
+      "expectedSkillActivation": false,
+      "expectedFirstAction": {
+        "kind": "ordinary",
+        "name": "rg"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "ordinary",
+            "name": "rg"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_target"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "pattern",
+          "equals": "class GeneratedThing"
+        },
+        {
+          "callIndex": 0,
+          "path": "glob",
+          "equals": "*.g.cs"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "text-match-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "stdout"
+            ],
+            "predicates": [
+              {
+                "path": "stdout",
+                "type": "string",
+                "nonBlank": true
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "textOnly"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
+      "baselineTrace": {
+        "skillActivated": false,
+        "calls": [
+          {
+            "kind": "ordinary",
+            "name": "rg",
+            "arguments": {
+              "pattern": "class GeneratedThing",
+              "glob": "*.g.cs"
+            },
+            "selectedResultFields": {
+              "stdout": "public sealed class GeneratedThing"
+            }
+          }
+        ],
+        "stopReason": "text-match-returned",
+        "semanticChecks": {
+          "textOnly": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
+    },
+    {
+      "id": "arbitrary-text-search-28",
+      "taskClass": "arbitrary-text-search",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "Search the fixture text for `Widget`.",
+      "expectedSkillActivation": false,
+      "expectedFirstAction": {
+        "kind": "ordinary",
+        "name": "rg"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "ordinary",
+            "name": "rg"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_target"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "pattern",
+          "equals": "Widget"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "text-search-complete"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "stdout"
+            ],
+            "predicates": [
+              {
+                "path": "stdout",
+                "type": "string",
+                "nonBlank": true
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "textOnly"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
+      "baselineTrace": {
+        "skillActivated": false,
+        "calls": [
+          {
+            "kind": "ordinary",
+            "name": "rg",
+            "arguments": {
+              "pattern": "Widget"
+            },
+            "selectedResultFields": {
+              "stdout": "public partial class Widget"
+            }
+          }
+        ],
+        "stopReason": "text-search-complete",
+        "semanticChecks": {
+          "textOnly": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
+    },
+    {
+      "id": "simple-file-read-29",
+      "taskClass": "simple-file-read",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "Read the known C# fixture source file.",
+      "expectedSkillActivation": false,
+      "expectedFirstAction": {
+        "kind": "ordinary",
+        "name": "file-read"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "ordinary",
+            "name": "file-read"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_target"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "path",
+          "equals": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "file-read-complete"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "stdout"
+            ],
+            "predicates": [
+              {
+                "path": "stdout",
+                "type": "string",
+                "nonBlank": true
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "fileReadOnly"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
+      "baselineTrace": {
+        "skillActivated": false,
+        "calls": [
+          {
+            "kind": "ordinary",
+            "name": "file-read",
+            "arguments": {
+              "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs"
+            },
+            "selectedResultFields": {
+              "stdout": "public partial class Widget"
+            }
+          }
+        ],
+        "stopReason": "file-read-complete",
+        "semanticChecks": {
+          "fileReadOnly": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
+    },
+    {
+      "id": "build-test-execution-30",
+      "taskClass": "build-test-execution",
+      "workspace": "navlyn.slnx",
+      "prompt": "Run the focused Navlyn tool-selection tests.",
+      "expectedSkillActivation": false,
+      "expectedFirstAction": {
+        "kind": "ordinary",
+        "name": "test"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "ordinary",
+            "name": "test"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_target"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "project",
+          "equals": "navlyn.Tests/navlyn.Tests.csproj"
+        },
+        {
+          "callIndex": 0,
+          "path": "filter",
+          "equals": "FullyQualifiedName~ToolSelectionEvalTests"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "test-run-complete"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "exitCode"
+            ],
+            "predicates": [
+              {
+                "path": "exitCode",
+                "type": "number",
+                "equals": 0
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "executionObserved"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
+      "baselineTrace": {
+        "skillActivated": false,
+        "calls": [
+          {
+            "kind": "ordinary",
+            "name": "test",
+            "arguments": {
+              "project": "navlyn.Tests/navlyn.Tests.csproj",
+              "filter": "FullyQualifiedName~ToolSelectionEvalTests"
+            },
+            "selectedResultFields": {
+              "exitCode": 0
+            }
+          }
+        ],
+        "stopReason": "test-run-complete",
+        "semanticChecks": {
+          "executionObserved": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "navlyn.Tests/navlyn.Tests.csproj"
+    },
+    {
+      "id": "ambiguity-31",
+      "taskClass": "ambiguity",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "List the two `Widget.Format` overloads so I can choose the intended signature.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_target"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_target"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "mode",
+          "equals": "list"
+        },
+        {
+          "callIndex": 0,
+          "path": "query",
+          "equals": "Format"
+        },
+        {
+          "callIndex": 0,
+          "path": "assumeKind",
+          "equals": "Method"
+        },
+        {
+          "callIndex": 0,
+          "path": "match",
+          "equals": "exact"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "ambiguity-list-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.candidateCount",
+              "result.candidates"
+            ],
+            "predicates": [
+              {
+                "path": "result.candidateCount",
+                "type": "number",
+                "minimum": 1
+              },
+              {
+                "path": "result.candidates",
+                "type": "array",
+                "minItems": 1
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "ambiguityReported"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
+      "baselineTrace": {
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_target",
+            "arguments": {
+              "mode": "list",
+              "query": "Format",
+              "assumeKind": "Method",
+              "match": "exact"
+            },
+            "selectedResultFields": {
+              "result": {
+                "query": "Format",
+                "intent": "find",
+                "match": "exact",
+                "assumptions": {
+                  "kinds": [
+                    "Method"
+                  ]
+                },
+                "confidence": "ambiguous",
+                "candidateCount": 2,
+                "totalCandidates": 2,
+                "candidates": [
+                  {
+                    "name": "Format",
+                    "kind": "Method",
+                    "container": "SymbolNavigationFixture.Widget",
+                    "fullyQualifiedName": "SymbolNavigationFixture.Widget.Format(int)",
+                    "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                    "line": 15,
+                    "column": 19,
+                    "candidateId": "sym:v1:fixture-format-1"
+                  },
+                  {
+                    "name": "Format",
+                    "kind": "Method",
+                    "container": "SymbolNavigationFixture.Widget",
+                    "fullyQualifiedName": "SymbolNavigationFixture.Widget.Format(string)",
+                    "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                    "line": 20,
+                    "column": 19,
+                    "candidateId": "sym:v1:fixture-format-2"
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "stopReason": "ambiguity-list-returned",
+        "semanticChecks": {
+          "ambiguityReported": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
+    },
+    {
+      "id": "stale-candidate-32",
+      "taskClass": "stale-candidate",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "Check whether this candidate is stale.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_verify_edit"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_verify_edit"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "candidateId",
+          "equals": "sym:v1:stale"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "stale-candidate-reported"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "error",
+              "error.message"
+            ],
+            "predicates": [
+              {
+                "path": "error",
+                "type": "object",
+                "minProperties": 1
+              },
+              {
+                "path": "error.message",
+                "type": "string",
+                "nonBlank": true
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "staleReported"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
+      "baselineTrace": {
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_verify_edit",
+            "arguments": {
+              "candidateId": "sym:v1:stale"
+            },
+            "selectedResultFields": {
+              "error": {
+                "message": "The supplied candidate id could not be resolved against the current workspace."
+              }
+            }
+          }
+        ],
+        "stopReason": "stale-candidate-reported",
+        "semanticChecks": {
+          "staleReported": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
+    },
+    {
+      "id": "stale-workspace-33",
+      "taskClass": "stale-workspace",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "Check the workspace cache status before relying on cached semantic facts.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_workspace_status"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_workspace_status"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "cache",
+          "equals": "off"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "cache-state-returned"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.cache.status"
+            ],
+            "predicates": [
+              {
+                "path": "result.cache.status",
+                "type": "string",
+                "equals": "disabled"
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "cacheStateReported"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "unknown"
+      },
+      "baselineTrace": {
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_workspace_status",
+            "arguments": {
+              "cache": "off"
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "workspace-status",
+                "cache": {
+                  "status": "disabled"
+                }
+              }
+            }
+          }
+        ],
+        "stopReason": "cache-state-returned",
+        "semanticChecks": {
+          "cacheStateReported": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "unknown"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
+    },
+    {
+      "id": "missing-workspace-34",
+      "taskClass": "missing-workspace",
+      "workspace": "tests/fixtures/does-not-exist/None.csproj",
+      "prompt": "Explain why this unavailable workspace cannot be inspected.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_doctor"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_doctor"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "workspace-unavailable-reported"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.workspace",
+              "result.workspace.loaded"
+            ],
+            "predicates": [
+              {
+                "path": "result.workspace",
+                "type": "object",
+                "requiredProperties": [
+                  "loaded"
+                ]
+              },
+              {
+                "path": "result.workspace.loaded",
+                "type": "boolean",
+                "equals": false
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "unavailableReported"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "missing",
+        "workspaceFreshness": "unknown"
+      },
+      "baselineTrace": {
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_doctor",
+            "arguments": {},
+            "selectedResultFields": {
+              "result": {
+                "command": "doctor",
+                "workspace": {
+                  "loaded": false
+                }
+              }
+            }
+          }
+        ],
+        "stopReason": "workspace-unavailable-reported",
+        "semanticChecks": {
+          "unavailableReported": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "missing",
+          "workspaceFreshness": "unknown"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/DiagnosticFixture/DiagnosticFixture.csproj"
+    },
+    {
+      "id": "unavailable-mcp-35",
+      "taskClass": "unavailable-mcp",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "MCP is unavailable; should I use a CLI fallback?",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "ordinary",
+        "name": "file-read"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "ordinary",
+            "name": "file-read"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_target"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "path",
+          "equals": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "ordinary-fallback-complete"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "stdout"
+            ],
+            "predicates": [
+              {
+                "path": "stdout",
+                "type": "string",
+                "nonBlank": true
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "fallbackExplicit"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "unavailable",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
+      "baselineTrace": {
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "ordinary",
+            "name": "file-read",
+            "arguments": {
+              "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs"
+            },
+            "selectedResultFields": {
+              "stdout": "public partial class Widget"
+            }
+          }
+        ],
+        "stopReason": "ordinary-fallback-complete",
+        "semanticChecks": {
+          "fallbackExplicit": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "unavailable",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
+    },
+    {
+      "id": "partial-result-36",
+      "taskClass": "partial-result",
+      "workspace": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj",
+      "prompt": "Find references to the Widget type at this known source position, returning at most five matches.",
+      "expectedSkillActivation": true,
+      "expectedFirstAction": {
+        "kind": "mcp",
+        "name": "navlyn_navigate"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_navigate"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_batch"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "operation",
+          "equals": "references"
+        },
+        {
+          "callIndex": 0,
+          "path": "file",
+          "equals": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs"
+        },
+        {
+          "callIndex": 0,
+          "path": "line",
+          "equals": 6
+        },
+        {
+          "callIndex": 0,
+          "path": "column",
+          "equals": 23
+        },
+        {
+          "callIndex": 0,
+          "path": "limit",
+          "equals": 5
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "references-returned-with-limit"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "result.totalMatches",
+              "result.references"
+            ],
+            "predicates": [
+              {
+                "path": "result.totalMatches",
+                "type": "number",
+                "minimum": 1
+              },
+              {
+                "path": "result.references",
+                "type": "array",
+                "minItems": 1
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "partialReported"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
+      "baselineTrace": {
+        "skillActivated": true,
+        "calls": [
+          {
+            "kind": "mcp",
+            "name": "navlyn_navigate",
+            "arguments": {
+              "operation": "references",
+              "file": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+              "line": 6,
+              "column": 23,
+              "limit": 5
+            },
+            "selectedResultFields": {
+              "result": {
+                "command": "references",
+                "totalMatches": 22,
+                "references": [
+                  {
+                    "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                    "line": 28,
+                    "column": 19,
+                    "usageKind": "read"
+                  },
+                  {
+                    "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                    "line": 30,
+                    "column": 20,
+                    "usageKind": "construct"
+                  },
+                  {
+                    "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                    "line": 36,
+                    "column": 40,
+                    "usageKind": "read"
+                  },
+                  {
+                    "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                    "line": 44,
+                    "column": 32,
+                    "usageKind": "read"
+                  },
+                  {
+                    "path": "tests/fixtures/SymbolNavigationFixture/FixtureCode.cs",
+                    "line": 52,
+                    "column": 25,
+                    "usageKind": "read"
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "stopReason": "references-returned-with-limit",
+        "semanticChecks": {
+          "partialReported": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
+    },
+    {
+      "id": "explicit-no-navlyn-override-37",
+      "taskClass": "explicit-no-navlyn-override",
+      "workspace": "navlyn.slnx",
+      "prompt": "Do not use Navlyn; search this Markdown text only.",
+      "expectedSkillActivation": false,
+      "expectedFirstAction": {
+        "kind": "ordinary",
+        "name": "rg"
+      },
+      "acceptedSequences": [
+        [
+          {
+            "kind": "ordinary",
+            "name": "rg"
+          }
+        ],
+        [
+          {
+            "kind": "ordinary",
+            "name": "file-read"
+          }
+        ]
+      ],
+      "forbiddenTools": [
+        {
+          "kind": "mcp",
+          "name": "navlyn_target"
+        }
+      ],
+      "forbiddenSequences": [
+        [
+          {
+            "kind": "mcp",
+            "name": "navlyn_context_pack"
+          },
+          {
+            "kind": "mcp",
+            "name": "navlyn_batch"
+          }
+        ]
+      ],
+      "requiredArguments": [
+        {
+          "callIndex": 0,
+          "path": "pattern",
+          "equals": "^# Navlyn Tool-Selection Eval$"
+        },
+        {
+          "callIndex": 0,
+          "path": "path",
+          "equals": "docs/evals/tool-selection.md"
+        }
+      ],
+      "expectedStopEvidence": {
+        "acceptedStopReasons": [
+          "text-search-complete"
+        ],
+        "alternatives": [
+          {
+            "callIndex": 0,
+            "requiredFields": [
+              "stdout"
+            ],
+            "predicates": [
+              {
+                "path": "stdout",
+                "type": "string",
+                "nonBlank": true
+              }
+            ]
+          }
+        ]
+      },
+      "semanticCorrectnessChecks": [
+        "overrideRespected"
+      ],
+      "maxCalls": 1,
+      "stdoutBudgetChars": 20000,
+      "latencyBudgetMs": 30000,
+      "unsupportedClaims": [
+        "runtime behavior",
+        "security guarantee"
+      ],
+      "availabilityFreshnessSetup": {
+        "mcpAvailability": "available",
+        "workspaceAvailability": "available",
+        "workspaceFreshness": "fresh"
+      },
+      "baselineTrace": {
+        "skillActivated": false,
+        "calls": [
+          {
+            "kind": "ordinary",
+            "name": "rg",
+            "arguments": {
+              "pattern": "^# Navlyn Tool-Selection Eval$",
+              "path": "docs/evals/tool-selection.md"
+            },
+            "selectedResultFields": {
+              "stdout": "# Navlyn Tool-Selection Eval"
+            }
+          }
+        ],
+        "stopReason": "text-search-complete",
+        "semanticChecks": {
+          "overrideRespected": true
+        },
+        "claims": [],
+        "environment": {
+          "mcpAvailability": "available",
+          "workspaceAvailability": "available",
+          "workspaceFreshness": "fresh"
+        },
+        "stdoutChars": 1500,
+        "latencyMs": 500,
+        "stderrClean": true,
+        "outputValid": true
+      },
+      "fixture": "tests/fixtures/SymbolNavigationFixture/SymbolNavigationFixture.csproj"
     }
   ]
 }

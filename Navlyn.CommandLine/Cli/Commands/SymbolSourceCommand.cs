@@ -23,16 +23,24 @@ internal static class SymbolSourceCommand
             Description = $"Approximate character budget per slice. Defaults to {DefaultBudgetTokens} tokens."
         };
 
+        Option<string> externalSourceOption = new("--external-source")
+        {
+            Description = "External member source: none, metadata, or decompiled.",
+            DefaultValueFactory = _ => "none"
+        };
+        externalSourceOption.AcceptOnlyFromAmong("none", "metadata", "decompiled");
+
         return SourcePositionCommand.Create(
             commandName,
             description ?? "Return bounded source slices for the C# or Visual Basic symbol at a source position.",
-            [viewOption, maxLinesOption, budgetTokensOption],
+            [viewOption, maxLinesOption, budgetTokensOption, externalSourceOption],
             (workspace, options, parseResult, cancellationToken) => ExecuteAsync(
                 workspace,
                 options,
                 parseResult.GetValue(viewOption)!,
                 parseResult.GetValue(maxLinesOption),
                 parseResult.GetValue(budgetTokensOption),
+                parseResult.GetValue(externalSourceOption)!,
                 cancellationToken));
     }
 
@@ -42,6 +50,7 @@ internal static class SymbolSourceCommand
         string view,
         int? maxLines,
         int? budgetTokens,
+        string externalSource,
         CancellationToken cancellationToken)
     {
         int effectiveMaxLines = maxLines ?? DefaultMaxLines;
@@ -65,7 +74,7 @@ internal static class SymbolSourceCommand
             sourceOptions.Column,
             sourceOptions.Project,
             sourceOptions.ExcludeGenerated,
-            new SymbolSourceOptions(view, effectiveMaxLines, effectiveBudgetTokens),
+            new SymbolSourceOptions(view, effectiveMaxLines, effectiveBudgetTokens, externalSource),
             cancellationToken);
 
         if (result.Error is not null)
@@ -87,7 +96,9 @@ internal static class SymbolSourceCommand
             Symbol: resolution.Symbol,
             Slices: resolution.Slices,
             Truncated: resolution.Truncated,
-            Warnings: resolution.Warnings));
+            Warnings: resolution.Warnings,
+            SourceOrigin: resolution.SourceOrigin,
+            ExternalAssembly: resolution.ExternalAssembly));
 
         return ExitCodes.Success;
     }
@@ -119,5 +130,9 @@ internal static class SymbolSourceCommand
         SymbolSourceSymbol Symbol,
         IReadOnlyList<SymbolSourceSlice> Slices,
         bool Truncated,
-        IReadOnlyList<string> Warnings);
+        IReadOnlyList<string> Warnings,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        string? SourceOrigin,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        ExternalAssemblyProvenance? ExternalAssembly);
 }

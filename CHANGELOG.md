@@ -2,6 +2,17 @@
 
 All notable public release changes for Navlyn are tracked here.
 
+## 0.8.0
+
+- Added opt-in metadata and decompiled reads for exact external library members, including verified NuGet `ref`/implementation and RID assets. Results identify the selected PE and keep reconstructed C# distinct from original source.
+- Strengthened long-running MCP workspace freshness, generation publication, and source, reference assembly, analyzer, and restore-assets input tracking while keeping stale reads fail-closed.
+- Consolidated the MCP surface to 25 read-only tools. See the [migration table](docs/navlyn-mcp-server.md#stable-tool-surface) for retired names and canonical replacements.
+- Updated clean-install, client setup, package identity, three-OS CI, and protected NuGet publication checks for the public release.
+
+## 0.8.0-preview.1 - 2026-09-26
+
+Unpublished preview identity for the v0.8 release-readiness rehearsal. `0.7.0` remains the public NuGet release. Preview packages are produced only in local or CI rehearsal artifacts and are not claimed to be available from nuget.org. The CLI and MCP packages retain their read-only semantic contracts. The MCP surface is consolidated to 25 tools; see [the migration table](docs/navlyn-mcp-server.md#stable-tool-surface) for retired names and canonical starting points. This entry records rehearsal changes and does not announce a public release.
+
 ## 0.7.0 - 2026-07-12
 
 Public release preparation for Navlyn as a read-only semantic evidence layer for C#/.NET coding agents.

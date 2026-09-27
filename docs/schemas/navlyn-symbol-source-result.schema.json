@@ -19,33 +19,17 @@
     "file": { "type": "string", "minLength": 1 },
     "line": { "type": "integer", "minimum": 1 },
     "column": { "type": "integer", "minimum": 1 },
-    "project": {
-      "type": "object",
-      "additionalProperties": true
-    },
-    "selectionInput": {
-      "type": "object",
-      "additionalProperties": true
-    },
+    "project": { "type": "object", "additionalProperties": true },
+    "selectionInput": { "type": "object", "additionalProperties": true },
     "excludeGenerated": { "type": "boolean" },
     "view": {
       "type": "string",
-      "enum": [
-        "signature",
-        "declaration",
-        "body",
-        "members",
-        "xml-doc",
-        "attributes"
-      ]
+      "enum": [ "signature", "declaration", "body", "members", "xml-doc", "attributes" ]
     },
     "limits": {
       "type": "object",
       "additionalProperties": true,
-      "required": [
-        "maxLines",
-        "budgetTokens"
-      ],
+      "required": [ "maxLines", "budgetTokens" ],
       "properties": {
         "maxLines": { "type": "integer", "minimum": 1 },
         "budgetTokens": { "type": "integer", "minimum": 1 }
@@ -54,19 +38,17 @@
     "symbol": {
       "type": "object",
       "additionalProperties": true,
-      "required": [
-        "name",
-        "kind",
-        "facts"
-      ],
+      "required": [ "name", "kind", "facts" ],
       "properties": {
         "name": { "type": "string", "minLength": 1 },
         "kind": { "type": "string", "minLength": 1 },
         "container": { "type": [ "string", "null" ] },
-        "facts": {
-          "type": "object",
-          "additionalProperties": true
-        }
+        "facts": { "type": "object", "additionalProperties": true },
+        "path": { "type": [ "string", "null" ] },
+        "line": { "type": [ "integer", "null" ], "minimum": 1 },
+        "column": { "type": [ "integer", "null" ], "minimum": 1 },
+        "endLine": { "type": [ "integer", "null" ], "minimum": 1 },
+        "endColumn": { "type": [ "integer", "null" ], "minimum": 1 }
       }
     },
     "slices": {
@@ -75,27 +57,52 @@
         "type": "object",
         "additionalProperties": true,
         "required": [
-          "kind",
+          "textKind",
           "path",
           "startLine",
+          "startColumn",
           "endLine",
-          "text",
+          "endColumn",
+          "lines",
           "truncated"
         ],
         "properties": {
-          "kind": { "type": "string", "minLength": 1 },
+          "textKind": {
+            "type": "string",
+            "enum": [ "signature", "declaration", "body", "members", "xml-doc", "attributes" ]
+          },
           "path": { "type": "string", "minLength": 1 },
           "startLine": { "type": "integer", "minimum": 1 },
+          "startColumn": { "type": "integer", "minimum": 1 },
           "endLine": { "type": "integer", "minimum": 1 },
-          "text": { "type": "string" },
-          "truncated": { "type": "boolean" }
-        }
+          "endColumn": { "type": "integer", "minimum": 1 },
+          "lines": { "type": "array", "items": { "type": "string" } },
+          "truncated": { "type": "boolean" },
+          "origin": { "type": "string", "enum": [ "metadata", "decompiled" ] },
+          "editable": { "const": false }
+        },
+        "allOf": [
+          {
+            "if": { "required": [ "origin" ] },
+            "then": { "required": [ "editable" ] }
+          }
+        ]
       }
     },
     "truncated": { "type": "boolean" },
-    "warnings": {
-      "type": "array",
-      "items": { "type": "string" }
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "sourceOrigin": { "type": "string", "enum": [ "metadata", "decompiled" ] },
+    "externalAssembly": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [ "identity", "targetFramework", "selectedAssembly", "referenceSha256", "implementationSha256" ],
+      "properties": {
+        "identity": { "type": "string", "minLength": 1 },
+        "targetFramework": { "type": "string", "minLength": 1 },
+        "selectedAssembly": { "type": "string", "enum": [ "reference", "implementation" ] },
+        "referenceSha256": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+        "implementationSha256": { "type": [ "string", "null" ], "pattern": "^[A-Fa-f0-9]{64}$" }
+      }
     }
   }
 }

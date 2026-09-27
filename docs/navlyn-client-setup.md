@@ -1,36 +1,37 @@
-# Alternative Installation
+# Client Setup
 
-For normal CLI and MCP setup, start with the [README](../README.md). This page covers the two alternatives people commonly need after that first setup.
+Start with the [Windows first 10 minutes guide](navlyn-first-10-minutes.md). It installs both 0.8.0 .NET tools from NuGet under an isolated `--tool-path` and runs the installed executable by absolute path. The packages contain `net8.0` and `net10.0` assets.
 
-## Pick A Setup
+## Select A Client
 
-| Persona | Use | Why |
+| Client or use | Setup | Evidence state |
 | --- | --- | --- |
-| Evaluating alone | Global `navlyn` and `navlyn-mcp` tools | Fastest path to `doctor`, `target`, and one MCP client. |
-| Team repository | Repository-local .NET tool manifest | Pins the version for contributors, CI, and agent workspaces. |
-| Coding agent client | `navlyn-mcp` stdio server, usually with no args | Gives one read-only semantic tool surface over the repository's single discovered workspace. |
-| CI / release validation | `navlyn` CLI plus JSON artifacts | Keeps stdout deterministic and diagnostics on stderr for automation. |
+| Codex CLI routing skill | Install from the source checkout with `scripts/install-routing-skill.ps1`; install/update/uninstall and isolated discovery are covered in the quick start. | Verified for Codex CLI `0.155.0-alpha.16` on Windows; activation passed only in a process-scoped full-access session. The tested Windows read-only sandbox could not launch WindowsApps PowerShell. |
+| GitHub Copilot CLI MCP | Configure repository `.mcp.json` or `.github/mcp.json` with `mcpServers`; point at the absolute `navlyn-mcp.exe`. Enable repository MCP configuration with `GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP=true` for prompt sessions. | Copilot CLI `1.0.88` on Windows called `navlyn_target` on installed 0.8.0 and returned the consumer symbol. This does not establish Copilot skill support. |
+| VS Code MCP | Configure `.vscode/mcp.json` with `servers`. See [VS Code's MCP guide](https://code.visualstudio.com/docs/agent-customization/mcp-servers). | VS Code 1.139.1 Copilot Chat on Windows called `navlyn_target` on an installed 0.8.0 server. It returned `Navlyn.Mcp.Execution.NavlynMcpWorkspaceCache` from the current workspace. |
+| Other MCP clients | Follow that client's official stdio MCP configuration guide. | Documented only unless a specific installed client/version has its own observed test. |
 
-Use automatic workspace discovery for the first setup. Add `navlyn.workspace.json` or pass an explicit workspace only when the repository has multiple plausible workspaces and needs one shared policy.
+The formats are client-specific: Copilot CLI uses root `.mcp.json` / `.github/mcp.json` with `mcpServers`; VS Code uses `.vscode/mcp.json` with `servers`. A configuration example by itself is not client verification. See [the release contract](navlyn-release-contract.md#client-support-claims) for exact support boundaries.
 
-## Pin Navlyn In A Repository
+## Repository Tool Manifest
 
-Use a .NET tool manifest when a team or CI job should use the same Navlyn version:
+Run `dotnet new tool-manifest`, then `dotnet tool install --local navlyn --version 0.8.0` and the equivalent `navlyn-mcp` command to create a repository-local `dotnet-tools.json`. Restore it with `dotnet tool restore`, then invoke the CLI with `dotnet tool run navlyn -- doctor --workspace auto`.
+
+The checked-in [manifest example](../examples/install/dotnet-tools.json) records both 0.8.0 tools. Copy it to the consumer repository's `.config/dotnet-tools.json` and restore from NuGet:
 
 ```powershell
-dotnet new tool-manifest
-dotnet tool install navlyn --version 0.7.0
-dotnet tool install navlyn-mcp --version 0.7.0
+$navlynSource = 'C:\path\to\navlyn'
+New-Item -ItemType Directory -Force .config | Out-Null
+Copy-Item (Join-Path $navlynSource 'examples/install/dotnet-tools.json') .config\dotnet-tools.json
 dotnet tool restore
-```
-
-Run the CLI through the manifest:
-
-```powershell
 dotnet tool run navlyn -- doctor --workspace auto
 ```
 
-For an MCP client, use this command shape:
+Replace `$navlynSource` with the absolute path to your Navlyn source checkout. The manifest lives under `examples/install`; this repository does not keep one at its root.
+
+## MCP Server Command
+
+With a published package installed in the repository-local .NET tool manifest, the command is:
 
 ```json
 {
@@ -40,19 +41,6 @@ For an MCP client, use this command shape:
 }
 ```
 
-The `cwd` should be the repository root. If the client cannot set `cwd`, add `["tool", "run", "navlyn-mcp", "--", "--working-directory", "."]`. If the repository has multiple top-level workspace candidates, add `["tool", "run", "navlyn-mcp", "--", "--workspace", "path/to/YourRepo.sln"]`.
+For a `--tool-path` installation, configure the absolute `navlyn-mcp.exe` path. Launch it with the inspected repository as working directory. Use `--workspace` only when multiple plausible workspaces require an explicit choice.
 
-## MCP Tool Surface
-
-Navlyn MCP exposes one stable read-only semantic tool surface. Configure the workspace once; the agent chooses the smallest relevant tool from tool descriptions, schemas, and returned evidence.
-
-| Need | Start with |
-| --- | --- |
-| Setup and workspace health | `navlyn_doctor` |
-| First symbol anchor | `navlyn_target` |
-| Known file outline | `navlyn_file_outline` |
-| One selected source or relationship fact | `navlyn_read` or `navlyn_symbol_edges` |
-| Pre-edit evidence | `navlyn_prepare_edit` |
-| Actual Git diff evidence | `navlyn_review` |
-
-Use [navlyn-mcp-server.md](navlyn-mcp-server.md) for the complete MCP tool surface. Agent instruction snippets for Copilot, Claude, Codex, and other clients live in `examples/agents`.
+See [README MCP setup](../README.md#use-with-mcp), the [Copilot CLI example](../examples/install/copilot-cli-mcp.json), and [MCP server reference](navlyn-mcp-server.md) for the tool surface. Official configuration guidance: [Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers), [Codex CLI](https://learn.chatgpt.com/docs/extend/mcp?surface=cli), and [VS Code](https://code.visualstudio.com/docs/agent-customization/mcp-servers).

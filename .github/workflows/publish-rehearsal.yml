@@ -1,0 +1,57 @@
+name: NuGet Publish Rehearsal
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rehearse:
+    name: NuGet publish rehearsal (Ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Verify main commit
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -ne 'refs/heads/main') { throw 'NuGet publish rehearsal requires main.' }
+          if ((git rev-parse HEAD).Trim() -ne $env:GITHUB_SHA) { throw 'Checked-out commit differs from the dispatched commit.' }
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Source validation
+        shell: pwsh
+        run: ./scripts/test-publish-prerequisites.ps1
+
+      - name: Pack release
+        shell: pwsh
+        run: ./scripts/pack-release.ps1 -NoValidation -Output artifacts/packages
+
+      - name: Validate package contract
+        shell: pwsh
+        run: ./scripts/test-package-contract.ps1 -Manifest artifacts/packages/navlyn-release-pack.json
+
+      - name: Retain rehearsal package bytes
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: navlyn-publish-rehearsal
+          path: artifacts/packages
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Dry-run publish
+        shell: pwsh
+        run: ./scripts/publish-nuget.ps1 -DryRun

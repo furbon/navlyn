@@ -1,0 +1,19 @@
+{
+  "packages": [
+    {
+      "id": "Newtonsoft.Json",
+      "version": "13.0.3",
+      "sha256": "872fc189e638ab1056555b03aaa38f68bcb54286e221aa646eb1129babf63c77"
+    },
+    {
+      "id": "Serilog",
+      "version": "4.2.0",
+      "sha256": "edfdc4a42b046c3c5782cba1138df4295235e29ee80d4b82b70469382aad9dbb"
+    },
+    {
+      "id": "Microsoft.Extensions.Primitives",
+      "version": "10.0.9",
+      "sha256": "5843ed9a511ec66e904854782139411ee503e7f6ea31f79c3b115ee6191b00f5"
+    }
+  ]
+}

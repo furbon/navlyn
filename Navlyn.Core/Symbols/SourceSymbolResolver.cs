@@ -13,7 +13,8 @@ internal sealed class SourceSymbolResolver
         int column,
         Project? project,
         bool excludeGenerated,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool requireExactBinding = false)
     {
         SourceDocumentResolutionResult documentResult =
             await new SourceDocumentResolver().ResolveAsync(solution, file, project, excludeGenerated, cancellationToken);
@@ -55,6 +56,8 @@ internal sealed class SourceSymbolResolver
             return SymbolNotFound(sourceDocument.DisplayPath, line, column);
         }
 
+        bool hasExactBinding = requireExactBinding && HasExactBinding(semanticModel, token, position, symbol, cancellationToken);
+
         return SourceSymbolResolutionResult.Succeeded(new SourceSymbolResolution(
             File: sourceDocument.DisplayPath,
             Line: line,
@@ -64,7 +67,25 @@ internal sealed class SourceSymbolResolver
             ProjectId: sourceDocument.Document.Project.Id,
             SyntaxTree: root.SyntaxTree,
             ProjectName: sourceDocument.Document.Project.Name,
-            Symbol: symbol));
+            Symbol: symbol,
+            HasExactBinding: hasExactBinding));
+    }
+
+    private static bool HasExactBinding(SemanticModel semanticModel, SyntaxToken token, int position, ISymbol selected, CancellationToken cancellationToken)
+    {
+        foreach (SyntaxNode node in token.Parent?.AncestorsAndSelf() ?? [])
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!node.Span.Contains(position)) continue;
+            SymbolInfo info = semanticModel.GetSymbolInfo(node, cancellationToken);
+            if (info.Symbol is not null && SymbolEqualityComparer.Default.Equals(
+                SymbolNavigationFacts.NormalizeSourceNavigationSymbol(info.Symbol), selected))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static SourceSymbolResolutionResult SymbolNotFound(string displayPath, int line, int column)
@@ -142,6 +163,7 @@ internal sealed record SourceSymbolResolution(
     ProjectId ProjectId,
     SyntaxTree SyntaxTree,
     string ProjectName,
-    ISymbol Symbol);
+    ISymbol Symbol,
+    bool HasExactBinding = false);
 
 internal sealed record SymbolNavigationError(int DiagnosticId, string Message, int ExitCode);

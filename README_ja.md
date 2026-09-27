@@ -19,16 +19,24 @@ Navlyn は「`PaymentService` を直して」のような指示を、エージ�
 
 ## 3 分の最短導線
 
-コーディングエージェントから使う場合は MCP server をインストールします。
+NuGet から Navlyn 0.8.0 をインストールし、自分のリポジトリで最初の問い合わせを実行できます。[最初の 10 分](docs/navlyn-first-10-minutes.md)では、専用のツールディレクトリへのインストールと、実行ファイルの絶対パスを使った確認を説明します。リポジトリ用の [ツール manifest 例](examples/install/dotnet-tools.json)もあります。
+
+ローカルにある依存ライブラリのメソッドは `read --external-source decompiled` で調べられます。返る C# は逆コンパイルで再構成したもので、元のソースではありません。[実パッケージの評価結果](docs/evals/external-member-corpus.md)も参照してください。
+
+### 0.8.0 をインストール
+
+次のコマンドで両ツールをインストールできます。
+
+コーディングエージェント用の MCP server を install します。
 
 ```powershell
-dotnet tool install --global navlyn-mcp --version 0.7.0
+dotnet tool install --global navlyn-mcp --version 0.8.0
 ```
 
 shell や CI で JSON fact を使いたい場合は CLI も入れます。
 
 ```powershell
-dotnet tool install --global navlyn --version 0.7.0
+dotnet tool install --global navlyn --version 0.8.0
 ```
 
 次に、workspace と symbol を一つ確認します。通常の、トップレベルに `.slnx`、`.sln`、`.csproj`、`.vbproj` が一つあるリポジトリでは `auto` を使います。
@@ -52,9 +60,20 @@ navlyn review --workspace auto --profile evidence
 
 トップレベルの workspace 候補が一つだけのリポジトリでは、MCP server はリポジトリルートの working directory から自動で workspace を見つけます。複数の solution/project があり得るリポジトリだけ、明示的に `--workspace` を渡します。MCP client が server をリポジトリルートから起動しない場合は、`--workspace` ではなく `--working-directory <repo-root>` を渡します。
 
-### GitHub Copilot / VS Code
+### GitHub Copilot CLI
 
-リポジトリのルートに `.vscode/mcp.json` を作成します。
+[Copilot CLI MCP 設定例](examples/install/copilot-cli-mcp.json)をリポジトリルートの `.mcp.json` または `.github/mcp.json` にコピーし、`command` にインストール済み `navlyn-mcp` の絶対パスを指定します。Copilot CLI の設定形式は `mcpServers` です。リポジトリの MCP 設定を有効にするには、起動前に PowerShell で次を設定します。
+
+```powershell
+$env:GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP = 'true'
+copilot
+```
+
+Windows の Copilot CLI `1.0.88` から、0.8.0 の `navlyn-mcp` に対する `navlyn_target` 呼び出しと結果を確認しました。クライアントごとの確認範囲は [設定ガイド](docs/navlyn-client-setup.md)、リポジトリ設定の条件は公式の [Copilot CLI MCP guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers)を参照してください。
+
+### GitHub Copilot in VS Code
+
+リポジトリのルートに `.vscode/mcp.json` を作成します。VS Code の PATH に実行ファイルがない場合は、`navlyn-mcp` を絶対パスに置き換えます。
 
 ```json
 {
@@ -68,13 +87,34 @@ navlyn review --workspace auto --profile evidence
 }
 ```
 
+VS Code は `.vscode/mcp.json` と `servers` 形式を使います。Windows の VS Code 1.139.1 Copilot Chat から、インストールした 0.8.0 の `navlyn_target` を呼び出し、このリポジトリの型が返ることを確認しました。詳細は公式の [VS Code MCP guide](https://code.visualstudio.com/docs/agent-customization/mcp-servers) を参照してください。
+
 ### Codex
 
-リポジトリのルートで次を実行します。
+グローバルインストールの場合は、リポジトリのルートで次を実行します。専用ディレクトリにインストールした場合は [最初の 10 分](docs/navlyn-first-10-minutes.md#mcp-client-setup) の絶対パスを使います。
 
 ```powershell
 codex mcp add navlyn -- navlyn-mcp
 ```
+
+## Codex routing skill
+
+Navlyn routing skill は `navlyn-mcp` とは別に install します。対象 repository で、Navlyn source checkout にある installer を呼び出し、その repository の `.agents/skills` に install / update します。
+
+```powershell
+$navlynSource = (Resolve-Path '<navlyn-source-checkout>').Path
+$skillRoot = Join-Path (Get-Location) '.agents/skills'
+New-Item -ItemType Directory -Force $skillRoot | Out-Null
+& (Join-Path $navlynSource 'scripts/install-routing-skill.ps1') -Action Install -DestinationRoot $skillRoot
+```
+
+同じ bytes で再実行しても変更はありません。隣接する `.navlyn-semantic-routing.install.json` marker が所有権を記録します。marker がない・不正、管理対象の bytes が変わった、または無関係なファイルがある場合は停止し、ファイルを保持します。状態を確認して競合を解決してから再実行してください。管理下の skill は次のように削除できます。
+
+```powershell
+& (Join-Path $navlynSource 'scripts/install-routing-skill.ps1') -Action Uninstall -DestinationRoot $skillRoot
+```
+
+Windows の Codex CLI `0.155.0-alpha.16` で隔離 discovery と6ケースの activation smoke を確認しました。process-scoped full-access session で実施し、source への書き込み試行や diff はありませんでした。検証した read-only Windows sandbox では WindowsApps PowerShell が起動できず、同 sandbox mode での activation は確認していません。Codex skill は Copilot 対応を意味しません。詳細は [release contract](docs/navlyn-release-contract.md#client-support-claims) を参照してください。
 
 ### Claude Code
 
@@ -100,7 +140,7 @@ Navlyn MCP は、読み取り専用の semantic tool surface を一つだけ公�
 | --- | --- |
 | ユーザーが指しているシンボルはどれか | `navlyn_target` |
 | 選んだシンボルの宣言を見たい | `navlyn_read` |
-| 呼び出し元や参照元を知りたい | `navlyn_symbol_edges` |
+| 呼び出し元や参照元を知りたい | `navlyn_navigate` |
 | 変更前に何を把握すべきか | `navlyn_prepare_edit` |
 | 実際の diff が対象から外れていないか | `navlyn_verify_edit` |
 | この Git diff は何へ影響したか | `navlyn_review` |

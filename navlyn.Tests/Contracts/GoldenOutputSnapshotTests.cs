@@ -77,7 +77,7 @@ public sealed class GoldenOutputSnapshotTests
             }
             """);
         NavlynToolResult result = NavlynToolResult.Succeeded(
-            "navlyn_find_symbol",
+            "navlyn_target",
             new NavlynSourceCommand("find", ["find", "--workspace", "navlyn.slnx", "--query", "SymbolSourceResolver"]),
             "navlyn.slnx",
             resultDocument.RootElement,
@@ -176,6 +176,36 @@ public sealed class GoldenOutputSnapshotTests
     public void McpToolSurface_MatchesGoldenSnapshot()
     {
         IReadOnlyList<string> unifiedTools = NavlynMcpToolProfilePolicy.GetToolNames(NavlynMcpToolProfile.Full);
+        string[] expectedTools =
+        [
+            "navlyn_target",
+            "navlyn_read",
+            "navlyn_file_outline",
+            "navlyn_navigate",
+            "navlyn_prepare_edit",
+            "navlyn_verify_edit",
+            "navlyn_review",
+            "navlyn_workspace_summary",
+            "navlyn_workspace_status",
+            "navlyn_workspace_refresh",
+            "navlyn_doctor",
+            "navlyn_impact",
+            "navlyn_context_pack",
+            "navlyn_entrypoints",
+            "navlyn_tests_for_symbol",
+            "navlyn_tests_for_diff",
+            "navlyn_diagnostics",
+            "navlyn_di",
+            "navlyn_public_api_diff",
+            "navlyn_routes",
+            "navlyn_options",
+            "navlyn_messages",
+            "navlyn_ef",
+            "navlyn_packages",
+            "navlyn_batch"
+        ];
+
+        Assert.Equal(expectedTools, unifiedTools);
         Assert.Equal(unifiedTools, NavlynMcpToolProfilePolicy.GetToolNames(NavlynMcpToolProfile.Reader));
         Assert.Equal(unifiedTools, NavlynMcpToolProfilePolicy.GetToolNames(NavlynMcpToolProfile.Review));
         Assert.Equal(unifiedTools, NavlynMcpToolProfilePolicy.GetToolNames(NavlynMcpToolProfile.Edit));
