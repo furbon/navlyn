@@ -32,7 +32,7 @@ $mcpExe
     "navlyn": {
       "type": "stdio",
       "command": "C:\\path\\to\\navlyn-mcp.exe",
-      "cwd": "${workspaceFolder}"
+      "args": ["--working-directory", "${workspaceFolder}"]
     }
   }
 }

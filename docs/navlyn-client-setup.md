@@ -32,7 +32,7 @@ Follow [VS Code's GitHub Copilot setup](https://code.visualstudio.com/docs/copil
     "navlyn": {
       "type": "stdio",
       "command": "C:\\path\\to\\navlyn-mcp.exe",
-      "cwd": "${workspaceFolder}"
+      "args": ["--working-directory", "${workspaceFolder}"]
     }
   }
 }
