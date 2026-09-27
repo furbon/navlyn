@@ -270,3 +270,4 @@ try {
 }
 Write-Output $json
 if ($null -ne $failure) { [Console]::Error.WriteLine("Routing skill lifecycle test failed: $failure"); exit 1 }
+exit 0
