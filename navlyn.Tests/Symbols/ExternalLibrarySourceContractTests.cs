@@ -95,7 +95,13 @@ public sealed class ExternalLibrarySourceContractTests
                 .OfType<PortableExecutableReference>()
                 .Where(reference => reference.FilePath?.Contains("ExternalFixture", StringComparison.OrdinalIgnoreCase) == true)
                 .Select(reference => $"{reference.FilePath} => {compilation.GetAssemblyOrModuleSymbol(reference)}"));
-            Assert.Fail($"{response.Stderr} Workspace error: {loaded.Error?.Message}; references: {references}");
+            string? targetFramework = project is null ? null : ProjectContextFacts.GetTargetFramework(project);
+            string assetsPath = Path.Combine(Path.GetDirectoryName(fixture.VisualBasicProject)!, "obj", "project.assets.json");
+            using JsonDocument assets = JsonDocument.Parse(File.ReadAllText(assetsPath));
+            string targets = string.Join(",", assets.RootElement.GetProperty("targets").EnumerateObject().Select(item => item.Name));
+            string runtimes = assets.RootElement.GetProperty("project").TryGetProperty("runtimes", out JsonElement runtimeElement)
+                ? string.Join(",", runtimeElement.EnumerateObject().Select(item => item.Name)) : "none";
+            Assert.Fail($"{response.Stderr} Workspace error: {loaded.Error?.Message}; project: {project?.Name}; framework: {targetFramework}; output: {project?.OutputFilePath}; targets: {targets}; runtimes: {runtimes}; references: {references}");
         }
 
         Assert.Contains("FIXTURE_NET10_INT_OVERLOAD_BODY", SliceText(response.Stdout), StringComparison.Ordinal);
