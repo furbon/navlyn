@@ -28,6 +28,8 @@ MCP default:
 4. Other tools use `NavlynInProcessCommandAdapter`, which runs the shared command runtime in-process.
 5. The MCP result envelope returns `sourceCommand` for traceability and the command JSON under `result`.
 
+The `read`/`symbol-source` path can opt into `metadata` or `decompiled` external-member reads. It retains Roslyn's exact call-site binding and selected project target framework, matches the compile-time reference PE to local package/runtime assets or a direct implementation reference, and decompiles one exact member in a separate killable worker. It reports reference and implementation content hashes and validates the selected inputs before returning. The default `externalSource: "none"` path keeps the existing behavior and does not inspect external binaries. External slices use non-editable `navlyn-metadata://` or `navlyn-decompiled://` paths and contain reconstructed text, not a claim of original source.
+
 MCP legacy external CLI:
 
 1. This path is used only when `--navlyn-executable` is explicitly supplied.

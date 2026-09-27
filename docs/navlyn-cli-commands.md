@@ -1969,6 +1969,23 @@ Optional options:
 - `--budget-tokens <number>`: approximate character budget per slice using `tokens * 4`. Defaults to `4000`.
 - `--project <project>`.
 - `--exclude-generated`.
+- `--external-source none|metadata|decompiled`: external-member source mode. Defaults to `none`, preserving the current source-only result and avoiding external PE inspection. The `read` command is an alias for `symbol-source` and accepts the same option.
+
+For a metadata-only dependency symbol, `metadata` returns the selected member's Roslyn declaration and `decompiled` can return reconstructed C# for one exact member when a matching local implementation PE is available. Both modes require an exact C# or Visual Basic call-site binding. Workspace source locations continue to take priority. `signature`, `declaration`, and `body` are the only supported external views. A body is returned only when the exact implementation member has one; reference assemblies, abstract members, unresolved or ambiguous implementation assets, malformed images, stale binaries, unsupported views, and safety-limit failures return a deterministic diagnostic without a body. For an external C# property body, a simple read selects its getter and a simple assignment selects its setter, including parenthesized and supported conditional access. Compound assignment, increment/decrement, or otherwise ambiguous access fails closed. Property `signature` and `declaration` views use the bound metadata declaration and report metadata provenance, even when `decompiled` was requested.
+
+Example:
+
+```powershell
+navlyn read --workspace path\to\consumer.csproj --file src\Caller.cs --line 42 --column 27 --view body --external-source decompiled
+```
+
+External result slices use the existing `textKind`, `path`, `startLine`, `startColumn`, `endLine`, `endColumn`, `lines`, and `truncated` fields. They also carry `origin` (`metadata` or `decompiled`) and `editable: false`; external results add `sourceOrigin` and `externalAssembly` with assembly identity, selected target framework, whether the reference or implementation PE supplied the result, and content hashes. A decompiled slice uses `navlyn-decompiled://<implementation-sha256>/<member-id-sha256>`; metadata uses `navlyn-metadata://<reference-sha256>/<member-id-sha256>`. Its line and column coordinates refer to the returned virtual member text starting at line 1. These URIs are display identifiers, not repository paths, and cannot be used as source-file or candidate-ID input. Existing `sym:v1:` candidate IDs retain their source-anchor meaning.
+
+Reconstructed C# is not the library's original source and does not prove runtime dispatch. The result distinguishes the compile-time reference PE from the selected implementation PE. NuGet `ref`/`lib` assets and direct local implementation DLL references are supported when the exact assembly and member can be matched. Framework/shared-framework metadata can be read, but a body is unavailable when Navlyn cannot identify one exact local implementation PE and runtime variant. Navlyn does not restore packages, fetch binaries, execute the dependency, or write source files for these reads; package assets must already be available locally.
+
+External reads limit each reference or implementation PE to 64 MiB, `project.assets.json` to 16 MiB, and the selected method IL to 1 MiB. Implementation selection and decompilation run in a disposable worker with a 10-second deadline.
+
+External diagnostics are written to stderr and return a nonzero usage exit without JSON stdout: `NAVLYN1401` unsupported external view, `NAVLYN1402` no matching local implementation PE, `NAVLYN1403` exact member has no body, `NAVLYN1404` ambiguous member or implementation, `NAVLYN1405` reference/assets/implementation changed during the read, `NAVLYN1406` size or decompilation deadline exceeded, and `NAVLYN1407` malformed or undecompilable PE.
 
 Result shape:
 

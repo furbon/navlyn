@@ -17,7 +17,7 @@
     <RepositoryUrl>https://github.com/furbon/navlyn</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/furbon/navlyn</PackageProjectUrl>
-    <PackageReleaseNotes>0.8.0-preview.1 begins the release-readiness rehearsal for the standalone Navlyn MCP server. The server retains its single read-only semantic tool surface.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.8.0-preview.1 begins the release-readiness rehearsal for the standalone Navlyn MCP server. The server retains its single read-only semantic tool surface. navlyn_read adds opt-in metadata and reconstructed C# reads for exact external library members; original source is not claimed.</PackageReleaseNotes>
     <Copyright>Copyright (c) 2026 furbon.tech</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
@@ -27,6 +27,7 @@
     <None Include="..\assets\navlyn-icon.png" Pack="true" PackagePath="\" />
     <None Include="..\README.md" Pack="true" PackagePath="\" />
     <None Include="..\README_ja.md" Pack="true" PackagePath="\" />
+    <None Include="..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>

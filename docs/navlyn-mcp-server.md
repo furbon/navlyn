@@ -215,6 +215,18 @@ The MCP surface is deliberately need-triggered. Prefer the specific high-level t
 | `navlyn_packages` | Source package usage or package-impact evidence | `package-usage`, `package-impact` |
 | `navlyn_batch` | Optimization for multiple already-needed batch-supported CLI facts in one MCP tool call | `batch` |
 
+### Reading an external library member
+
+`navlyn_read` accepts `externalSource: "none" | "metadata" | "decompiled"`. It defaults to `none`, which keeps the existing source-only behavior. For a metadata-only symbol selected at an exact C# or Visual Basic call site, `metadata` returns a Roslyn declaration and `decompiled` can return reconstructed C# for one exact member from a matching local implementation PE. Existing workspace source always takes priority, and the 25-tool MCP surface is unchanged.
+
+Use `view: "signature"`, `"declaration"`, or `"body"`. The result keeps the call-site `file`, `line`, and `column`. External slices carry `origin` and `editable: false`, plus a `navlyn-metadata://<reference-sha256>/<member-id-sha256>` or `navlyn-decompiled://<implementation-sha256>/<member-id-sha256>` virtual path. Slice coordinates start at line 1 in the returned text; the URI is not a file path and cannot be reused as a source position or candidate ID. `externalAssembly` reports the assembly identity, selected target framework, reference-versus-implementation provenance, and PE content hashes. Reconstructed C# is not original library source and does not establish runtime dispatch.
+
+For `body`, Navlyn requires the exact bound member to have an implementation body in the exact local implementation PE. A reference-only NuGet package, abstract member, unresolved framework implementation or runtime variant, missing PE, malformed image, ambiguity, stale binary, unsupported view, or exceeded safety limit returns a deterministic error without a body. Framework reference metadata may still be returned in `metadata` mode. Navlyn does not restore/fetch packages, execute referenced assemblies, or write source files. The default `none` mode does not inspect dependency PEs.
+
+External reads limit each reference or implementation PE to 64 MiB, `project.assets.json` to 16 MiB, and the selected method IL to 1 MiB. Implementation selection and decompilation run in a disposable worker with a 10-second deadline.
+
+External diagnostics use the CLI IDs in the MCP error result: `NAVLYN1401` unsupported view, `NAVLYN1402` matching implementation unavailable, `NAVLYN1403` exact member has no body, `NAVLYN1404` ambiguous member or implementation, `NAVLYN1405` selected reference/assets/implementation changed during the read, `NAVLYN1406` a configured size/decompilation limit was exceeded, and `NAVLYN1407` malformed or undecompilable PE.
+
 Profiled tools accept the values documented by their logical CLI commands. Use `compact` for small workflow scans, `evidence` for review and CI facts, and `full` only when the richest result is required. `navlyn_workspace_status` and `navlyn_workspace_refresh` accept cache modes `auto`, `on`, or `off`; refresh also accepts `clearCache` and `writeCache`. `navlyn_impact` accepts `light` or `full`. `navlyn_context_pack` accepts edit-oriented `changeKind` hints. `navlyn_batch` accepts request-level profiles and `candidateIdFrom` dependencies when a later request should reuse an earlier result's `candidateId`.
 
 Source-position modes on `navlyn_target`, `navlyn_read`, `navlyn_navigate`, `navlyn_tests_for_symbol`, and selected domain tools accept at most one project context and reject fuzzy selection-only options. Diff-mode `navlyn_context_pack` rejects fuzzy selection-only options because the diff, not a symbol query, selects the context.

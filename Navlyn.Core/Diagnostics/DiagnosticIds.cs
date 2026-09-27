@@ -39,6 +39,14 @@ internal static class DiagnosticIds
     public const int SourceFileNotInProject = 1306;
     public const int SourceFileExcludedByGeneratedCodeFilter = 1307;
 
+    public const int InvalidExternalSourceView = 1401;
+    public const int ExternalImplementationUnavailable = 1402;
+    public const int ExternalMemberBodyUnavailable = 1403;
+    public const int ExternalMemberAmbiguous = 1404;
+    public const int ExternalMemberStale = 1405;
+    public const int ExternalMemberLimitExceeded = 1406;
+    public const int ExternalMemberMalformedImage = 1407;
+
     public const int GitRepositoryNotFound = 1501;
     public const int GitCommandFailed = 1502;
     public const int InvalidDiffOptions = 1503;

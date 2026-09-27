@@ -219,12 +219,13 @@ internal static class NavlynMcpTools
         [Description("Source view: signature, declaration, body, members, xml-doc, or attributes.")] string? view = null,
         [Description("Maximum source lines per slice. Must be 1 or greater.")] int? maxLines = null,
         [Description("Approximate token budget per slice. Must be 1 or greater.")] int? budgetTokens = null,
+        [Description("External member source: none (default), metadata, or decompiled.")] string? externalSource = null,
         CancellationToken cancellationToken = default)
     {
         return RunAsync(
             services,
             ReadTool,
-            NavlynToolCommandBuilder.Read(candidateId, file, line, column, project, excludeGenerated, view, maxLines, budgetTokens),
+            NavlynToolCommandBuilder.Read(candidateId, file, line, column, project, excludeGenerated, view, maxLines, budgetTokens, externalSource),
             cancellationToken);
     }
 

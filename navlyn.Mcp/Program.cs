@@ -6,6 +6,12 @@ using ModelContextProtocol.Server;
 using Navlyn.Mcp.Configuration;
 using Navlyn.Mcp.Execution;
 using Navlyn.Mcp.Tools;
+using Navlyn.Symbols;
+
+if (await ExternalMemberWorker.RunIfRequestedAsync(args, CancellationToken.None))
+{
+    return 0;
+}
 
 if (!NavlynMcpServerOptions.TryParse(args, out NavlynMcpServerOptions options, out string? error, out bool showHelp))
 {

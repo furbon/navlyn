@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><RestoreSources>$(MSBuildThisFileDirectory)..\packages</RestoreSources></PropertyGroup>
+  <ItemGroup><PackageReference Include="Navlyn.ExternalLibrarySourceFixture.ReferenceOnly" Version="1.0.0" /></ItemGroup>
+</Project>

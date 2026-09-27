@@ -77,20 +77,35 @@ internal sealed class NavlynMcpDirectToolRunner(
 
                 await using NavlynMcpWorkspaceCache.WorkspaceLease lease = cacheResult.Lease!;
                 NavlynMcpWorkspaceCache.CachedWorkspace cachedWorkspace = lease.CachedWorkspace;
-                NavlynToolResult result = command.Command switch
+                ExternalMemberSnapshot? externalSnapshot = null;
+                NavlynToolResult result;
+                if (command.Command is "read" or "symbol-source")
                 {
+                    (result, externalSnapshot) = await RunSymbolSourceAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken);
+                }
+                else
+                {
+                    result = command.Command switch
+                    {
                     "workspace-status" => await RunWorkspaceStatusAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
                     "workspace-refresh" => await RunWorkspaceRefreshAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
                     "repo-graph" => RunRepoGraph(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments),
                     "outline" => await RunOutlineAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
-                    "read" or "symbol-source" => await RunSymbolSourceAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
-                    _ => Failed(toolName, sourceCommand, "NAVLYN_MCP_DIRECT_UNSUPPORTED", $"Direct MCP execution is not available for {command.Command}.")
-                };
+                        _ => Failed(toolName, sourceCommand, "NAVLYN_MCP_DIRECT_UNSUPPORTED", $"Direct MCP execution is not available for {command.Command}.")
+                    };
+                }
 
                 beforeValidation?.Invoke(attempt);
                 if (!await workspaceCache.ValidateAsync(lease, cancellationToken))
                 {
                     continue;
+                }
+
+                if (result.Ok && externalSnapshot is not null &&
+                    !await ExternalMemberSourceResolver.ValidateSnapshotAsync(externalSnapshot, cancellationToken))
+                {
+                    return Failed(toolName, sourceCommand, DiagnosticCode(DiagnosticIds.ExternalMemberStale),
+                        "External member binaries changed during the tool call. Retry against the current workspace state.");
                 }
 
                 if (command.Command == "workspace-refresh" && result.Ok && !string.IsNullOrWhiteSpace(options.DaemonPipe))
@@ -305,7 +320,7 @@ internal sealed class NavlynMcpDirectToolRunner(
         return Succeeded(toolName, sourceCommand, output, CreateMetadata(cachedWorkspace, cacheHit, "cheap-file-first"));
     }
 
-    private async Task<NavlynToolResult> RunSymbolSourceAsync(
+    private async Task<(NavlynToolResult Result, ExternalMemberSnapshot? Snapshot)> RunSymbolSourceAsync(
         string toolName,
         NavlynSourceCommand sourceCommand,
         NavlynMcpWorkspaceCache.CachedWorkspace cachedWorkspace,
@@ -317,6 +332,7 @@ internal sealed class NavlynMcpDirectToolRunner(
         string? file = GetValue(arguments, "--file");
         int? line = GetIntValue(arguments, "--line");
         int? column = GetIntValue(arguments, "--column");
+        string externalSource = GetValue(arguments, "--external-source") ?? "none";
         string? projectFilter = GetValue(arguments, "--project");
         bool excludeGenerated = HasFlag(arguments, "--exclude-generated");
         string view = GetValue(arguments, "--view") ?? "declaration";
@@ -326,7 +342,7 @@ internal sealed class NavlynMcpDirectToolRunner(
         ProjectFilterResolutionResult projectResolution = ResolveSingleProject(cachedWorkspace, projectFilter);
         if (projectResolution.Error is not null)
         {
-            return Failed(toolName, sourceCommand, projectResolution.Error);
+            return (Failed(toolName, sourceCommand, projectResolution.Error), null);
         }
 
         Project? project = string.IsNullOrWhiteSpace(projectFilter)
@@ -347,7 +363,7 @@ internal sealed class NavlynMcpDirectToolRunner(
                 cancellationToken);
             if (targetResult.Error is not null)
             {
-                return Failed(toolName, sourceCommand, targetResult.Error);
+                return (Failed(toolName, sourceCommand, targetResult.Error), null);
             }
 
             CandidateTargetResolution target = targetResult.Resolution!;
@@ -365,12 +381,12 @@ internal sealed class NavlynMcpDirectToolRunner(
             column!.Value,
             project,
             excludeGenerated,
-            new SymbolSourceOptions(view, maxLines, budgetTokens),
+            new SymbolSourceOptions(view, maxLines, budgetTokens, externalSource),
             cancellationToken);
 
         if (result.Error is not null)
         {
-            return Failed(toolName, sourceCommand, result.Error);
+            return (Failed(toolName, sourceCommand, result.Error), null);
         }
 
         SymbolSourceResolution resolution = result.Resolution!;
@@ -386,9 +402,11 @@ internal sealed class NavlynMcpDirectToolRunner(
             Symbol: resolution.Symbol,
             Slices: resolution.Slices,
             Truncated: resolution.Truncated,
-            Warnings: resolution.Warnings);
+            Warnings: resolution.Warnings,
+            SourceOrigin: resolution.SourceOrigin,
+            ExternalAssembly: resolution.ExternalAssembly);
 
-        return Succeeded(toolName, sourceCommand, output, CreateMetadata(cachedWorkspace, cacheHit, "cheap-file-first"));
+        return (Succeeded(toolName, sourceCommand, output, CreateMetadata(cachedWorkspace, cacheHit, "cheap-file-first")), resolution.ExternalSnapshot);
     }
 
     private async Task<CandidateTargetResolutionResult> ResolveCandidateTargetAsync(
@@ -656,5 +674,9 @@ internal sealed class NavlynMcpDirectToolRunner(
         SymbolSourceSymbol Symbol,
         IReadOnlyList<SymbolSourceSlice> Slices,
         bool Truncated,
-        IReadOnlyList<string> Warnings);
+        IReadOnlyList<string> Warnings,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        string? SourceOrigin,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        ExternalAssemblyProvenance? ExternalAssembly);
 }

@@ -57,7 +57,7 @@ function Test-PackageEntryPath {
     if ($Path -match '(^|/)(obj|bin|\.git|\.vs|secrets?|credentials?|passwords?|\.env[^/]*)(/|$)') { return $false }
     if ($Path -match '\.(zip|tar|gz|7z|rar|nupkg|snupkg|cs|vb|sln|csproj|vbproj|pfx|snk)$') { return $false }
 
-    if ($Path -in @('_rels/.rels', '[Content_Types].xml', 'README.md', 'README_ja.md', 'navlyn-icon.png', "$PackageId.nuspec")) { return $true }
+    if ($Path -in @('_rels/.rels', '[Content_Types].xml', 'README.md', 'README_ja.md', 'THIRD-PARTY-NOTICES.md', 'navlyn-icon.png', "$PackageId.nuspec")) { return $true }
     if ($Path -match '^package/services/metadata/core-properties/[^/]+\.psmdcp$') { return $true }
     if ($Path -match '^tools/(net8\.0|net10\.0)/any/([^/]+\.(dll|pdb|deps\.json|runtimeconfig\.json)|DotnetToolSettings\.xml)$') { return $true }
     if ($Path -match '^tools/(net8\.0|net10\.0)/any/BuildHost-(net472|netcore)/[^/]+\.(dll|exe|pdb|json|config)$') { return $true }
@@ -161,11 +161,13 @@ try {
             $entries = @($archive.Entries | ForEach-Object { $_.FullName })
             if (@($entries | Group-Object | Where-Object Count -gt 1).Count -gt 0) { Add-Failure "Package '$id' contains duplicate entry paths." }
             foreach ($entryPath in $entries) { if (!(Test-PackageEntryPath -Path $entryPath -PackageId $id)) { Add-Failure "Package '$id' contains a disallowed path." } }
-            foreach ($required in @('_rels/.rels', '[Content_Types].xml', 'README.md', 'README_ja.md', 'navlyn-icon.png', "$id.nuspec")) {
+            foreach ($required in @('_rels/.rels', '[Content_Types].xml', 'README.md', 'README_ja.md', 'THIRD-PARTY-NOTICES.md', 'navlyn-icon.png', "$id.nuspec")) {
                 if ($entries -cnotcontains $required) { Add-Failure "Package '$id' is missing a required package file." }
             }
             foreach ($framework in $ExpectedFrameworks) {
                 $settingsPath = "tools/$framework/any/DotnetToolSettings.xml"
+                $decompilerPath = "tools/$framework/any/ICSharpCode.Decompiler.dll"
+                if ($entries -cnotcontains $decompilerPath) { Add-Failure "Package '$id' is missing the ILSpy decompiler payload for $framework." }
                 if ($entries -cnotcontains $settingsPath) { Add-Failure "Package '$id' is missing tool settings for $framework."; continue }
                 $settingsEntry = $archive.GetEntry($settingsPath)
                 [xml]$settings = Get-EntryText -Entry $settingsEntry

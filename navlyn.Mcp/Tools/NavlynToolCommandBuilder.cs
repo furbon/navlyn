@@ -266,9 +266,10 @@ internal static class NavlynToolCommandBuilder
         bool? excludeGenerated,
         string? view,
         int? maxLines,
-        int? budgetTokens)
+        int? budgetTokens,
+        string? externalSource = null)
     {
-        CommandBuildResult result = SymbolSource(candidateId, file, line, column, project, excludeGenerated, view, maxLines, budgetTokens);
+        CommandBuildResult result = SymbolSource(candidateId, file, line, column, project, excludeGenerated, view, maxLines, budgetTokens, externalSource);
         return result.IsValid ? result with { Command = "read" } : result;
     }
 
@@ -869,11 +870,13 @@ internal static class NavlynToolCommandBuilder
         bool? excludeGenerated,
         string? view,
         int? maxLines,
-        int? budgetTokens)
+        int? budgetTokens,
+        string? externalSource = null)
     {
         List<string> args = [];
         if (!TryAddExactNavigationTarget(args, candidateId, file, line, column, out string? error) ||
             !TryAddAllowedValue(args, "--view", view, SourceViewValues, out error) ||
+            !TryAddAllowedValue(args, "--external-source", externalSource, ["none", "metadata", "decompiled"], out error) ||
             !TryAddPositiveInt(args, "--max-lines", maxLines, out error) ||
             !TryAddPositiveInt(args, "--budget-tokens", budgetTokens, out error))
         {
