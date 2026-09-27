@@ -22,7 +22,7 @@ The Windows release lane installs both .NET 8 and .NET 10 SDKs, runs the xUnit s
 
 ## Current Release State
 
-The current package identity is `0.8.0`; `0.7.0` remains the previous public release. The protected publish workflow, public NuGet indexing, tag, and GitHub Release are verified separately during the release sequence.
+The current package identity is `0.8.1`; `0.8.0` is the previous public release. The protected publish workflow, public NuGet indexing, tag, and GitHub Release are verified separately during the release sequence.
 
 To validate a candidate locally on Windows without changing global tools or real client settings, use .NET SDK 10 to build both target frameworks:
 
@@ -37,7 +37,7 @@ New-Item -ItemType Directory -Path $checks | Out-Null
 ./scripts/test-consumer-install.ps1 -Manifest $manifest -OutputReport (Join-Path $PWD "$checks/consumer-install.json")
 ```
 
-The consumer harness installs into isolated `--tool-path` directories and tests both target frameworks. To install manually from a local feed, use `dotnet tool install --tool-path <isolated-tool-dir> --add-source <local-feed> navlyn --version 0.8.0` (repeat for `navlyn-mcp`). Run the installed executable by absolute path from a separate consumer workspace. Rollback can be exercised by passing an older package manifest with `-RollbackManifest`; uninstall and cleanup are included in the harness. Reports and packages are written under ignored `artifacts/` paths.
+The consumer harness installs into isolated `--tool-path` directories and tests both target frameworks. To install manually from a local feed, use `dotnet tool install --tool-path <isolated-tool-dir> --add-source <local-feed> navlyn --version 0.8.1` (repeat for `navlyn-mcp`). Run the installed executable by absolute path from a separate consumer workspace. Rollback can be exercised by passing an older package manifest with `-RollbackManifest`; uninstall and cleanup are included in the harness. Reports and packages are written under ignored `artifacts/` paths.
 
 ## User Install Shape
 
@@ -67,8 +67,8 @@ For teams and agent workspaces, prefer a repository-local .NET tool manifest whe
 
 ```powershell
 dotnet new tool-manifest
-dotnet tool install navlyn --version 0.8.0
-dotnet tool install navlyn-mcp --version 0.8.0
+dotnet tool install navlyn --version 0.8.1
+dotnet tool install navlyn-mcp --version 0.8.1
 dotnet tool restore
 dotnet tool run navlyn -- doctor --workspace auto
 ```
@@ -100,7 +100,7 @@ When an agent needs several facts from one workspace, prefer CLI `navlyn batch`,
 
 ## Release Identity
 
-The final release identity is `0.8.0`; both package IDs and the source tag use that version.
+The final release identity is `0.8.1`; both package IDs and the source tag use that version.
 
 Keep `navlyn` and `navlyn-mcp` versions synchronized for the initial public releases. Both packages should use the same repository URL, license expression, README, package icon, author, and release notes discipline.
 
@@ -151,7 +151,7 @@ Publishing is opt-in. Dry-run is the default:
 ./scripts/publish-nuget.ps1 -DryRun
 ```
 
-Publish 0.8.0 only through the protected GitHub Actions workflow on the reviewed `main` commit. NuGet Trusted Publishing exchanges the GitHub OIDC token for a short-lived API key immediately before the push. The workflow uploads the manifest and both package bytes before that step. The script reads `artifacts/packages/navlyn-release-pack.json`, verifies both SHA-256 values, and stops if a selected version already exists on NuGet. A partial publication needs explicit inspection of the retained bytes before retrying only the missing package.
+Publish 0.8.1 only through the protected GitHub Actions workflow on the reviewed `main` commit. NuGet Trusted Publishing exchanges the GitHub OIDC token for a short-lived API key immediately before the push. The workflow uploads the manifest and both package bytes before that step. The script reads `artifacts/packages/navlyn-release-pack.json`, verifies both SHA-256 values, and stops if a selected version already exists on NuGet. A partial publication needs explicit inspection of the retained bytes before retrying only the missing package.
 
 ## GitHub Manual Publish Workflow
 
@@ -168,9 +168,9 @@ The workflow must run release validation before packing and publishing. Normal `
 
 ## GitHub Release
 
-After both 0.8.0 packages are publicly indexed and independently installable:
+After both 0.8.1 packages are publicly indexed and independently installable:
 
-1. Push an annotated `v0.8.0` tag on the exact reviewed and published `main` commit.
+1. Push an annotated `v0.8.1` tag on the exact reviewed and published `main` commit.
 2. Wait for tag-triggered release validation.
 3. Create the GitHub Release with concise English and Japanese notes, the package manifest, and retained package artifacts where available.
 4. Verify tag target, artifact hashes, NuGet installs, and release links.
@@ -182,8 +182,8 @@ Do not create the public release before package smoke and dry-run publish have s
 After NuGet indexing completes, test installation from the public feed in a clean shell:
 
 ```powershell
-dotnet tool install --tool-path <clean-cli-tools> navlyn --version 0.8.0
-dotnet tool install --tool-path <clean-mcp-tools> navlyn-mcp --version 0.8.0
+dotnet tool install --tool-path <clean-cli-tools> navlyn --version 0.8.1
+dotnet tool install --tool-path <clean-mcp-tools> navlyn-mcp --version 0.8.1
 navlyn --help
 navlyn-mcp --help
 navlyn doctor --workspace auto

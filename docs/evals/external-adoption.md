@@ -41,7 +41,7 @@ If the primary solution is too broad or fails because unrelated projects cannot 
 
 The report includes stdout/stderr character counts and previews for restore, doctor, target, and prepare-edit so failures are diagnosable without rerunning immediately.
 
-## Current v0.8.0-preview.1 Corpus Result
+## Recorded v0.8.0-preview.1 Corpus Result
 
 Last local Windows run: 2026-09-26. The report is retained at `artifacts/release-readiness-goal-20260926/p8-external-adoption.json` (SHA-256 `82deb5e0067070030f2fea7e6f2f61c36a953bd221dffbd98e9597d5110956f9`). This ignored report is local release evidence, not part of the packages.
 

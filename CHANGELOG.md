@@ -2,6 +2,13 @@
 
 All notable public release changes for Navlyn are tracked here.
 
+## 0.8.1
+
+- Reorganized the English and Japanese README files around direct paths to terminal, VS Code, GitHub Copilot CLI, Codex, and Claude Code setup.
+- Added paired first-run, client setup, and Codex routing-skill guides, with installation, connection checks, and removal steps.
+- Rewrote Japanese workspace guidance in natural Japanese and aligned the English entry points.
+- Kept the read-only CLI and 25-tool MCP contracts unchanged from 0.8.0.
+
 ## 0.8.0
 
 - Added opt-in metadata and decompiled reads for exact external library members, including verified NuGet `ref`/implementation and RID assets. Results identify the selected PE and keep reconstructed C# distinct from original source.

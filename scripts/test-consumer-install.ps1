@@ -308,7 +308,7 @@ $script:WorkspacePath = Join-Path $script:RootPath 'consumer-workspace'
 $markerName = '.navlyn-consumer-install-owner.json'
 $packages = Get-ManifestPackages -Path $Manifest
 $rollbackPackages = if ([string]::IsNullOrWhiteSpace($RollbackManifest)) { $null } else { Get-ManifestPackages -Path $RollbackManifest }
-if ($packages.navlyn.version -cne '0.8.0') { throw 'Current package manifest must identify version 0.8.0.' }
+if ($packages.navlyn.version -cne '0.8.1') { throw 'Current package manifest must identify version 0.8.1.' }
 if ($null -ne $rollbackPackages -and ($rollbackPackages.navlyn.version -eq $packages.navlyn.version -or $rollbackPackages['navlyn-mcp'].version -ne $rollbackPackages.navlyn.version)) { throw 'Rollback manifest must contain a different synchronized package version.' }
 
 $report = [ordered]@{

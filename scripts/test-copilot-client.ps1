@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Manifest = 'artifacts/release-readiness-goal-20260926/p2-packages/navlyn-release-pack.json',
+    [string]$Manifest = 'artifacts/packages/navlyn-release-pack.json',
     [string]$ConsumerRoot = (Join-Path ([System.IO.Path]::GetTempPath()) "navlyn-copilot-consumer-$([guid]::NewGuid().ToString('N'))"),
     [Parameter(Mandatory = $true)]
     [string]$OutputReport,
@@ -110,7 +110,7 @@ Assert-NoReparsePoint $manifestPath
 $manifestDoc = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 if ($manifestDoc.schemaVersion -cne 'navlyn.release-pack.v1' -or @($manifestDoc.packages).Count -ne 2) { throw 'The package manifest has an unsupported shape.' }
 $package = @($manifestDoc.packages | Where-Object { $_.id -ceq 'navlyn-mcp' })
-if ($package.Count -ne 1 -or $package[0].version -cne '0.8.0') { throw 'The manifest must identify exactly one locked navlyn-mcp 0.8.0 package.' }
+if ($package.Count -ne 1 -or $package[0].version -cne '0.8.1') { throw 'The manifest must identify exactly one locked navlyn-mcp 0.8.1 package.' }
 $packagePath = Resolve-InputPath ([string]$package[0].path)
 if (!(Test-Path -LiteralPath $packagePath -PathType Leaf)) { throw 'The manifest package file was not found.' }
 Assert-NoReparsePoint $packagePath

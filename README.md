@@ -1,193 +1,39 @@
 # Navlyn
 
-日本語: [`README_ja.md`](README_ja.md)
+[日本語](https://github.com/furbon/navlyn/blob/main/README_ja.md)
 
-**Stop your coding agent from wandering through the codebase.**
+Navlyn helps coding agents identify the right type or method in a .NET repository before they edit it. It focuses on C# and supports some Visual Basic scenarios. You can find declarations, references, and code worth reading before a change, then check which types or methods the diff affected.
 
-Navlyn turns an instruction such as "fix `PaymentService`" into the small set of code, relationships, and checks an agent needs to act. It picks the intended target, gives the agent a reusable anchor for its investigation, and checks whether the actual diff stayed on that target.
+Use the `navlyn-mcp` server with an agent, or the `navlyn` command from a terminal or CI. Both read local code and return JSON results.
 
-```text
-"Fix PaymentService"
-        |
-        v
-choose the intended target -> read only what matters -> change it -> check the diff
-```
+## Start with your environment
 
-Generic code search gives an agent a pile of matches. Navlyn keeps each next question attached to one selected target: which symbol the user meant, what code it depends on, what should be read before changing it, and whether the edit landed where intended. The agent reads less unrelated code, makes fewer broad searches, and keeps its context on facts that can change the edit.
+- [Use Navlyn in VS Code with GitHub Copilot](https://github.com/furbon/navlyn/blob/main/docs/navlyn-client-setup.md#vs-code-with-github-copilot)
+- [Use Navlyn in GitHub Copilot CLI](https://github.com/furbon/navlyn/blob/main/docs/navlyn-client-setup.md#github-copilot-cli)
+- [Use Navlyn in Codex](https://github.com/furbon/navlyn/blob/main/docs/navlyn-client-setup.md#codex)
+- [Use Navlyn in Claude Code](https://github.com/furbon/navlyn/blob/main/docs/navlyn-client-setup.md#claude-code)
+- [Look up a type in a terminal](https://github.com/furbon/navlyn/blob/main/docs/navlyn-first-10-minutes.md)
 
-`navlyn-mcp` is the primary way to use Navlyn with coding agents. The `navlyn` CLI uses the same engine for shell workflows, CI, and first-run verification.
+To help Codex choose when to use Navlyn, see [install the Codex routing skill](https://github.com/furbon/navlyn/blob/main/docs/navlyn-codex-routing-skill.md).
 
-## Three-Minute Path
+## Try it in a terminal
 
-Install Navlyn 0.8.0 from NuGet, then run one semantic query in your repository. The [first 10 minutes guide](docs/navlyn-first-10-minutes.md) uses an isolated tool directory and an absolute executable path. A copyable repository-local tool manifest is in [examples/install/dotnet-tools.json](examples/install/dotnet-tools.json).
-
-Navlyn can read a local dependency member's reconstructed C# with `read --external-source decompiled`. See the [real-package evaluation corpus](docs/evals/external-member-corpus.md) for tested boundaries.
-
-### Install 0.8.0
-
-The following commands install the versioned packages:
-
-Install the MCP server:
+You need a .NET SDK that can load the repository you want to inspect. Install the tools from NuGet:
 
 ```powershell
-dotnet tool install --global navlyn-mcp --version 0.8.0
+dotnet tool install --global navlyn --version 0.8.1
 ```
 
-Install the CLI too when you want shell or CI JSON facts:
-
-```powershell
-dotnet tool install --global navlyn --version 0.8.0
-```
-
-Then verify one workspace and one symbol. In a normal repository with one top-level `.slnx`, `.sln`, `.csproj`, or `.vbproj`, use `auto`:
+Open a new terminal at the root of the repository you want to inspect and check that Navlyn can select a workspace:
 
 ```powershell
 navlyn doctor --workspace auto
-navlyn target --workspace auto --query PaymentService --assume-kind NamedType --limit 10
-navlyn read --workspace auto --candidate-id sym:v1:... --view declaration --max-lines 80
-navlyn prepare-edit --workspace auto --candidate-id sym:v1:... --goal modify --change-kind behavior
 ```
 
-Use the `candidateId` from `target` for follow-up calls. After an edit, inspect the real diff:
+If `auto` cannot choose one workspace, pass the intended `.slnx`, `.sln`, `.csproj`, or `.vbproj` path. The [10-minute guide](https://github.com/furbon/navlyn/blob/main/docs/navlyn-first-10-minutes.md) shows an isolated installation and walks through one type lookup.
 
-```powershell
-navlyn review --workspace auto --profile evidence
-```
+For repository selection, see [workspace configuration](https://github.com/furbon/navlyn/blob/main/docs/navlyn-workspace.md). Complete command and result details are in the [CLI reference](https://github.com/furbon/navlyn/blob/main/docs/navlyn-cli-commands.md) and [MCP reference](https://github.com/furbon/navlyn/blob/main/docs/navlyn-mcp-server.md).
 
-If `auto` finds no workspace or more than one best candidate, pass the intended `.slnx`, `.sln`, `.csproj`, or `.vbproj` path explicitly, or add `navlyn.workspace.json` to make the repository choice shared.
+The Navlyn commands run locally and do not upload code. They do not edit code, run tests, or prove runtime behavior. Navlyn uses MSBuild to load projects, so run it only on repositories you trust. See [limitations and safety notes](https://github.com/furbon/navlyn/blob/main/docs/navlyn-limitations.md) for details.
 
-## Use With MCP
-
-For a repository with one top-level workspace candidate, the MCP server can use the repository root working directory and discover the workspace automatically. Use an explicit `--workspace` only when the repository has multiple plausible solutions or projects. If an MCP client does not launch servers from the repository root, pass `--working-directory <repo-root>` instead of `--workspace`.
-
-### GitHub Copilot CLI
-
-Copy [the Copilot CLI MCP example](examples/install/copilot-cli-mcp.json) to `.mcp.json` or `.github/mcp.json` in the repository root and set its command to the installed `navlyn-mcp` executable. Copilot CLI configuration uses `mcpServers`. To enable repository MCP configuration for a prompt session in PowerShell, set the documented opt-in variable before starting Copilot:
-
-```powershell
-$env:GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP = 'true'
-copilot
-```
-
-The 0.8.0 `navlyn-mcp` package was exercised with Copilot CLI `1.0.88` on Windows using its explicit additional-config option: an observed `navlyn_target` call returned the consumer symbol. See the official [Copilot CLI MCP documentation](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers) for current project-config opt-in behavior.
-
-### GitHub Copilot In VS Code
-
-Create `.vscode/mcp.json` in the repository root. If the executable is not on VS Code's path, replace `navlyn-mcp` with its installed absolute path:
-
-```json
-{
-  "servers": {
-    "navlyn": {
-      "type": "stdio",
-      "command": "navlyn-mcp",
-      "cwd": "${workspaceFolder}"
-    }
-  }
-}
-```
-
-VS Code uses `.vscode/mcp.json` and the `servers` property as shown above. VS Code 1.139.1 Copilot Chat on Windows called `navlyn_target` on an installed 0.8.0 server and returned a symbol from this repository. See the official [VS Code MCP documentation](https://code.visualstudio.com/docs/agent-customization/mcp-servers).
-
-### Codex
-
-For a global installation, run this from the repository root. For an isolated tool path, use the absolute executable in the [first 10 minutes guide](docs/navlyn-first-10-minutes.md#mcp-client-setup):
-
-```powershell
-codex mcp add navlyn -- navlyn-mcp
-```
-
-### Claude Code
-
-Create `.mcp.json` in the repository root:
-
-```json
-{
-  "mcpServers": {
-    "navlyn": {
-      "type": "stdio",
-      "command": "navlyn-mcp",
-      "args": ["--working-directory", "${CLAUDE_PROJECT_DIR:-.}"]
-    }
-  }
-}
-```
-
-## Codex Routing Skill
-
-The Navlyn routing skill is separate from `navlyn-mcp`. From the inspected repository, call the installer from the Navlyn source checkout and target that repository's `.agents/skills` directory:
-
-```powershell
-$navlynSource = (Resolve-Path '<navlyn-source-checkout>').Path
-$skillRoot = Join-Path (Get-Location) '.agents/skills'
-New-Item -ItemType Directory -Force $skillRoot | Out-Null
-& (Join-Path $navlynSource 'scripts/install-routing-skill.ps1') -Action Install -DestinationRoot $skillRoot
-```
-
-Identical reinstall is safe. A valid adjacent `.navlyn-semantic-routing.install.json` marker records ownership. If the marker is absent/invalid, managed bytes differ, or unrelated files exist in the skill directory, the installer stops and preserves the content. Resolve a conflict only after reviewing it. Uninstall a managed copy with:
-
-```powershell
-& (Join-Path $navlynSource 'scripts/install-routing-skill.ps1') -Action Uninstall -DestinationRoot $skillRoot
-```
-
-Codex CLI `0.155.0-alpha.16` on Windows passed isolated discovery and a six-case activation smoke in a process-scoped full-access session with no source write attempts or diff. The tested read-only Windows sandbox could not launch WindowsApps PowerShell, so activation in that sandbox mode is not established. This Codex skill does not claim Copilot skill support. See [the release contract](docs/navlyn-release-contract.md#client-support-claims) for tested support boundaries.
-
-Navlyn MCP exposes one stable read-only semantic tool surface. The default startup discovers a single repository-local workspace candidate and fails closed when that choice is ambiguous. The agent should start with the smallest relevant fact, reuse `candidateId`, and stop when the returned JSON answers the question.
-
-## What The Agent Gets
-
-| Agent question | Navlyn MCP tool |
-| --- | --- |
-| Which symbol did the user mean? | `navlyn_target` |
-| Show the declaration for this selected symbol. | `navlyn_read` |
-| Who calls or references it? | `navlyn_navigate` |
-| What should I know before changing it? | `navlyn_prepare_edit` |
-| Did the actual diff stay on target? | `navlyn_verify_edit` |
-| What did this Git diff affect? | `navlyn_review` |
-
-The useful unit is one answerable question, not a repository dump. Navlyn returns bounded JSON facts so an agent can keep an exact `candidateId` through its investigation and only request the next relationship or source slice when it needs it.
-
-## Use / Do Not Use
-
-| Use Navlyn For | Do Not Use Navlyn For |
-| --- | --- |
-| C# or Visual Basic symbol identity, overloads, partial declarations, project context, target frameworks, DI, routes, related tests, and Git diff evidence. | Comments, strings, docs, arbitrary text search, generated artifacts, runtime proof, security scanning, test execution, editing, refactoring, or publishing review comments. |
-
-Use normal file reads and `rg` when text is enough. Use Navlyn when Roslyn/MSBuild facts would change what the agent reads or edits.
-
-## Workspace Choice
-
-Most repositories do not need `navlyn.workspace.json`. For the MCP server, omit `--workspace` in the repository root; for CLI commands, use `--workspace auto`. Both forms select a single top-level `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `.vbproj` candidate and fail instead of guessing when the best candidate is ambiguous.
-
-Add `navlyn.workspace.json` only when a repository has several possible solutions/projects and needs one shared choice. Its smallest useful form is:
-
-```json
-{
-  "primaryWorkspace": "YourRepo.sln"
-}
-```
-
-The complete configuration reference, including candidate discovery and root policy, is in [docs/navlyn-workspace.md](docs/navlyn-workspace.md).
-
-## CLI And CI
-
-The CLI is optional after MCP setup, but it is the easiest way to verify installs, script facts, and produce CI evidence.
-
-## Boundaries
-
-Navlyn is local and read-only. It does not edit files, run arbitrary shell commands, call the network, upload source, or claim to prove runtime behavior. Use it where compiler and project facts matter; use normal file reads and `rg` where text is enough.
-
-## Documentation
-
-- [MCP server reference](docs/navlyn-mcp-server.md): stable tool surface, resources, and protocol behavior.
-- [Workspace configuration](docs/navlyn-workspace.md): when and how to use `navlyn.workspace.json`.
-- [First investigation](docs/navlyn-first-10-minutes.md): a short semantic investigation flow after setup.
-- [Demos and case studies](docs/navlyn-demo-walkthroughs.md): reproducible current-repo and fixture-backed evidence.
-- [CLI command reference](docs/navlyn-cli-commands.md): complete command and JSON contract.
-- [Agent recipes](docs/navlyn-agent-recipes.md): focused CLI and MCP workflows.
-
-Client-specific configuration formats are documented by [GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers), [Codex CLI](https://learn.chatgpt.com/docs/extend/mcp?surface=cli), [VS Code](https://code.visualstudio.com/docs/agent-customization/mcp-servers), and [Claude Code](https://docs.anthropic.com/en/docs/claude-code/mcp). A configuration example is documented support only; it does not establish client verification.
-
-## License
-
-Navlyn is licensed under the MIT License. See [LICENSE](LICENSE).
+Navlyn is released under the MIT License. See [LICENSE](https://github.com/furbon/navlyn/blob/main/LICENSE).

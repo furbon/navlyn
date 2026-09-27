@@ -1,46 +1,92 @@
-# Client Setup
+# Use Navlyn from an AI tool
 
-Start with the [Windows first 10 minutes guide](navlyn-first-10-minutes.md). It installs both 0.8.0 .NET tools from NuGet under an isolated `--tool-path` and runs the installed executable by absolute path. The packages contain `net8.0` and `net10.0` assets.
+[日本語](navlyn-client-setup_ja.md)
 
-## Select A Client
+MCP lets an AI tool call an external program. For Navlyn, that program is `navlyn-mcp`. Once connected, the AI tool can call `navlyn_target` and the other Navlyn tools.
 
-| Client or use | Setup | Evidence state |
-| --- | --- | --- |
-| Codex CLI routing skill | Install from the source checkout with `scripts/install-routing-skill.ps1`; install/update/uninstall and isolated discovery are covered in the quick start. | Verified for Codex CLI `0.155.0-alpha.16` on Windows; activation passed only in a process-scoped full-access session. The tested Windows read-only sandbox could not launch WindowsApps PowerShell. |
-| GitHub Copilot CLI MCP | Configure repository `.mcp.json` or `.github/mcp.json` with `mcpServers`; point at the absolute `navlyn-mcp.exe`. Enable repository MCP configuration with `GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP=true` for prompt sessions. | Copilot CLI `1.0.88` on Windows called `navlyn_target` on installed 0.8.0 and returned the consumer symbol. This does not establish Copilot skill support. |
-| VS Code MCP | Configure `.vscode/mcp.json` with `servers`. See [VS Code's MCP guide](https://code.visualstudio.com/docs/agent-customization/mcp-servers). | VS Code 1.139.1 Copilot Chat on Windows called `navlyn_target` on an installed 0.8.0 server. It returned `Navlyn.Mcp.Execution.NavlynMcpWorkspaceCache` from the current workspace. |
-| Other MCP clients | Follow that client's official stdio MCP configuration guide. | Documented only unless a specific installed client/version has its own observed test. |
+These steps use Windows. Prepare [PowerShell 7](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) and a [.NET SDK](https://dotnet.microsoft.com/download) that can load your repository.
 
-The formats are client-specific: Copilot CLI uses root `.mcp.json` / `.github/mcp.json` with `mcpServers`; VS Code uses `.vscode/mcp.json` with `servers`. A configuration example by itself is not client verification. See [the release contract](navlyn-release-contract.md#client-support-claims) for exact support boundaries.
-
-## Repository Tool Manifest
-
-Run `dotnet new tool-manifest`, then `dotnet tool install --local navlyn --version 0.8.0` and the equivalent `navlyn-mcp` command to create a repository-local `dotnet-tools.json`. Restore it with `dotnet tool restore`, then invoke the CLI with `dotnet tool run navlyn -- doctor --workspace auto`.
-
-The checked-in [manifest example](../examples/install/dotnet-tools.json) records both 0.8.0 tools. Copy it to the consumer repository's `.config/dotnet-tools.json` and restore from NuGet:
+Run `dotnet tool list --global` to check for `navlyn-mcp`. If it is absent, install it below. If version 0.8.1 is listed, skip installation. For an older version, run `dotnet tool update --global navlyn-mcp --version 0.8.1`.
 
 ```powershell
-$navlynSource = 'C:\path\to\navlyn'
-New-Item -ItemType Directory -Force .config | Out-Null
-Copy-Item (Join-Path $navlynSource 'examples/install/dotnet-tools.json') .config\dotnet-tools.json
-dotnet tool restore
-dotnet tool run navlyn -- doctor --workspace auto
+dotnet tool install --global navlyn-mcp --version 0.8.1
+$mcpExe = Join-Path $HOME '.dotnet/tools/navlyn-mcp.exe'
+Test-Path $mcpExe
+$mcpExe
 ```
 
-Replace `$navlynSource` with the absolute path to your Navlyn source checkout. The manifest lives under `examples/install`; this repository does not keep one at its root.
+If the tool was already installed, still run the `$mcpExe` lines above. When `Test-Path` returns `True`, use the final path printed to replace `C:\path\to\navlyn-mcp.exe` below. Open the repository you want to inspect before configuring a client.
 
-## MCP Server Command
+## VS Code with GitHub Copilot
 
-With a published package installed in the repository-local .NET tool manifest, the command is:
+Follow [VS Code's GitHub Copilot setup](https://code.visualstudio.com/docs/copilot/setup) to sign in and make Copilot Chat available. See [VS Code's MCP guide](https://code.visualstudio.com/docs/agent-customization/mcp-servers) for the server controls.
+
+1. Open the repository in VS Code.
+2. Create `.vscode/mcp.json` in that repository and save the example below. Replace the executable path; keep the doubled backslashes in JSON.
+3. Run `MCP: List Servers` from the Command Palette and start `navlyn`. If prompted to trust it, check the executable path before accepting.
+4. Open Copilot Chat in `Agent` mode and enable Navlyn in the tool picker. Ask it to use `navlyn_target` to find a real type in this repository. Check the tool call and result.
 
 ```json
 {
-  "command": "dotnet",
-  "args": ["tool", "run", "navlyn-mcp"],
-  "cwd": "."
+  "servers": {
+    "navlyn": {
+      "type": "stdio",
+      "command": "C:\\path\\to\\navlyn-mcp.exe",
+      "cwd": "${workspaceFolder}"
+    }
+  }
 }
 ```
 
-For a `--tool-path` installation, configure the absolute `navlyn-mcp.exe` path. Launch it with the inspected repository as working directory. Use `--workspace` only when multiple plausible workspaces require an explicit choice.
+If it cannot connect, check the executable path, the folder open in VS Code, and errors shown by `MCP: List Servers`. Remove the `navlyn` entry from `.vscode/mcp.json` to undo this setup.
 
-See [README MCP setup](../README.md#use-with-mcp), the [Copilot CLI example](../examples/install/copilot-cli-mcp.json), and [MCP server reference](navlyn-mcp-server.md) for the tool surface. Official configuration guidance: [Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers), [Codex CLI](https://learn.chatgpt.com/docs/extend/mcp?surface=cli), and [VS Code](https://code.visualstudio.com/docs/agent-customization/mcp-servers).
+## GitHub Copilot CLI
+
+[Install and sign in to Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/install-copilot-cli). Its [MCP setup guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers) describes repository configuration. Create `.mcp.json` at the repository root with the following content. Replace both paths.
+
+```json
+{
+  "mcpServers": {
+    "navlyn": {
+      "type": "local",
+      "command": "C:\\path\\to\\navlyn-mcp.exe",
+      "args": ["--working-directory", "C:\\path\\to\\your-repository"]
+    }
+  }
+}
+```
+
+Start `copilot` in that repository and respond to its repository trust prompt. Run `/mcp list` to check that `navlyn` appears, then ask it to use `navlyn_target` to find a real type and check the result. You can also list servers from a terminal with `copilot mcp list`.
+
+For prompt mode in an untrusted folder, set `$env:GITHUB_COPILOT_PROMPT_MODE_WORKSPACE_MCP = 'true'` before starting it.
+
+Copilot CLI does not read `.vscode/mcp.json`. Remove the entry from `.mcp.json` to undo this setup.
+
+## Codex
+
+Follow the [Codex quickstart](https://developers.openai.com/codex/quickstart). Replace `$mcpExe` with the absolute path to the installed `navlyn-mcp.exe`:
+
+```powershell
+$mcpExe = 'C:\path\to\navlyn-mcp.exe'
+codex mcp add navlyn -- $mcpExe
+codex mcp list
+```
+
+Start Codex from the repository you want to inspect and ask it to use `navlyn_target` to find a real type. If Codex starts elsewhere, add `--working-directory C:\path\to\your-repository` after the executable when registering it. Use `codex mcp remove navlyn` to remove the registration. See the [Codex MCP reference](https://developers.openai.com/codex/mcp).
+
+To give Codex guidance on when to use Navlyn, see [install the Codex routing skill](navlyn-codex-routing-skill.md).
+
+## Claude Code
+
+Follow the [Claude Code quickstart](https://code.claude.com/docs/en/quickstart) to install and sign in. Run this from the repository you want to inspect, replacing both paths:
+
+```powershell
+claude mcp add --transport stdio navlyn -- 'C:\path\to\navlyn-mcp.exe' --working-directory 'C:\path\to\your-repository'
+claude mcp list
+```
+
+In Claude Code, open `/mcp` to check the `navlyn` connection. Ask it to use `navlyn_target` to find a real type and check the tool result. Run `claude mcp remove navlyn` to remove the registration. See the [official MCP guide](https://code.claude.com/docs/en/mcp).
+
+## After connecting
+
+If `navlyn_target` cannot find the intended code, [run `doctor`](navlyn-first-10-minutes.md#2-run-it-in-a-repository) from the repository root. If several workspaces are possible, see [workspace configuration](navlyn-workspace.md). The [MCP reference](navlyn-mcp-server.md) lists all Navlyn tools.
