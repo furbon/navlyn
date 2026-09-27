@@ -21,6 +21,8 @@ Navlyn は「`PaymentService` を直して」のような指示を、エージ�
 
 現在の `0.8.0-preview.1` candidate は、公開前のローカル release rehearsal 用です。NuGet には公開されていません。Windows、PowerShell 7、.NET SDK 10 を用意し、[Windows 向けローカル feed quick start](docs/navlyn-first-10-minutes.md) に従って両ターゲットの package を作成し、`--tool-path` に隔離して install してください。install した絶対パスの `navlyn.exe` で最初の semantic fact を取得します。repository にある tool manifest もこの preview を指定しているため、対応するローカル feed を使って restore してください。
 
+このプレビューでは、ローカルにある依存ライブラリのメソッドを `read --external-source decompiled` で調べられます。返る C# は逆コンパイルで再構成したもので、元のソースではありません。[実パッケージの評価結果](docs/evals/external-member-corpus.md)も参照してください。
+
 ### 公開済みの 0.7.0
 
 以下のコマンドは公開済みの `0.7.0` 用です。`0.8.0-preview.1` candidate を試す場合は、上記のローカル feed quick start を使用してください。

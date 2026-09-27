@@ -21,6 +21,8 @@ Generic code search gives an agent a pile of matches. Navlyn keeps each next que
 
 The current `0.8.0-preview.1` candidate is a local release rehearsal and is not published to NuGet. On Windows with PowerShell 7 and .NET SDK 10, use the [local-feed quick start](docs/navlyn-first-10-minutes.md) to pack both target frameworks, install both tools with `--tool-path`, and run the installed absolute `navlyn.exe` to get a first semantic fact. The checked-in package manifest also names this preview; restore it only with the matching local feed, never public NuGet.
 
+The preview can read a local dependency member's reconstructed C# with `read --external-source decompiled`. See the [real-package evaluation corpus](docs/evals/external-member-corpus.md) for tested boundaries.
+
 ### Published 0.7.0
 
 The following commands use the published `0.7.0` packages. To exercise the `0.8.0-preview.1` candidate, use the local-feed quick start above.
