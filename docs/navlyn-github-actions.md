@@ -33,7 +33,7 @@ The example workflow:
 - appends `summary.md` to the GitHub job summary,
 - uploads JSON facts as an artifact.
 
-The copyable example targets Windows and builds the checked-out source. Downstream repositories can install the published 0.8.0 tools from NuGet; source builds remain useful for validating changes before publication.
+The copyable example targets Windows and builds the checked-out source. Downstream repositories can install the published 0.8.1 tools from NuGet; source builds remain useful for validating changes before publication.
 
 ## Release workflow lanes
 

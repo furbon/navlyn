@@ -7,7 +7,9 @@ This document captures durable local development checks, command implementation 
 - `docs/navlyn-workspace.md` and `docs/navlyn-workspace_ja.md`: optional workspace-configuration reference.
 - `docs/navlyn-cli-commands.md`: public CLI contract. Update this when implemented command behavior changes.
 - `docs/navlyn-mcp-server.md`: public MCP server setup, tool surface, result envelope, and boundaries.
-- `docs/navlyn-first-10-minutes.md`: short first-run onboarding path.
+- `docs/navlyn-first-10-minutes.md` and `docs/navlyn-first-10-minutes_ja.md`: first terminal run.
+- `docs/navlyn-client-setup.md` and `docs/navlyn-client-setup_ja.md`: VS Code, Copilot CLI, Codex, and Claude Code setup.
+- `docs/navlyn-codex-routing-skill.md` and `docs/navlyn-codex-routing-skill_ja.md`: optional Codex skill installation.
 - `docs/navlyn-positioning.md`: category positioning against search, LSP, analyzers, MCP servers, and review bots.
 - `docs/navlyn-distribution.md`: package validation and release workflow.
 - `docs/navlyn-performance.md`: local performance measurement, MCP cost model, and release-readiness performance smoke.

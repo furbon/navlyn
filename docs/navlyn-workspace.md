@@ -1,8 +1,8 @@
 # Navlyn Workspace Configuration
 
-Read this page only when a direct `.slnx`, `.sln`, `.csproj`, or `.vbproj` path is not enough. The normal setup is in the [README](../README.md#workspace-choice).
+Usually, run `navlyn doctor --workspace auto` from the repository root. See [Try Navlyn on Windows](navlyn-first-10-minutes.md) for the first run. If discovery finds several candidates, first try an explicit path such as `--workspace .\YourRepo.slnx`.
 
-`navlyn.workspace.json` makes the workspace choice explicit for repositories with several possible solutions or projects. It is a Navlyn configuration file, not the workspace itself.
+To share that choice with your team, place `navlyn.workspace.json` at the repository root. It names the solution or project to load.
 
 ## Start With One Choice
 

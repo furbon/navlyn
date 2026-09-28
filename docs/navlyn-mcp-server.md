@@ -1,6 +1,6 @@
 # Navlyn MCP Server
 
-`navlyn-mcp` gives MCP clients a read-only C#-first .NET semantic evidence surface with Roslyn-backed Visual Basic support. It is designed for agents that should inspect code with Roslyn/MSBuild facts before they edit, review, or explain it. For installation and client-specific copyable files, start with the [README](../README.md#use-with-mcp).
+`navlyn-mcp` gives MCP clients a read-only C#-first .NET semantic evidence surface with Roslyn-backed Visual Basic support. It is designed for agents that should inspect code with Roslyn/MSBuild facts before they edit, review, or explain it. For installation and client-specific steps, start with [client setup](navlyn-client-setup.md).
 
 The server is intentionally facts-only:
 
@@ -106,7 +106,7 @@ Equivalent MCP client configuration for local development:
 }
 ```
 
-For the 0.8.0 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
+For the 0.8.1 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
 
 ## Server Options
 

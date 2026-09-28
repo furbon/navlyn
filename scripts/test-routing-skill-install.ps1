@@ -73,7 +73,7 @@ function Set-OlderFixture([string] $Root) {
     [System.IO.File]::AppendAllText($path, "`n<!-- controlled older release fixture -->`n", [System.Text.UTF8Encoding]::new($false))
     $markerPath = Join-Path $Root $markerName
     $marker = Get-Content -LiteralPath $markerPath -Raw | ConvertFrom-Json -AsHashtable
-    $marker.navlynVersion = '0.8.0-preview.0'
+    $marker.navlynVersion = '0.8.0'
     $marker.files['SKILL.md'] = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
     [System.IO.File]::WriteAllText($markerPath, ($marker | ConvertTo-Json -Depth 8), [System.Text.UTF8Encoding]::new($false))
 }
@@ -252,7 +252,7 @@ try {
 $report = [ordered]@{
     schema = 'navlyn.routing-skill-install-test.v1'
     status = $(if ($null -eq $failure) { 'passed' } else { 'failed' })
-    releaseVersion = '0.8.0'
+    releaseVersion = '0.8.1'
     layouts = @($results)
     cleanup = $(if (Test-Path -LiteralPath $tempRoot) { 'failed' } else { 'passed' })
     failure = $failure
