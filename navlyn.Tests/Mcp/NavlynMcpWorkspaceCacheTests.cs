@@ -4,13 +4,221 @@ using Microsoft.CodeAnalysis.CSharp;
 using Navlyn.Mcp.Execution;
 using Navlyn.Mcp.Tools;
 using Navlyn.Workspaces;
+using Navlyn.Symbols;
 using System.IO.Pipes;
 using System.Text;
+using System.Text.Json.Nodes;
 
 namespace Navlyn.Tests.Mcp;
 
 public sealed class NavlynMcpWorkspaceCacheTests
 {
+    [Fact]
+    public async Task DirectTarget_SimpleQueryMatchesCliAndRefreshesAfterSourceEdit()
+    {
+        using TemporaryDirectory directory = TemporaryDirectory.Create();
+        Directory.CreateDirectory(Path.Combine(directory.Path, ".git"));
+        string projectPath = CreateProject(directory.Path);
+        string sourcePath = Path.Combine(directory.Path, "Fixture.cs");
+        await File.WriteAllTextAsync(sourcePath, "namespace Fixture; public sealed class Alpha { }\n");
+        NavlynMcpServerOptions options = CreateOptions(projectPath);
+        using NavlynMcpWorkspaceCache cache = new(options);
+        NavlynMcpDirectToolRunner runner = new(options, cache);
+        NavlynInProcessCommandAdapter cli = new(options);
+        CommandBuildResult command = CommandBuildResult.Valid("target", ["--query", "Alpha"]);
+        Assert.True(runner.CanRun(command));
+        Assert.False(runner.CanRun(CommandBuildResult.Valid("target", ["--query", "Alpha", "--match", "exact"])));
+
+        NavlynToolResult direct = await runner.RunAsync(NavlynMcpTools.TargetTool, command, CancellationToken.None);
+        NavlynToolResult original = await cli.RunAsync(
+            NavlynMcpTools.TargetTool, "target", command.Arguments, null, CancellationToken.None);
+        Assert.True(direct.Ok, direct.Error?.Message);
+        Assert.True(original.Ok, original.Error?.Message);
+        Assert.Equal("direct", direct.Metadata?.ExecutionPath);
+        Assert.True(JsonNode.DeepEquals(
+            JsonNode.Parse(direct.Result!.Value.GetRawText()),
+            JsonNode.Parse(original.Result!.Value.GetRawText())),
+            $"Direct: {direct.Result.Value.GetRawText()}\nCLI: {original.Result.Value.GetRawText()}");
+
+        await File.WriteAllTextAsync(sourcePath, "namespace Fixture; public sealed class Bravo { }\n");
+        NavlynToolResult staleName = await runner.RunAsync(NavlynMcpTools.TargetTool, command, CancellationToken.None);
+        Assert.True(staleName.Ok, staleName.Error?.Message);
+        Assert.False(staleName.Result!.Value.TryGetProperty("selectedTarget", out _));
+        CommandBuildResult replacement = CommandBuildResult.Valid("target", ["--query", "Bravo"]);
+        NavlynToolResult newName = await runner.RunAsync(NavlynMcpTools.TargetTool, replacement, CancellationToken.None);
+        Assert.True(newName.Ok, newName.Error?.Message);
+        Assert.Equal("Bravo", newName.Result!.Value.GetProperty("selectedTarget").GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task DirectTarget_LinkedSourceInMultipleProjectsMatchesCliAmbiguityEnvelope()
+    {
+        using TemporaryDirectory directory = TemporaryDirectory.Create();
+        Directory.CreateDirectory(Path.Combine(directory.Path, ".git"));
+        await File.WriteAllTextAsync(Path.Combine(directory.Path, "Shared.cs"),
+            "namespace Fixture; public sealed class SharedName { }\n");
+        foreach (string project in new[] { "First", "Second" })
+        {
+            string root = Path.Combine(directory.Path, project);
+            Directory.CreateDirectory(root);
+            await File.WriteAllTextAsync(Path.Combine(root, $"{project}.csproj"),
+                "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>" +
+                "<ItemGroup><Compile Include=\"../Shared.cs\" Link=\"Shared.cs\" /></ItemGroup></Project>");
+        }
+
+        string solutionPath = Path.Combine(directory.Path, "Fixture.slnx");
+        await File.WriteAllTextAsync(solutionPath,
+            "<Solution><Project Path=\"First/First.csproj\" /><Project Path=\"Second/Second.csproj\" /></Solution>");
+        NavlynMcpServerOptions options = CreateOptions(solutionPath);
+        using NavlynMcpWorkspaceCache cache = new(options);
+        NavlynMcpDirectToolRunner runner = new(options, cache);
+        NavlynInProcessCommandAdapter cli = new(options);
+        CommandBuildResult command = CommandBuildResult.Valid("target", ["--query", "SharedName"]);
+        NavlynToolResult direct = await runner.RunAsync(NavlynMcpTools.TargetTool, command, CancellationToken.None);
+        NavlynToolResult original = await cli.RunAsync(
+            NavlynMcpTools.TargetTool, "target", command.Arguments, null, CancellationToken.None);
+        Assert.True(direct.Ok, direct.Error?.Message);
+        Assert.True(original.Ok, original.Error?.Message);
+        Assert.True(JsonNode.DeepEquals(
+            JsonNode.Parse(direct.Result!.Value.GetRawText()),
+            JsonNode.Parse(original.Result!.Value.GetRawText())),
+            $"Direct: {direct.Result.Value.GetRawText()}\nCLI: {original.Result.Value.GetRawText()}");
+    }
+
+    [Fact]
+    public void DirectTarget_WithoutRepositoryDisplayRootUsesCliFallback()
+    {
+        using TemporaryDirectory directory = TemporaryDirectory.Create();
+        string projectPath = CreateProject(directory.Path);
+        NavlynMcpServerOptions options = CreateOptions(projectPath);
+        using NavlynMcpWorkspaceCache cache = new(options);
+        NavlynMcpDirectToolRunner runner = new(options, cache);
+        Assert.False(runner.CanRun(CommandBuildResult.Valid("target", ["--query", "Alpha"])));
+    }
+
+    [Theory]
+    [InlineData("candidate")]
+    [InlineData("source-position")]
+    [InlineData("outline")]
+    public async Task DirectReader_NestedRepository_ReturnsTheSelectedDeclaration(string selectionMode)
+    {
+        using TemporaryDirectory directory = TemporaryDirectory.Create();
+        Directory.CreateDirectory(Path.Combine(directory.Path, ".git"));
+        string projectRoot = Path.Combine(directory.Path, "src");
+        Directory.CreateDirectory(projectRoot);
+        string projectPath = CreateProject(projectRoot);
+        await File.WriteAllTextAsync(Path.Combine(projectRoot, "Fixture.cs"),
+            "namespace Fixture;\npublic sealed class Alpha { public string Name => \"alpha\"; }\n");
+        NavlynMcpServerOptions options = CreateOptions(projectPath);
+        using NavlynMcpWorkspaceCache cache = new(options);
+        NavlynMcpDirectToolRunner runner = new(options, cache);
+        FuzzySymbolCandidate candidate;
+        await using (NavlynMcpWorkspaceCache.WorkspaceLease lease = Assert.IsType<NavlynMcpWorkspaceCache.WorkspaceLease>(
+            (await cache.GetAsync(CancellationToken.None)).Lease))
+        {
+            FuzzyFindResult find = await new FuzzyDiscoveryResolver().FindAsync(
+                lease.CachedWorkspace.Workspace,
+                new FuzzyQueryOptions("Alpha", ["NamedType"], "exact", null, false, null),
+                lease.CachedWorkspace.Workspace.Solution.Projects.ToArray(),
+                projectFilters: null,
+                CancellationToken.None);
+            candidate = Assert.IsType<FuzzySymbolCandidate>(find.SelectedCandidate);
+        }
+
+        string? candidateId = selectionMode == "source-position" ? null : candidate.CandidateId;
+        if (selectionMode == "outline")
+        {
+            NavlynToolResult outline = await runner.RunAsync(NavlynMcpTools.FileOutlineTool,
+                NavlynToolCommandBuilder.FileOutline("src/Fixture.cs", null, null), CancellationToken.None);
+            Assert.True(outline.Ok, outline.Error?.Message);
+            candidateId = Assert.Single(outline.Result!.Value.GetProperty("entries").EnumerateArray(),
+                entry => entry.GetProperty("name").GetString() == "Alpha").GetProperty("candidateId").GetString();
+        }
+
+        CommandBuildResult read = NavlynToolCommandBuilder.Read(
+            candidateId,
+            candidateId is null ? "src/Fixture.cs" : null,
+            candidateId is null ? candidate.Line : null,
+            candidateId is null ? candidate.Column : null,
+            null, null, "declaration", null, null);
+        for (int attempt = 0; attempt < 2; attempt++)
+        {
+            NavlynToolResult result = await runner.RunAsync(NavlynMcpTools.ReadTool, read, CancellationToken.None);
+            Assert.True(result.Ok, result.Error?.Message);
+            Assert.Equal("direct", result.Metadata!.ExecutionPath);
+            Assert.Equal("src/Fixture.cs", result.Result!.Value.GetProperty("file").GetString());
+            Assert.Equal("Alpha", result.Result.Value.GetProperty("symbol").GetProperty("name").GetString());
+            Assert.Equal("Fixture", result.Result.Value.GetProperty("symbol").GetProperty("facts").GetProperty("project").GetString());
+            Assert.Contains("public sealed class Alpha", result.Result.Value.GetProperty("slices")[0]
+                .GetProperty("lines")[0].GetString(), StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task DirectReader_NestedRepository_PreservesAbsoluteInputAndRejectsUnloadedSource()
+    {
+        using TemporaryDirectory directory = TemporaryDirectory.Create();
+        Directory.CreateDirectory(Path.Combine(directory.Path, ".git"));
+        string projectRoot = Path.Combine(directory.Path, "src");
+        Directory.CreateDirectory(projectRoot);
+        string projectPath = CreateProject(projectRoot);
+        string sourcePath = Path.Combine(projectRoot, "Fixture.cs");
+        await File.WriteAllTextAsync(sourcePath, "namespace Fixture;\npublic sealed class Alpha { }\n");
+        string unloadedPath = Path.Combine(directory.Path, "Outside.cs");
+        await File.WriteAllTextAsync(unloadedPath, "namespace Fixture;\npublic sealed class Alpha { }\n");
+        using NavlynMcpWorkspaceCache cache = new(CreateOptions(projectPath));
+        NavlynMcpDirectToolRunner runner = new(CreateOptions(projectPath), cache);
+        NavlynToolResult loaded = await runner.RunAsync(NavlynMcpTools.ReadTool,
+            NavlynToolCommandBuilder.Read(null, sourcePath, 2, 21, null, null, "declaration", null, null), CancellationToken.None);
+        Assert.True(loaded.Ok, loaded.Error?.Message);
+        Assert.Equal("Alpha", loaded.Result!.Value.GetProperty("symbol").GetProperty("name").GetString());
+
+        foreach (string path in new[] { unloadedPath, "../Outside.cs", "Missing.cs" })
+        {
+            NavlynToolResult unloaded = await runner.RunAsync(NavlynMcpTools.ReadTool,
+                NavlynToolCommandBuilder.Read(null, path, 2, 21, null, null, "declaration", null, null), CancellationToken.None);
+            Assert.False(unloaded.Ok);
+            Assert.Equal("NAVLYN1302", unloaded.Error!.Code);
+        }
+    }
+
+    [Fact]
+    public async Task DirectReader_NestedRepository_RetainsSelectedProjectForLinkedSource()
+    {
+        using TemporaryDirectory directory = TemporaryDirectory.Create();
+        Directory.CreateDirectory(Path.Combine(directory.Path, ".git"));
+        string sharedPath = Path.Combine(directory.Path, "Shared.cs");
+        await File.WriteAllTextAsync(sharedPath, "namespace Fixture;\npublic sealed class Alpha { }\n");
+        foreach (string name in new[] { "First", "Second" })
+        {
+            string projectRoot = Path.Combine(directory.Path, name);
+            Directory.CreateDirectory(projectRoot);
+            await File.WriteAllTextAsync(Path.Combine(projectRoot, $"{name}.csproj"),
+                "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>" +
+                "<ItemGroup><Compile Include=\"../Shared.cs\" Link=\"Shared.cs\" /></ItemGroup></Project>");
+        }
+        string firstOnlyPath = Path.Combine(directory.Path, "First", "OnlyFirst.cs");
+        await File.WriteAllTextAsync(firstOnlyPath, "namespace Fixture;\npublic sealed class FirstOnly { }\n");
+        string solutionPath = Path.Combine(directory.Path, "Fixture.slnx");
+        await File.WriteAllTextAsync(solutionPath,
+            "<Solution><Project Path=\"First/First.csproj\" /><Project Path=\"Second/Second.csproj\" /></Solution>");
+        NavlynMcpServerOptions options = CreateOptions(solutionPath) with { WorkingDirectory = Path.Combine(directory.Path, "First") };
+        using NavlynMcpWorkspaceCache cache = new(options);
+        NavlynMcpDirectToolRunner runner = new(options, cache);
+        foreach (string project in new[] { "First", "Second" })
+        {
+            NavlynToolResult linked = await runner.RunAsync(NavlynMcpTools.ReadTool,
+                NavlynToolCommandBuilder.Read(null, "Shared.cs", 2, 21, project, null, "declaration", null, null), CancellationToken.None);
+            Assert.True(linked.Ok, linked.Error?.Message);
+            Assert.Equal(project, linked.Result!.Value.GetProperty("symbol").GetProperty("facts").GetProperty("project").GetString());
+        }
+
+        NavlynToolResult wrongProject = await runner.RunAsync(NavlynMcpTools.ReadTool,
+            NavlynToolCommandBuilder.Read(null, "First/OnlyFirst.cs", 2, 21, "Second", null, "declaration", null, null), CancellationToken.None);
+        Assert.False(wrongProject.Ok);
+        Assert.Equal("NAVLYN1306", wrongProject.Error!.Code);
+    }
+
     [Fact]
     public async Task Refresh_KeepsLeasedGenerationUsableUntilReleaseAndValidatesOnlyNewGeneration()
     {
@@ -60,6 +268,7 @@ public sealed class NavlynMcpWorkspaceCacheTests
         using NavlynMcpWorkspaceCache cache = new(CreateOptions(projectPath));
 
         NavlynMcpWorkspaceCacheResult initial = await cache.GetAsync(CancellationToken.None);
+        Assert.True(initial.Error is null, initial.Error?.Message);
         NavlynMcpWorkspaceCache.WorkspaceLease oldLease = Assert.IsType<NavlynMcpWorkspaceCache.WorkspaceLease>(initial.Lease);
         await File.WriteAllTextAsync(projectPath, "<Project>");
 

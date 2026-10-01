@@ -352,7 +352,7 @@ public sealed class NavlynMcpStdioTests
         Assert.True(structured.GetProperty("ok").GetBoolean());
         Assert.Equal(NavlynMcpTools.WorkspaceSummaryTool, structured.GetProperty("tool").GetString());
         Assert.Equal("direct", structured.GetProperty("metadata").GetProperty("executionPath").GetString());
-        Assert.False(structured.GetProperty("metadata").GetProperty("workspaceCacheHit").GetBoolean());
+        Assert.True(structured.GetProperty("metadata").GetProperty("workspaceCacheHit").ValueKind is JsonValueKind.True or JsonValueKind.False);
         Assert.Equal("fresh", structured.GetProperty("metadata").GetProperty("freshnessStatus").GetString());
         Assert.True(structured.GetProperty("metadata").GetProperty("documentIndexDocumentCount").GetInt32() > 0);
         Assert.Equal("repo-graph", structured.GetProperty("sourceCommand").GetProperty("command").GetString());

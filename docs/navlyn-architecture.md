@@ -24,8 +24,8 @@ MCP default:
 
 1. `navlyn.Mcp` receives an MCP tool, resource, or prompt request.
 2. MCP arguments are validated and mapped to an allowlisted logical Navlyn command.
-3. Reader-path tools such as `navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, and `navlyn_read` use direct Core resolver paths with a lazy per-server workspace cache and `DocumentIndex`.
-4. Other tools use `NavlynInProcessCommandAdapter`, which runs the shared command runtime in-process.
+3. Reader-path tools such as `navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, and `navlyn_read` use direct Core resolver paths with a lazy per-server workspace cache and `DocumentIndex`. A simple `navlyn_target` query also uses the direct resolver when the workspace has a repository display root.
+4. Other tools, and target calls with additional selection options or without a repository display root, use `NavlynInProcessCommandAdapter`, which runs the shared command runtime in-process.
 5. The MCP result envelope returns `sourceCommand` for traceability and the command JSON under `result`.
 
 The `read`/`symbol-source` path can opt into `metadata` or `decompiled` external-member reads. It retains Roslyn's exact call-site binding and selected project target framework, matches the compile-time reference PE to local package/runtime assets or a direct implementation reference, and decompiles one exact member in a separate killable worker. It reports reference and implementation content hashes and validates the selected inputs before returning. The default `externalSource: "none"` path keeps the existing behavior and does not inspect external binaries. External slices use non-editable `navlyn-metadata://` or `navlyn-decompiled://` paths and contain reconstructed text, not a claim of original source.

@@ -6,6 +6,7 @@ using Navlyn.Cli.OutputProfiles;
 using Navlyn.Diagnostics;
 using Navlyn.Mcp.Configuration;
 using Navlyn.Mcp.Tools;
+using Navlyn.Paths;
 using Navlyn.RepoGraph;
 using Navlyn.Symbols;
 using Navlyn.Workspaces;
@@ -39,7 +40,8 @@ internal sealed class NavlynMcpDirectToolRunner(
     public bool CanRun(CommandBuildResult command)
     {
         return command.StandardInput is null &&
-            command.Command is "repo-graph" or "outline" or "read" or "symbol-source" or "workspace-status" or "workspace-refresh";
+            (command.Command is "repo-graph" or "outline" or "read" or "symbol-source" or "workspace-status" or "workspace-refresh" ||
+             command.Command == "target" && IsSimpleTargetQuery(command.Arguments) && HasRepositoryDisplayRoot());
     }
 
     public async Task<NavlynToolResult> RunAsync(
@@ -91,6 +93,7 @@ internal sealed class NavlynMcpDirectToolRunner(
                     "workspace-refresh" => await RunWorkspaceRefreshAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
                     "repo-graph" => RunRepoGraph(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments),
                     "outline" => await RunOutlineAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
+                    "target" => await RunTargetAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
                         _ => Failed(toolName, sourceCommand, "NAVLYN_MCP_DIRECT_UNSUPPORTED", $"Direct MCP execution is not available for {command.Command}.")
                     };
                 }
@@ -285,7 +288,7 @@ internal sealed class NavlynMcpDirectToolRunner(
 
         OutlineResolutionResult result = await new OutlineResolver().ResolveAsync(
             cachedWorkspace.Workspace.Solution,
-            CreateFileInfo(file),
+            CreateFileInfo(file, cachedWorkspace, project),
             project,
             excludeGenerated,
             cancellationToken);
@@ -318,6 +321,58 @@ internal sealed class NavlynMcpDirectToolRunner(
                 EndColumn: entry.EndColumn))]);
 
         return Succeeded(toolName, sourceCommand, output, CreateMetadata(cachedWorkspace, cacheHit, "cheap-file-first"));
+    }
+
+    private async Task<NavlynToolResult> RunTargetAsync(
+        string toolName,
+        NavlynSourceCommand sourceCommand,
+        NavlynMcpWorkspaceCache.CachedWorkspace cachedWorkspace,
+        bool cacheHit,
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken)
+    {
+        string query = arguments[1].Trim();
+        ProjectFilterResolutionResult projectResolution = new ProjectFilterResolver().ResolveMany(
+            cachedWorkspace.Workspace.Solution, []);
+        if (projectResolution.Error is not null)
+        {
+            return Failed(toolName, sourceCommand, projectResolution.Error);
+        }
+
+        FuzzyQueryOptions selection = new(
+            Query: query,
+            AssumeKinds: [],
+            Match: "smart",
+            CaseSensitive: null,
+            ExcludeGenerated: false,
+            Limit: null,
+            Selection: new FuzzySelectionOptions("select", "medium", false));
+        ResolveTargetResult result = await new ResolveTargetResolver().ResolveFuzzyAsync(
+            cachedWorkspace.Workspace,
+            selection,
+            projectResolution.Projects,
+            projectFilters: null,
+            cancellationToken);
+
+        return Succeeded(toolName, sourceCommand, result with { Command = "target" },
+            CreateMetadata(cachedWorkspace, cacheHit, "semantic-target"));
+    }
+
+    private static bool IsSimpleTargetQuery(IReadOnlyList<string> arguments)
+    {
+        return arguments.Count == 2 && arguments[0] == "--query" &&
+            !string.IsNullOrWhiteSpace(arguments[1]);
+    }
+
+    private bool HasRepositoryDisplayRoot()
+    {
+        string workspace = options.Workspace;
+        string anchor = string.IsNullOrWhiteSpace(workspace) || workspace == "auto"
+            ? options.WorkingDirectory
+            : Path.IsPathRooted(workspace)
+                ? workspace
+                : Path.Combine(options.WorkingDirectory, workspace);
+        return PathDisplay.FindRepositoryRoot(anchor) is not null;
     }
 
     private async Task<(NavlynToolResult Result, ExternalMemberSnapshot? Snapshot)> RunSymbolSourceAsync(
@@ -376,7 +431,7 @@ internal sealed class NavlynMcpDirectToolRunner(
 
         SymbolSourceResolutionResult result = await new SymbolSourceResolver().ResolveAsync(
             cachedWorkspace.Workspace.Solution,
-            CreateFileInfo(file!),
+            CreateFileInfo(file!, cachedWorkspace, project),
             line!.Value,
             column!.Value,
             project,
@@ -431,7 +486,7 @@ internal sealed class NavlynMcpDirectToolRunner(
             Project? targetProject = project ?? cachedWorkspace.FindProject(cachedTarget.ProjectName);
             return CandidateTargetResolutionResult.Succeeded(new CandidateTargetResolution(
                 normalizedCandidateId,
-                CreateFileInfo(cachedTarget.Path),
+                CreateFileInfo(cachedTarget.Path, cachedWorkspace, targetProject),
                 cachedTarget.Line,
                 cachedTarget.Column,
                 targetProject));
@@ -563,11 +618,28 @@ internal sealed class NavlynMcpDirectToolRunner(
             ]);
     }
 
-    private FileInfo CreateFileInfo(string path)
+    private FileInfo CreateFileInfo(
+        string path,
+        NavlynMcpWorkspaceCache.CachedWorkspace cachedWorkspace,
+        Project? project)
     {
-        return Path.IsPathRooted(path)
+        FileInfo workingFile = Path.IsPathRooted(path)
             ? new FileInfo(path)
             : new FileInfo(Path.Combine(options.WorkingDirectory, path));
+        Solution solution = cachedWorkspace.Workspace.Solution;
+        string? anchor = project?.FilePath ?? solution.FilePath ?? solution.Projects
+            .Select(item => item.FilePath)
+            .FirstOrDefault(item => item is not null);
+        IReadOnlyList<string> candidates =
+        [
+            workingFile.FullName,
+            .. PathDisplay.GetInputPathCandidates(path, anchor),
+            .. PathDisplay.GetInputPathCandidates(path, options.WorkingDirectory)
+        ];
+        DocumentIndex documentIndex = DocumentIndexProvider.GetOrCreate(solution);
+        DocumentIndexEntry? entry = documentIndex.Find(candidates, project).Entry ??
+            documentIndex.Find(candidates, project: null).Entry;
+        return entry is null ? workingFile : new FileInfo(entry.FullPath);
     }
 
     private static string DiagnosticCode(int diagnosticId)
