@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/furbon/navlyn/blob/main/docs/evals/v0.8.2-real-task-campaign.schema.json",
+  "title": "Navlyn real-task campaign registration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "campaignId", "attempts"],
+  "properties": {
+    "schema": { "const": "navlyn.real-task-campaign.v1" },
+    "campaignId": { "$ref": "#/$defs/id" },
+    "attempts": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/attempt" }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{5,79}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "taskId", "repetition", "arm", "model", "effort", "baseSha", "promptSha256", "oracleSha256", "conditionsSha256", "runner", "input", "scorePlan"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "taskId": { "type": "string", "pattern": "^[A-Z][A-Z0-9-]{2,30}$" },
+        "repetition": { "type": "integer", "minimum": 1 },
+        "arm": { "enum": ["A", "B", "C", "D", "skilloff"] },
+        "model": { "type": "string", "pattern": "^gpt-[a-z0-9-]+$" },
+        "effort": { "enum": ["low", "medium", "high"] },
+        "baseSha": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+        "promptSha256": { "$ref": "#/$defs/sha256" },
+        "oracleSha256": { "$ref": "#/$defs/sha256" },
+        "conditionsSha256": { "$ref": "#/$defs/sha256" },
+        "runner": { "$ref": "#/$defs/source" },
+        "input": { "$ref": "#/$defs/source" },
+        "scorePlan": { "$ref": "#/$defs/source" }
+      }
+    }
+  }
+}

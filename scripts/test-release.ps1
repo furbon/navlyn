@@ -80,6 +80,7 @@ try {
     & (Join-Path $PSScriptRoot 'test-setup-navlyn.ps1')
     & (Join-Path $PSScriptRoot 'test-publish-recovery.ps1')
     & (Join-Path $PSScriptRoot 'test-publish-orchestration.ps1')
+    & (Join-Path $PSScriptRoot 'test-real-task-eval.ps1')
 
     Write-Host 'Release validation passed.'
 }

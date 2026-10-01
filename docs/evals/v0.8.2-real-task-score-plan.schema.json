@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Navlyn frozen real-task score plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "taskId", "oracleSha256", "adapter"],
+  "properties": {
+    "schema": { "const": "navlyn.real-task-score-plan.v1" },
+    "taskId": { "type": "string", "pattern": "^[A-Z][A-Z0-9-]{2,30}$" },
+    "oracleSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "adapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  }
+}
