@@ -80,9 +80,12 @@ internal sealed class ProjectFilterResolver
 
         if (LooksLikeProjectPath(trimmedFilter))
         {
+            string? suggestedProject = FindProjectFileInDirectory(projects, trimmedFilter);
             return ProjectFilterResolutionResult.Failed(
                 DiagnosticIds.UnknownProjectFilter,
-                $"Project filter did not match any project: {trimmedFilter}",
+                suggestedProject is null
+                    ? $"Project filter did not match any project: {trimmedFilter}. Use an exact project name or .csproj/.vbproj path."
+                    : $"Project filter did not match any project: {trimmedFilter}. Did you mean {suggestedProject}?",
                 ExitCodes.UsageError);
         }
 
@@ -146,6 +149,32 @@ internal sealed class ProjectFilterResolver
         return filter.Contains(Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
             filter.Contains(Path.AltDirectorySeparatorChar, StringComparison.Ordinal) ||
             SourceLanguageFacts.IsSupportedProjectFile(filter);
+    }
+
+    private static string? FindProjectFileInDirectory(
+        IReadOnlyList<Project> projects,
+        string filter)
+    {
+        IReadOnlyList<string> directoryCandidates;
+        try
+        {
+            directoryCandidates = PathDisplay.GetInputPathCandidates(filter, GetWorkspaceAnchorPath(projects));
+        }
+        catch
+        {
+            return null;
+        }
+
+        StringComparer pathComparer = OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+        Project[] matches = [.. projects
+            .Where(project => project.FilePath is not null &&
+                directoryCandidates.Any(directory => pathComparer.Equals(
+                    Path.GetDirectoryName(Path.GetFullPath(project.FilePath)), directory)))
+            .Take(2)];
+
+        return matches.Length == 1 ? PathDisplay.FromCurrentDirectory(matches[0].FilePath!) : null;
     }
 
     private static AppliedProjectFilter CreateAppliedFilter(string filter, Project project)
