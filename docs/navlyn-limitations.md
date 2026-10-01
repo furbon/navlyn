@@ -18,7 +18,7 @@ Short version: Navlyn is strong at C# source identity, supports Visual Basic thr
 
 ## v1.0 Readiness Signals
 
-0.5.x is intended to be useful for local agent workflows while keeping boundaries conservative. Strong v1.0 signals include:
+Navlyn supports local agent workflows while keeping its evidence boundaries conservative. Strong v1.0 signals include:
 
 - stable envelope schemas for CLI workflow and MCP tool results;
 - broader command-specific schema coverage where it provides automation value;

@@ -76,6 +76,11 @@ try {
     & $PerformanceScript -Workspace $script:NavlynTestSolutionPath -Scenario quick -Iterations 1 -Warmup 0 -NoBuild -Output 'artifacts/performance-smoke/navlyn-quick.json'
     & $PackageInstallScript
 
+    & (Join-Path $PSScriptRoot 'test-setup-prerequisites.ps1')
+    & (Join-Path $PSScriptRoot 'test-setup-navlyn.ps1')
+    & (Join-Path $PSScriptRoot 'test-publish-recovery.ps1')
+    & (Join-Path $PSScriptRoot 'test-publish-orchestration.ps1')
+
     Write-Host 'Release validation passed.'
 }
 finally {

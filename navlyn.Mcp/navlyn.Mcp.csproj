@@ -17,7 +17,7 @@
     <RepositoryUrl>https://github.com/furbon/navlyn</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/furbon/navlyn</PackageProjectUrl>
-    <PackageReleaseNotes>0.8.1 reorganizes the English and Japanese installation and client setup guides. The 25 read-only MCP tools and their schemas are unchanged from 0.8.0.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.8.2 fixes nested-workspace source reads and MSBuild startup registration, adds a standalone VS Code setup helper, and preserves the 25-tool read-only MCP surface.</PackageReleaseNotes>
     <Copyright>Copyright (c) 2026 furbon.tech</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
