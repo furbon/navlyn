@@ -11,11 +11,11 @@ PowerShell で次を実行します。Navlyn を一時ディレクトリに入�
 ```powershell
 $tools = Join-Path $env:TEMP "navlyn-tools-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory $tools | Out-Null
-dotnet tool install navlyn --tool-path $tools --version 0.8.1
+dotnet tool install navlyn --tool-path $tools --version 0.8.2
 dotnet tool list --tool-path $tools
 ```
 
-一覧に `navlyn` が `0.8.1` と表示されることを確認します。
+一覧に `navlyn` が `0.8.2` と表示されることを確認します。
 
 ## 2. 調べるリポジトリで実行する
 
@@ -45,4 +45,4 @@ Set-Location 'C:\path\to\your-repository'
 - コマンドが見つからなければ、上記の `Join-Path $tools` を使い、`dotnet tool list --tool-path $tools` でインストール先を確認します。
 - 終わったら、作成したディレクトリを `Remove-Item -LiteralPath $tools -Recurse` で削除できます。削除する前に `$tools` の値を確認してください。
 
-AI ツールから使う場合は、[使っているクライアントの設定手順](navlyn-client-setup_ja.md)へ進みます。複数のソリューションがある場合は、[ワークスペース設定](navlyn-workspace_ja.md)を参照してください。
+AI ツールから使う場合は、[使っているクライアントの設定手順](navlyn-client-setup_ja.md)へ進みます。VS Code では[設定バンドル](navlyn-client-setup_ja.md#vs-code-の設定バンドル)を使い、書き込みを行わない計画を確認してから適用し、実際のツール呼び出しまで確認できます。手動設定の手順もあります。複数のソリューションがある場合は、[ワークスペース設定](navlyn-workspace_ja.md)を参照してください。

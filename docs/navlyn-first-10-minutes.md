@@ -11,11 +11,11 @@ Run this in PowerShell. The unique temporary directory keeps this installation s
 ```powershell
 $tools = Join-Path $env:TEMP "navlyn-tools-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory $tools | Out-Null
-dotnet tool install navlyn --tool-path $tools --version 0.8.1
+dotnet tool install navlyn --tool-path $tools --version 0.8.2
 dotnet tool list --tool-path $tools
 ```
 
-Check that the list shows `navlyn` at `0.8.1`.
+Check that the list shows `navlyn` at `0.8.2`.
 
 ## 2. Run it in a repository
 
@@ -45,4 +45,4 @@ Copy a `candidateId` from the resulting JSON to read its declaration. Replace `s
 - If the executable cannot be found, use the `Join-Path $tools` form above and check `dotnet tool list --tool-path $tools`.
 - You can remove the temporary installation with `Remove-Item -LiteralPath $tools -Recurse` after checking the value of `$tools`.
 
-To use Navlyn from an AI tool, continue with [client setup](navlyn-client-setup.md). For repositories with several solutions, see [workspace configuration](navlyn-workspace.md).
+To use Navlyn from an AI tool, continue with [client setup](navlyn-client-setup.md). VS Code users can choose the [setup bundle](navlyn-client-setup.md#vs-code-setup-bundle), review its no-write plan, then apply and check a live tool call. Manual configuration remains available. For repositories with several solutions, see [workspace configuration](navlyn-workspace.md).

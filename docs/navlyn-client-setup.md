@@ -6,11 +6,35 @@ MCP lets an AI tool call an external program. For Navlyn, that program is `navly
 
 These steps use Windows. Prepare [PowerShell 7](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) and a [.NET SDK](https://dotnet.microsoft.com/download) that can load your repository.
 
-Run `dotnet tool list --global` to check for `navlyn-mcp`. If it is absent, install it below. If version 0.8.1 is listed, skip installation. For an older version, run `dotnet tool update --global navlyn-mcp --version 0.8.1`.
+For VS Code, the standalone setup bundle provides a plan, installation, connection checks, and undo. Other clients can use the manual installation below.
+
+## VS Code setup bundle
+
+Extract the `navlyn-setup-0.8.2.zip` release asset into a separate directory. Its `integrity.json` records the source commit and file hashes. Run these commands from the extracted directory, replacing both workspace paths:
 
 ```powershell
-dotnet tool install --global navlyn-mcp --version 0.8.1
-$mcpExe = Join-Path $HOME '.dotnet/tools/navlyn-mcp.exe'
+./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.8.2
+./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.8.2 -Apply
+```
+
+The first command displays a plan without writing files, downloading packages, or launching a client. Review the paths, version, feed, and effects before applying. Choose an explicit `.slnx`, `.sln`, `.csproj`, or `.vbproj` with `-WorkspaceFile` when automatic selection is ambiguous or cannot find it.
+
+Apply installs `navlyn-mcp` into workspace-owned storage under your application-data directory, tests the installed executable and workspace, and writes the `navlyn` entry in `.vscode/mcp.json`. It preserves unrelated JSONC entries and comments. It does not change VS Code trust settings. Open that workspace and follow the server-start and live tool-call steps below; the helper's protocol check does not replace a client connection check.
+
+For a local package source, add `-Feed 'C:/packages/navlyn'`. Installation and update require an exact `-Version`. Use the same workspace and target with `-Action Update -Version <version> -Apply`, `-Action Undo -Apply`, or `-Action Remove -Apply`. Undo restores the prior owned transaction; Remove removes this helper's registration and owned installation. Modified files and entries with unproven ownership cause a conflict and remain intact. Resolve the reported conflict before retrying.
+
+`-Target Global` opts into changes to your global `navlyn-mcp` installation. The helper retains a verified package snapshot for restoration, preserves unrelated tools, and refuses restoration while another owned workspace references that package. It keeps a newer version unless `-AllowDowngrade` is supplied. See the bundle README for recovery after an interrupted operation.
+
+Installation and update check SDK and VS Code CLI availability before starting package operations. If prerequisites or connection checks fail, use the reported SDK/client installation link, check the selected workspace and executable, or use the manual steps below. Copilot CLI, Codex, and Claude Code each use their own configuration; this bundle configures VS Code only.
+
+## Manual MCP installation
+
+Run `dotnet tool list --global` to check for `navlyn-mcp`. If it is absent, install it below. If version 0.8.2 is listed, skip installation. For an older version, run `dotnet tool update --global navlyn-mcp --version 0.8.2`.
+
+```powershell
+dotnet tool install --global navlyn-mcp --version 0.8.2
+$toolHome = if ($env:DOTNET_CLI_HOME) { $env:DOTNET_CLI_HOME } else { $HOME }
+$mcpExe = Join-Path $toolHome '.dotnet/tools/navlyn-mcp.exe'
 Test-Path $mcpExe
 $mcpExe
 ```
