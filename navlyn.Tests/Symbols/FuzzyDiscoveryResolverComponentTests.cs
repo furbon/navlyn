@@ -8,6 +8,63 @@ namespace Navlyn.Tests.Symbols;
 public sealed class FuzzyDiscoveryResolverComponentTests(ResolverComponentTestFixture fixture)
 {
     [Fact]
+    public async Task FindAsync_NestedWorkingDirectory_PreservesSelectorPathAndCandidateIdentity()
+    {
+        string originalDirectory = Directory.GetCurrentDirectory();
+        try
+        {
+            Directory.SetCurrentDirectory(fixture.RepoRoot);
+            FuzzySymbolCandidate rootCandidate = await FindCandidateAsync();
+            Directory.SetCurrentDirectory(Path.GetDirectoryName(fixture.FuzzyDiscoverySource.FullPath)!);
+            FuzzySymbolCandidate nestedCandidate = await FindCandidateAsync();
+
+            Assert.Equal(fixture.FuzzyDiscoverySource.RelativePath.Replace('\\', '/'), nestedCandidate.Selector!.Path);
+            Assert.Equal(rootCandidate.CandidateId, nestedCandidate.CandidateId);
+
+            SymbolSourceResolutionResult source = await new SymbolSourceResolver().ResolveAsync(
+                fixture.FuzzyDiscoveryWorkspace.Solution,
+                new FileInfo(nestedCandidate.Selector.Path),
+                nestedCandidate.Selector.Line,
+                nestedCandidate.Selector.Column,
+                project: null,
+                excludeGenerated: true,
+                new SymbolSourceOptions("declaration", 80, 4000),
+                CancellationToken.None);
+            Assert.Null(source.Error);
+            Assert.Equal("EnemyManagerTools", source.Resolution!.Symbol.Name);
+            Assert.Equal("FuzzyDiscoveryFixture", source.Resolution.Symbol.Facts.Project);
+
+            DefinitionResolutionResult definition = await new DefinitionResolver().ResolveAsync(
+                fixture.FuzzyDiscoveryWorkspace.Solution,
+                new FileInfo(nestedCandidate.Selector.Path),
+                nestedCandidate.Selector.Line,
+                nestedCandidate.Selector.Column,
+                project: null,
+                excludeGenerated: true,
+                includeMetadata: false,
+                CancellationToken.None);
+            Assert.Null(definition.Error);
+            Assert.Equal("EnemyManagerTools", definition.Resolution!.Symbol.Name);
+            Assert.Equal(nestedCandidate.Selector.Path, Assert.Single(definition.Resolution.Definitions).Path);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(originalDirectory);
+        }
+
+        async Task<FuzzySymbolCandidate> FindCandidateAsync()
+        {
+            FuzzyFindResult find = await new FuzzyDiscoveryResolver().FindAsync(
+                fixture.FuzzyDiscoveryWorkspace,
+                new FuzzyQueryOptions("EnemyManagerTools", ["NamedType"], "exact", null, true, null),
+                Projects(),
+                projectFilters: null,
+                CancellationToken.None);
+            return Assert.IsType<FuzzySymbolCandidate>(find.SelectedCandidate);
+        }
+    }
+
+    [Fact]
     public async Task FindAsync_UniqueType_SelectsHighConfidenceCandidate()
     {
         FuzzyFindResult result = await new FuzzyDiscoveryResolver().FindAsync(

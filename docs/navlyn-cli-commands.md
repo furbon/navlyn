@@ -297,6 +297,8 @@ Fuzzy selection rules prefer exact case-sensitive matches, then exact case-insen
 
 Candidate IDs are opaque deterministic handles for current source declarations. They have the form `sym:v1:<sha256-prefix>` and are paired with a human-readable `selector` containing kind, name, fully qualified name, documentation comment id, project, target framework, path, and source span. Source edits that move or change a declaration can change its candidate id. Partial declarations are declaration-specific, and multi-targeted projects can produce different ids per target framework.
 
+`selector.path` uses the same display path as the candidate source location: repository-relative where possible, otherwise absolute. A workspace nested inside a parent Git repository keeps that repository as the display base. Reuse the returned path, line, and column as source-position inputs, or use the candidate id directly; MCP reads and outlines also accept these repository-relative paths from a nested working directory. For linked source, keep the intended project context explicit.
+
 When a source-position command is invoked with `--candidate-id`, Navlyn re-resolves that declaration in the current workspace and then runs the same source-position resolver at the candidate declaration point. Malformed candidate ids produce `NAVLYN1701`; stale or filtered-out ids produce `NAVLYN1702`; duplicate ids in the current workspace produce `NAVLYN1703`. These are usage errors with no stdout output.
 
 When `--candidate-id` is used, `--query`, `--assume-kind`, `--match`, and `--case-sensitive` cannot be combined with it. Invalid or missing candidate ids return a usage error with no stdout.

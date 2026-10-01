@@ -1,6 +1,5 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
-using Navlyn.Paths;
 using Navlyn.Workspaces;
 using Microsoft.CodeAnalysis;
 
@@ -24,7 +23,7 @@ internal static class FuzzyCandidateIdentity
             DocumentationCommentId: candidate.DocumentationCommentId,
             Project: candidate.Facts.Project,
             TargetFramework: project is null ? null : ProjectContextFacts.GetTargetFramework(project),
-            Path: PathDisplay.FromRepositoryRoot(candidate.Path),
+            Path: candidate.Path,
             Line: candidate.Line,
             Column: candidate.Column,
             EndLine: candidate.EndLine,
