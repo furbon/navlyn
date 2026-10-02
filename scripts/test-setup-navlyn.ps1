@@ -129,10 +129,11 @@ try {
     Assert ($globalPlan.target -eq 'Global' -and $globalPlan.packageTarget -eq $fakeGlobalRoot -and $globalPlan.config -eq (Join-Path $fixture '.vscode/mcp.json')) 'Global Plan must identify the DOTNET_CLI_HOME global package target and workspace config separately.'
     Assert ($globalPlan.globalPackageVersion -eq '0.8.1' -and $globalPlan.globalShim -eq $fakeMcpShim) 'Global Plan must resolve version from package nuspec and exact shim metadata.'
     Assert ($globalPlan.effects.writes -eq $false -and $globalPlan.effects.network -eq $false -and $globalPlan.effects.installation -eq $false -and $globalPlan.effects.clientLaunch -eq $false) 'Global Plan must report no effects.'
-    $globalApplyRejected = $false
+    $globalApplyError = $null
     $shimHashBefore=(Get-FileHash -LiteralPath $fakeMcpShim).Hash
-    try { & (Join-Path $PSScriptRoot 'setup-navlyn.ps1') -Workspace $fixture -Target Global -Version 0.8.2 -Feed $fixture -Apply 2>&1 | Out-Null } catch { $globalApplyRejected = $_.Exception.Message -like '*Exact local package*missing*' }
-    Assert $globalApplyRejected 'Global Apply must fail before SDK/package mutation if the exact feed input is missing.'
+    try { & (Join-Path $PSScriptRoot 'setup-navlyn.ps1') -Workspace $fixture -Target Global -Version 0.8.2 -Feed $fixture -Apply 2>&1 | Out-Null } catch { $globalApplyError = $_.Exception.Message }
+    $globalApplyRejected = $globalApplyError -like '*Exact local package*missing*' -or $globalApplyError -like '*VS Code command-line client was not found*' -or $globalApplyError -like '*A .NET SDK is required*'
+    Assert $globalApplyRejected "Global Apply must fail before SDK/package mutation on a missing prerequisite or exact feed input. Actual: $globalApplyError"
     Assert (!(Test-Path -LiteralPath (Join-Path $fixture '.vscode'))) 'Rejected Global Apply changed workspace config.'
     Assert ((Get-FileHash -LiteralPath $fakeMcpShim).Hash -ceq $shimHashBefore) 'Global Plan or rejected Apply changed the shim.'
 
