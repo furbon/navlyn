@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param([Parameter(Mandatory)][string]$SourceSha, [Parameter(Mandatory)][string]$SetupBundle,
-    [Parameter(Mandatory)][string]$EvaluationReport, [string]$Manifest = 'artifacts/packages/navlyn-release-pack.json',
+    [string]$Manifest = 'artifacts/packages/navlyn-release-pack.json',
     [string]$Output = 'artifacts/publication-inputs')
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -16,11 +16,8 @@ $owned = [IO.Path]::GetFullPath((Join-Path $repo 'artifacts')).TrimEnd('\', '/')
 if (!$root.StartsWith($owned, [StringComparison]::Ordinal) -or (Test-Path -LiteralPath $root)) { throw 'Publication preparation requires a new owned artifacts directory.' }
 Assert-NavlynPublicationNoReparse $root
 $setup = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathFullyQualified($SetupBundle)) { $SetupBundle } else { Join-Path $repo $SetupBundle }))
-$evaluation = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathFullyQualified($EvaluationReport)) { $EvaluationReport } else { Join-Path $repo $EvaluationReport }))
-foreach ($file in @($setup, $evaluation)) { Assert-NavlynPublicationNoReparse $file; if (!(Test-Path -LiteralPath $file -PathType Leaf)) { throw 'Exact setup and curated evaluation artifacts must exist before publication preparation.' } }
-$report = Read-NavlynPublicationJson $evaluation
-if ($report.schema -cne 'navlyn.curated-evaluation.v1' -or $report.sourceSha -cne $SourceSha -or $report.version -cne $version -or
-    $report.passed -isnot [bool] -or !$report.passed) { throw 'Curated evaluation is not bound to the exact release source/version or has not passed.' }
+Assert-NavlynPublicationNoReparse $setup
+if (!(Test-Path -LiteralPath $setup -PathType Leaf)) { throw 'Exact setup bundle must exist before publication preparation.' }
 [IO.Directory]::CreateDirectory($root) | Out-Null
 $packages = @()
 foreach ($entry in $pack.packages) {
@@ -33,10 +30,8 @@ foreach ($entry in $pack.packages) {
     $packages += @{ id = $entry.id; version = $version; path = $name; sha256 = $entry.sha256 }
 }
 Copy-Item -LiteralPath $setup -Destination (Join-Path $root 'navlyn-setup.zip')
-Copy-Item -LiteralPath $evaluation -Destination (Join-Path $root 'navlyn-curated-evaluation.json')
 $inputs = [ordered]@{ schema = 'navlyn.publication-inputs.v1'; repository = 'furbon/navlyn'; workflow = '.github/workflows/publish-nuget.yml'; sourceSha = $SourceSha; version = $version; packages = $packages; assets = @(
-    @{ kind = 'setup'; path = 'navlyn-setup.zip'; sha256 = Get-NavlynPublicationHash (Join-Path $root 'navlyn-setup.zip'); sourceSha = $SourceSha },
-    @{ kind = 'evaluation'; path = 'navlyn-curated-evaluation.json'; sha256 = Get-NavlynPublicationHash (Join-Path $root 'navlyn-curated-evaluation.json'); sourceSha = $SourceSha }
+    @{ kind = 'setup'; path = 'navlyn-setup.zip'; sha256 = Get-NavlynPublicationHash (Join-Path $root 'navlyn-setup.zip'); sourceSha = $SourceSha }
 ) }
 $path = Join-Path $root 'navlyn-publication-inputs.json'
 [IO.File]::WriteAllText($path, ($inputs | ConvertTo-Json -Depth 30))

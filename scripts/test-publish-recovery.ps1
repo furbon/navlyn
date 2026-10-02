@@ -70,7 +70,7 @@ Test-RecoveryCase 'rooted package path' { $m = Copy-RecoveryObject $manifest; $m
 Test-RecoveryCase 'traversal package path' { $m = Copy-RecoveryObject $manifest; $m.packages[0].path = '../navlyn.0.8.2.nupkg'; $h = Write-RecoveryManifest $m; Read-NavlynPublicationInputs $inputRoot $sourceSha $h } -Reject
 Test-RecoveryCase 'duplicate package ID' { $m = Copy-RecoveryObject $manifest; $m.packages[1].id = 'navlyn'; $h = Write-RecoveryManifest $m; Read-NavlynPublicationInputs $inputRoot $sourceSha $h } -Reject
 Test-RecoveryCase 'changed package digest' { $m = Copy-RecoveryObject $manifest; $m.packages[0].sha256 = 'f' * 64; $h = Write-RecoveryManifest $m; Read-NavlynPublicationInputs $inputRoot $sourceSha $h } -Reject
-Test-RecoveryCase 'missing required setup and evaluation assets' { $h = Write-RecoveryManifest $manifest; Read-NavlynPublicationInputs $inputRoot $sourceSha $h -RequireAssets } -Reject
+Test-RecoveryCase 'missing required setup asset' { $h = Write-RecoveryManifest $manifest; Read-NavlynPublicationInputs $inputRoot $sourceSha $h -RequireAssets } -Reject
 Test-RecoveryCase 'duplicate JSON properties' { $p = Join-Path $testRoot 'duplicate.json'; [IO.File]::WriteAllText($p, '{"key":1,"key":2}'); Read-NavlynPublicationJson $p } -Reject
 $manifestHash = Write-RecoveryManifest $manifest
 

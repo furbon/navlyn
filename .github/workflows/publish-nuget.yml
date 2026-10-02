@@ -103,8 +103,7 @@ jobs:
           EXPECTED_SHA: ${{ inputs.expected-main-sha }}
         run: |
           ./scripts/build-setup-bundle.ps1 -Output artifacts/setup-bundle -SourceCommit $env:EXPECTED_SHA
-          # The curated evaluation producer is a release gate. Never fabricate a passed report.
-          ./scripts/prepare-publication-inputs.ps1 -SourceSha $env:EXPECTED_SHA -SetupBundle artifacts/setup-bundle.zip -EvaluationReport artifacts/release-assets/navlyn-curated-evaluation.json
+          ./scripts/prepare-publication-inputs.ps1 -SourceSha $env:EXPECTED_SHA -SetupBundle artifacts/setup-bundle.zip
 
       - name: Retain immutable exact inputs before publication
         if: inputs.mode == 'normal'

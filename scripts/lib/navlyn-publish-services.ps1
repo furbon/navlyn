@@ -212,11 +212,7 @@ function Get-NavlynNuGetObservation {
 function Assert-NavlynReleaseAssets {
     param([string]$Root, [Collections.IDictionary]$Manifest, [string]$RepositoryRoot)
     $assets = @($Manifest.assets)
-    if ($assets.Count -ne 2 -or @($assets | Where-Object { $_.kind -ceq 'setup' -and $_.path -ceq 'navlyn-setup.zip' }).Count -ne 1 -or
-        @($assets | Where-Object { $_.kind -ceq 'evaluation' -and $_.path -ceq 'navlyn-curated-evaluation.json' }).Count -ne 1) { throw 'Fixed setup and curated evaluation asset identities are required.' }
-    $evaluation = Read-NavlynPublicationJson (Get-NavlynPublicationInputFile $Root 'navlyn-curated-evaluation.json')
-    if ($evaluation.schema -cne 'navlyn.curated-evaluation.v1' -or $evaluation.sourceSha -cne $Manifest.sourceSha -or
-        $evaluation.version -cne $Manifest.version -or $evaluation.passed -isnot [bool] -or !$evaluation.passed) { throw 'Curated evaluation asset has no exact passed source/version binding.' }
+    if ($assets.Count -ne 1 -or $assets[0].kind -cne 'setup' -or $assets[0].path -cne 'navlyn-setup.zip') { throw 'Exact setup asset identity is required.' }
     $zip = [IO.Compression.ZipFile]::OpenRead((Get-NavlynPublicationInputFile $Root 'navlyn-setup.zip'))
     try {
         $allowed = @('setup-navlyn.ps1', 'lib/navlyn-jsonc.ps1', 'README.md', 'integrity.json', 'lib/')

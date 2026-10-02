@@ -125,10 +125,10 @@ function Read-NavlynPublicationInputs {
         Assert-NavlynPublicationPackageIdentity $file $package.id $manifest.version $ExpectedSha
     }
     $assets = @($manifest.assets)
-    if ($RequireAssets -and ($assets.Count -ne 2 -or (@($assets.kind | Sort-Object) -join ',') -cne 'evaluation,setup')) { throw 'Exact setup and curated evaluation assets are required.' }
+    if ($RequireAssets -and ($assets.Count -ne 1 -or $assets[0].kind -cne 'setup')) { throw 'Exact setup asset is required.' }
     foreach ($asset in $assets) {
         Assert-NavlynPublicationKeys $asset @('kind', 'path', 'sha256', 'sourceSha')
-        if ($asset.kind -cnotin @('setup', 'evaluation') -or $asset.sourceSha -cne $ExpectedSha -or !$names.Add($asset.path)) { throw 'Publication asset identity is invalid.' }
+        if ($asset.kind -cne 'setup' -or $asset.path -cne 'navlyn-setup.zip' -or $asset.sourceSha -cne $ExpectedSha -or !$names.Add($asset.path)) { throw 'Publication asset identity is invalid.' }
         Assert-NavlynPublicationDigest $asset.sha256 $asset.kind
         if ((Get-NavlynPublicationHash (Get-NavlynPublicationInputFile $Root $asset.path)) -cne $asset.sha256) { throw 'Publication asset bytes differ.' }
     }

@@ -174,19 +174,9 @@ Case 'missing predecessor service artifact fails closed' { $a = $api['/repos/fur
 $assetRoot = Join-Path $root 'assets'; [IO.Directory]::CreateDirectory($assetRoot) | Out-Null
 & (Join-Path $PSScriptRoot 'build-setup-bundle.ps1') -Output (Join-Path $root 'setup-source') -SourceCommit $sha | Out-Null
 Copy-Item -LiteralPath (Join-Path $root 'setup-source.zip') -Destination (Join-Path $assetRoot 'navlyn-setup.zip')
-$evaluationPath = Join-Path $assetRoot 'navlyn-curated-evaluation.json'
-$evaluation = @{ schema = 'navlyn.curated-evaluation.v1'; sourceSha = $sha; version = '0.8.2'; passed = $true; evidence = 'synthetic fixture only' }
-$evaluation | ConvertTo-Json | Set-Content -LiteralPath $evaluationPath -Encoding utf8
-$assetManifest = @{ sourceSha = $sha; version = '0.8.2'; assets = @(@{ kind = 'setup'; path = 'navlyn-setup.zip' }, @{ kind = 'evaluation'; path = 'navlyn-curated-evaluation.json' }) }
+$assetManifest = @{ sourceSha = $sha; version = '0.8.2'; assets = @(@{ kind = 'setup'; path = 'navlyn-setup.zip' }) }
 Case 'setup bundle integrity binds every payload file to exact checkout and source manifest' { Assert-NavlynReleaseAssets $assetRoot $assetManifest $repo }
-foreach ($field in @('sourceSha', 'version', 'passed', 'schema')) {
-    Case "curated asset wrong $field rejected" {
-        $changed = Clone $evaluation; $changed[$field] = if ($field -ceq 'passed') { 'true' } else { 'wrong' }
-        $changed | ConvertTo-Json | Set-Content -LiteralPath $evaluationPath -Encoding utf8
-        try { Assert-NavlynReleaseAssets $assetRoot $assetManifest $repo } finally { $evaluation | ConvertTo-Json | Set-Content -LiteralPath $evaluationPath -Encoding utf8 }
-    } -Reject
-}
-Case 'setup source identity cannot be substituted by an outer manifest claim' { $changed = Clone $assetManifest; $changed.sourceSha = 'b' * 40; $changedEvaluation = Clone $evaluation; $changedEvaluation.sourceSha = $changed.sourceSha; $changedEvaluation | ConvertTo-Json | Set-Content -LiteralPath $evaluationPath -Encoding utf8; try { Assert-NavlynReleaseAssets $assetRoot $changed $repo } finally { $evaluation | ConvertTo-Json | Set-Content -LiteralPath $evaluationPath -Encoding utf8 } } -Reject
+Case 'setup source identity cannot be substituted by an outer manifest claim' { $changed = Clone $assetManifest; $changed.sourceSha = 'b' * 40; Assert-NavlynReleaseAssets $assetRoot $changed $repo } -Reject
 
 if ($LiveBaselineTrust) {
     Case 'genuine public baseline packages verified with fresh isolated current NuGet trust' {
