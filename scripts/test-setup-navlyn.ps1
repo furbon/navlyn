@@ -126,7 +126,7 @@ try {
     $globalPlanOutput = & (Join-Path $PSScriptRoot 'setup-navlyn.ps1') -Workspace $fixture -Target Global -Version 0.8.2 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) { $failures.Add("Global Plan invocation failed: $globalPlanOutput") }
     $globalPlan = $globalPlanOutput | ConvertFrom-Json
-    Assert ($globalPlan.target -eq 'Global' -and $globalPlan.packageTarget -eq $fakeGlobalRoot -and $globalPlan.config -like '*\.vscode\mcp.json') 'Global Plan must identify the DOTNET_CLI_HOME global package target and workspace config separately.'
+    Assert ($globalPlan.target -eq 'Global' -and $globalPlan.packageTarget -eq $fakeGlobalRoot -and $globalPlan.config -eq (Join-Path $fixture '.vscode/mcp.json')) 'Global Plan must identify the DOTNET_CLI_HOME global package target and workspace config separately.'
     Assert ($globalPlan.globalPackageVersion -eq '0.8.1' -and $globalPlan.globalShim -eq $fakeMcpShim) 'Global Plan must resolve version from package nuspec and exact shim metadata.'
     Assert ($globalPlan.effects.writes -eq $false -and $globalPlan.effects.network -eq $false -and $globalPlan.effects.installation -eq $false -and $globalPlan.effects.clientLaunch -eq $false) 'Global Plan must report no effects.'
     $globalApplyRejected = $false
