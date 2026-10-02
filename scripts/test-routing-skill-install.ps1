@@ -67,13 +67,13 @@ function Invoke-Installer([string] $Verb, [string] $Root) {
     return [ordered]@{ exitCode = $code; output = (@($output | ForEach-Object { [string]$_ }) -join "`n") }
 }
 
-function Set-OlderFixture([string] $Root) {
+function Set-OlderFixture([string] $Root, [string] $Version) {
     $destination = Join-Path $Root 'navlyn-semantic-routing'
     $path = Join-Path $destination 'SKILL.md'
     [System.IO.File]::AppendAllText($path, "`n<!-- controlled older release fixture -->`n", [System.Text.UTF8Encoding]::new($false))
     $markerPath = Join-Path $Root $markerName
     $marker = Get-Content -LiteralPath $markerPath -Raw | ConvertFrom-Json -AsHashtable
-    $marker.navlynVersion = '0.8.0'
+    $marker.navlynVersion = $Version
     $marker.files['SKILL.md'] = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
     [System.IO.File]::WriteAllText($markerPath, ($marker | ConvertTo-Json -Depth 8), [System.Text.UTF8Encoding]::new($false))
 }
@@ -99,10 +99,12 @@ function Invoke-Lifecycle([string] $Label, [string] $Root) {
     $markerAfter = (Get-FileHash -LiteralPath (Join-Path $Root $markerName) -Algorithm SHA256).Hash
     if ($same.exitCode -ne 0 -or $before -cne $after -or $markerBefore -cne $markerAfter) { throw "$Label identical reinstall was not idempotent." }
 
-    Set-OlderFixture $Root
-    $upgrade = Invoke-Installer 'Install' $Root
-    if ($upgrade.exitCode -ne 0) { throw "$Label controlled upgrade failed." }
-    if ((@(Get-Inventory $destination | ForEach-Object { $_.sha256 }) -join "`n") -cne (@(Get-Inventory $source | ForEach-Object { $_.sha256 }) -join "`n")) { throw "$Label upgrade did not restore current source bytes." }
+    foreach ($olderVersion in @('0.8.0', '0.8.1')) {
+        Set-OlderFixture $Root $olderVersion
+        $upgrade = Invoke-Installer 'Install' $Root
+        if ($upgrade.exitCode -ne 0) { throw "$Label controlled upgrade from $olderVersion failed." }
+        if ((@(Get-Inventory $destination | ForEach-Object { $_.sha256 }) -join "`n") -cne (@(Get-Inventory $source | ForEach-Object { $_.sha256 }) -join "`n")) { throw "$Label upgrade did not restore current source bytes." }
+    }
 
     $unrelatedPath = Join-Path $destination 'user-owned-extra.txt'
     [System.IO.File]::WriteAllText($unrelatedPath, 'preserve unrelated entry', [System.Text.UTF8Encoding]::new($false))
@@ -178,6 +180,7 @@ function Invoke-Lifecycle([string] $Label, [string] $Root) {
         exactInventoryAndHashes = 'passed'
         idempotentReinstall = 'passed'
         controlledOlderUpgrade = 'passed'
+        controlledOlderVersions = @('0.8.0', '0.8.1')
         malformedWrongOrMissingMarkerPreserved = 'passed'
         missingManagedFileConflictPreserved = 'passed'
         divergentCollisionPreserved = 'passed'
@@ -252,7 +255,7 @@ try {
 $report = [ordered]@{
     schema = 'navlyn.routing-skill-install-test.v1'
     status = $(if ($null -eq $failure) { 'passed' } else { 'failed' })
-    releaseVersion = '0.8.1'
+    releaseVersion = '0.8.2'
     layouts = @($results)
     cleanup = $(if (Test-Path -LiteralPath $tempRoot) { 'failed' } else { 'passed' })
     failure = $failure

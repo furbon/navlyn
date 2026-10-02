@@ -89,7 +89,7 @@ For release preparation or a large refactor:
 ./scripts/test-release.ps1
 ```
 
-`test-release.ps1` restores and builds once, runs xUnit, checks C# file format, runs quick validation without rerunning xUnit, runs the full CLI contract suite, runs focused fixture scripts with `-NoBuild`, runs the public readiness audit, and runs local package install smoke when feasible.
+`test-release.ps1` restores and builds once, runs xUnit, checks C# file format, runs quick validation without rerunning xUnit, runs the full CLI contract suite, runs focused fixture scripts with `-NoBuild`, runs the public readiness audit, and runs local package install smoke when feasible. It also checks isolated setup prerequisites, JSONC handling, and deterministic publication recovery and orchestration. Its setup test invocation has no package feeds, so release preparation must separately run `test-setup-navlyn.ps1` with a verified v0.8.1 `-OfflineFeed` and the exact candidate `-CandidateFeed` in its owned isolated fixture to cover installed-package protocol, update, rollback, and global ownership. Retain that result alongside the signed-in VS Code check. Live clients, public-package trust checks, and model task campaigns use separate explicitly registered runs.
 
 Release publication and package ownership details live in `docs/navlyn-distribution.md`. Performance smoke guidance lives in `docs/navlyn-performance.md`.
 
@@ -231,7 +231,7 @@ Recommended command timeouts for automation:
 - `./scripts/test-multi-project-navigation.ps1`: at least 180 seconds.
 - `./scripts/test-diagnostics.ps1`: at least 180 seconds.
 - `./scripts/test-workspace-semantics.ps1`: at least 180 seconds.
-- `./scripts/test-release.ps1`: at least 900 seconds.
+- `./scripts/test-release.ps1`: at least 7,200 seconds for the outer automation process; poll progress without blocking user updates.
 
 Historical observed 0.7.0 local baseline on this Windows workstation after build: restore about 1-2 seconds, build about 4 seconds, `dotnet test navlyn.slnx --no-build` about 169 seconds with target frameworks serialized, quick validation without duplicate xUnit about 13 seconds, and CLI contract core about 34 seconds. Use these only as historical local measurements, not as current performance claims or universal budgets.
 

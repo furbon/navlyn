@@ -2,9 +2,42 @@ name: Publish NuGet
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Normal packs new exact inputs; resume reuses retained immutable inputs
+        required: true
+        type: choice
+        options: [normal, resume]
+        default: normal
+      expected-main-sha:
+        description: Exact reviewed main commit SHA
+        required: true
+        type: string
+      input-run-attempt:
+        description: Resume original input run ID and attempt, runId:attempt
+        type: string
+      input-artifact-id:
+        description: Resume immutable prepush artifact ID
+        type: string
+      input-artifact-sha256:
+        description: Resume immutable prepush artifact service SHA-256
+        type: string
+      manifest-sha256:
+        description: Resume exact publication input manifest SHA-256
+        type: string
+      latest-run-attempt:
+        description: Resume latest prior journal run ID and attempt, runId:attempt
+        type: string
+      latest-journal-artifact-id:
+        description: Resume latest prior immutable journal artifact ID
+        type: string
+      latest-journal-artifact-sha256:
+        description: Resume latest prior journal artifact service SHA-256
+        type: string
 
 permissions:
   contents: read
+  actions: read
   id-token: write
 
 concurrency:
@@ -27,8 +60,10 @@ jobs:
       - name: Verify main commit
         shell: pwsh
         run: |
-          if ($env:GITHUB_REF -ne 'refs/heads/main') { throw 'NuGet publication requires main.' }
-          if ((git rev-parse HEAD).Trim() -ne $env:GITHUB_SHA) { throw 'Checked-out commit differs from the dispatched commit.' }
+          if ($env:GITHUB_REF -ne 'refs/heads/main' -or $env:EXPECTED_SHA -cnotmatch '^[a-f0-9]{40}$') { throw 'NuGet publication requires explicit exact main SHA.' }
+          if ($env:GITHUB_SHA -cne $env:EXPECTED_SHA -or (git rev-parse HEAD).Trim() -cne $env:EXPECTED_SHA) { throw 'Checked-out/dispatched commit differs from the expected reviewed main commit.' }
+        env:
+          EXPECTED_SHA: ${{ inputs.expected-main-sha }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -38,29 +73,74 @@ jobs:
             10.0.x
 
       - name: Source validation
+        if: inputs.mode == 'normal'
         shell: pwsh
         run: ./scripts/test-publish-prerequisites.ps1
 
+      - name: Validate publication recovery
+        shell: pwsh
+        run: |
+          ./scripts/test-publish-recovery.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Publication recovery core tests failed.' }
+          ./scripts/test-publish-orchestration.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Publication recovery orchestration tests failed.' }
+
       - name: Pack release
+        if: inputs.mode == 'normal'
         shell: pwsh
         run: ./scripts/pack-release.ps1 -NoValidation -Output artifacts/packages
 
       - name: Validate package contract
+        if: inputs.mode == 'normal'
         shell: pwsh
         run: ./scripts/test-package-contract.ps1 -Manifest artifacts/packages/navlyn-release-pack.json
 
-      - name: Retain package bytes before publication
-        if: always()
+      - name: Prepare exact release assets
+        if: inputs.mode == 'normal'
+        id: prepare-inputs
+        shell: pwsh
+        env:
+          EXPECTED_SHA: ${{ inputs.expected-main-sha }}
+        run: |
+          ./scripts/build-setup-bundle.ps1 -Output artifacts/setup-bundle -SourceCommit $env:EXPECTED_SHA
+          ./scripts/prepare-publication-inputs.ps1 -SourceSha $env:EXPECTED_SHA -SetupBundle artifacts/setup-bundle.zip
+
+      - name: Retain immutable exact inputs before publication
+        if: inputs.mode == 'normal'
+        id: prepush
         uses: actions/upload-artifact@v7
         with:
-          name: navlyn-release-packages-prepush
-          path: artifacts/packages
-          if-no-files-found: warn
+          name: navlyn-publication-inputs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/publication-inputs
+          if-no-files-found: error
           retention-days: 90
 
-      - name: Dry-run publish
+      - name: Verify exact inputs and complete prior attempt chain
         shell: pwsh
-        run: ./scripts/publish-nuget.ps1 -DryRun
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ inputs.mode }}
+          EXPECTED_SHA: ${{ inputs.expected-main-sha }}
+          NORMAL_ARTIFACT_ID: ${{ steps.prepush.outputs.artifact-id }}
+          NORMAL_ARTIFACT_DIGEST: ${{ steps.prepush.outputs.artifact-digest }}
+          NORMAL_MANIFEST_DIGEST: ${{ steps.prepare-inputs.outputs.manifest-sha256 }}
+          INPUT_ATTEMPT: ${{ inputs.input-run-attempt }}
+          INPUT_ARTIFACT_ID: ${{ inputs.input-artifact-id }}
+          INPUT_ARTIFACT_DIGEST: ${{ inputs.input-artifact-sha256 }}
+          INPUT_MANIFEST_DIGEST: ${{ inputs.manifest-sha256 }}
+          LATEST_ATTEMPT: ${{ inputs.latest-run-attempt }}
+          LATEST_ARTIFACT_ID: ${{ inputs.latest-journal-artifact-id }}
+          LATEST_ARTIFACT_DIGEST: ${{ inputs.latest-journal-artifact-sha256 }}
+        run: |
+          if ($env:MODE -ceq 'normal') {
+            foreach ($value in @($env:INPUT_ATTEMPT,$env:INPUT_ARTIFACT_ID,$env:INPUT_ARTIFACT_DIGEST,$env:INPUT_MANIFEST_DIGEST,$env:LATEST_ATTEMPT,$env:LATEST_ARTIFACT_ID,$env:LATEST_ARTIFACT_DIGEST)) { if ($value) { throw 'Normal mode refuses resume identities.' } }
+            ./scripts/invoke-exact-publication.ps1 -Mode Normal -ExpectedSha $env:EXPECTED_SHA -ArtifactId $env:NORMAL_ARTIFACT_ID -ArtifactDigest $env:NORMAL_ARTIFACT_DIGEST -ManifestSha256 $env:NORMAL_MANIFEST_DIGEST
+          } else {
+            if ($env:MODE -cne 'resume' -or $env:INPUT_ATTEMPT -cnotmatch '^([1-9][0-9]*):([1-9][0-9]*)$') { throw 'Canonical original runId:attempt required.' }
+            $inputRun = $Matches[1]; $inputAttempt = $Matches[2]
+            if ($env:LATEST_ATTEMPT -cnotmatch '^([1-9][0-9]*):([1-9][0-9]*)$') { throw 'Canonical latest runId:attempt required.' }
+            ./scripts/invoke-exact-publication.ps1 -Mode Resume -ExpectedSha $env:EXPECTED_SHA -InputRunId $inputRun -InputRunAttempt $inputAttempt -ArtifactId $env:INPUT_ARTIFACT_ID -ArtifactDigest $env:INPUT_ARTIFACT_DIGEST -ManifestSha256 $env:INPUT_MANIFEST_DIGEST -LatestRunId $Matches[1] -LatestRunAttempt $Matches[2] -LatestJournalArtifactId $env:LATEST_ARTIFACT_ID -LatestJournalDigest $env:LATEST_ARTIFACT_DIGEST
+          }
 
       - name: NuGet login
         uses: NuGet/login@v1
@@ -68,8 +148,31 @@ jobs:
         with:
           user: ${{ vars.NUGET_USER }}
 
-      - name: Publish
+      - name: Publish exact retained inputs
         shell: pwsh
         env:
           NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
-        run: ./scripts/publish-nuget.ps1 -Publish
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ inputs.expected-main-sha }}
+        run: ./scripts/invoke-exact-publication.ps1 -Mode Publish -ExpectedSha $env:EXPECTED_SHA
+
+      - name: Retain attempt journal on every outcome
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: navlyn-publication-journal-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/publication-attempt/journal/navlyn-publication-journal.json
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Retain publication diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: navlyn-publication-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/publication-attempt/provenance
+            artifacts/publication-attempt/public-verification
+            artifacts/publication-attempt/push-*.txt
+          if-no-files-found: warn
+          retention-days: 90

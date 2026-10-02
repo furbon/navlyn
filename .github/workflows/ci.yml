@@ -36,6 +36,12 @@ jobs:
       - name: Build
         run: dotnet build navlyn.slnx --no-restore
 
+      - name: Setup prerequisite and JSONC validation
+        shell: pwsh
+        run: |
+          ./scripts/test-setup-prerequisites.ps1
+          ./scripts/test-setup-navlyn.ps1
+
       - name: Test net8.0
         env:
           TMPDIR: ${{ runner.temp }}
@@ -81,3 +87,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path artifacts/ci-checks -Force | Out-Null
           ./scripts/test-routing-skill-install.ps1 -OutputReport (Join-Path $PWD 'artifacts/ci-checks/skill-lifecycle.json')
+
+      - name: Publication recovery and orchestration validation
+        shell: pwsh
+        run: |
+          ./scripts/test-publish-recovery.ps1
+          ./scripts/test-publish-orchestration.ps1

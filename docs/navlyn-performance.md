@@ -16,7 +16,7 @@ Practical rule: use one precise fact first, reuse returned `candidateId` values,
 
 - CLI commands load the configured workspace for each process invocation.
 - `navlyn-mcp` is a read-only stdio server that runs Navlyn commands in-process by default through the shared engine.
-- MCP reader-path tools (`navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, and `navlyn_read`) use a direct Core resolver path with a lazy per-server workspace cache and workspace-scoped `DocumentIndex`.
+- MCP reader-path tools (`navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, and `navlyn_read`) use a direct Core resolver path with a lazy per-server workspace cache and workspace-scoped `DocumentIndex`. A simple `navlyn_target` query also uses that path when the workspace has a repository display root; target calls with other selection options use the command adapter.
 - `navlyn_read` and CLI `read`/`symbol-source` default to `externalSource=none`; external metadata and reconstructed-member reads are explicit opt-ins.
 - `navlyn_batch` can reduce repeated workspace loads when several batch-supported facts should be collected together.
 - `navlyn serve` is an opt-in local read-only daemon for workspace status/refresh requests over stdio JSON lines or a local named pipe.

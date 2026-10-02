@@ -106,7 +106,7 @@ Equivalent MCP client configuration for local development:
 }
 ```
 
-For the 0.8.1 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
+For the 0.8.2 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
 
 ## Server Options
 
@@ -300,7 +300,7 @@ navlyn_verify_edit(candidateId: "sym:v1:...", failOnRisk: "high")
 
 ## Warm Cache And Freshness
 
-`navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, and `navlyn_read` use a direct Core resolver path in the default in-process MCP server. The first direct call loads a session-local workspace cache and builds a `DocumentIndex` for path-to-document lookup. Each later direct call checks workspace inputs by content before using the cached snapshot and again before returning success. A stable source or project edit causes a reload; an edit during a call causes one retry, then `NAVLYN_MCP_STALE_WORKSPACE` if inputs keep changing or cannot be inspected. No previous result is returned as a successful fallback. `navlyn_workspace_refresh` forces a reload even when inputs are unchanged. Concurrent calls hold snapshot leases so refresh does not dispose an in-use workspace. `navlyn_file_outline` records its entry `candidateId` targets only for that snapshot; after replacement, an old ID is resolved against the current solution or receives the existing candidate diagnostic.
+`navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, and `navlyn_read` use a direct Core resolver path in the default in-process MCP server. A simple `navlyn_target` query also uses that path when a repository display root is available; other target forms use the command adapter. The first direct call loads a session-local workspace cache and builds a `DocumentIndex` for path-to-document lookup. Each later direct call checks workspace inputs by content before using the cached snapshot and again before returning success. A stable source or project edit causes a reload; an edit during a call causes one retry, then `NAVLYN_MCP_STALE_WORKSPACE` if inputs keep changing or cannot be inspected. No previous result is returned as a successful fallback. `navlyn_workspace_refresh` forces a reload even when inputs are unchanged. Concurrent calls hold snapshot leases so refresh does not dispose an in-use workspace. `navlyn_file_outline` records its entry `candidateId` targets only for that snapshot; after replacement, an old ID is resolved against the current solution or receives the existing candidate diagnostic.
 
 Fuzzy symbol tools use a workspace-scoped declaration index and candidate record map. Same-snapshot follow-ups that pass a returned `candidateId` can resolve through the recorded candidate when the solution fingerprint matches; unknown or stale IDs still return deterministic Navlyn candidate diagnostics. Heavy reference and caller operations use lexical document prefiltering plus scoped Roslyn document-set searches. Their inner results include `search` metadata with `scope`, `costClass`, searched counts, `partial`, and rerun hints when `maxDocuments` truncates the semantic search.
 

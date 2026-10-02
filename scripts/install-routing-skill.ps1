@@ -17,8 +17,8 @@ $script:MarkerName = '.navlyn-semantic-routing.install.json'
 $script:SkillName = 'navlyn-semantic-routing'
 $script:SchemaId = 'furbon.navlyn.semantic-routing-install'
 $script:SchemaVersion = 1
-$script:ReleaseVersion = '0.8.1'
-$script:SupportedMarkerVersions = @('0.8.1', '0.8.0', '0.8.0-preview.1', '0.8.0-preview.0')
+$script:ReleaseVersion = '0.8.2'
+$script:SupportedMarkerVersions = @('0.8.2', '0.8.1', '0.8.0', '0.8.0-preview.1', '0.8.0-preview.0')
 $script:RelativeFiles = @(
     'SKILL.md',
     'references/routing-matrix.md',

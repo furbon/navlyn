@@ -5,7 +5,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$ExpectedVersion = '0.8.1'
+$ExpectedVersion = '0.8.2'
 $Failures = [System.Collections.Generic.List[string]]::new()
 
 function Get-RequiredXmlValue {
@@ -40,13 +40,13 @@ foreach ($versionName in @('Version', 'PackageVersion', 'AssemblyVersion', 'File
     $validValues = switch ($versionName) {
         'Version' { @($ExpectedVersion); break }
         'PackageVersion' { @($ExpectedVersion, '$(Version)'); break }
-        { $_ -in @('AssemblyVersion', 'FileVersion') } { @('0.8.1.0'); break }
+        { $_ -in @('AssemblyVersion', 'FileVersion') } { @('0.8.2.0'); break }
     }
     if ($value -notin $validValues) {
         $expectedDescription = switch ($versionName) {
             'Version' { "'$ExpectedVersion'" }
             'PackageVersion' { "'$ExpectedVersion' or the shared Version property" }
-            default { "numeric '0.8.1.0'" }
+            default { "numeric '0.8.2.0'" }
         }
         Add-ContractFailure "Directory.Build.props $versionName is '$value'; expected $expectedDescription."
     }

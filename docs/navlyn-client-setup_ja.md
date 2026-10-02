@@ -6,11 +6,35 @@ MCP は、AI ツールが外部のコマンドを呼び出すための仕組み�
 
 以下は Windows の手順です。[PowerShell 7](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows) と、調べたいリポジトリに合う [.NET SDK](https://dotnet.microsoft.com/download) を用意します。
 
-`dotnet tool list --global` で `navlyn-mcp` が導入済みか確認してください。未導入なら以下を実行します。同じ版があればインストールを省略し、古い版なら `dotnet tool update --global navlyn-mcp --version 0.8.1` を実行します。
+VS Code では、設定バンドルを使って計画の確認、インストール、接続確認、取り消しを行えます。ほかのクライアントでは、後述の手動インストールを使います。
+
+## VS Code の設定バンドル
+
+リリースの添付ファイル `navlyn-setup-0.8.2.zip` を専用ディレクトリへ展開します。`integrity.json` にはソースのコミットと各ファイルのハッシュがあります。展開先で、次の二つのパスを実際のものに置き換えて実行します。
 
 ```powershell
-dotnet tool install --global navlyn-mcp --version 0.8.1
-$mcpExe = Join-Path $HOME '.dotnet/tools/navlyn-mcp.exe'
+./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.8.2
+./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.8.2 -Apply
+```
+
+最初のコマンドは計画を表示します。ファイルの書き込み、パッケージのダウンロード、クライアントの起動は行いません。パス、バージョン、取得元、変更内容を確認してから適用してください。自動選択で対象が決まらない場合は、`-WorkspaceFile` に使いたい `.slnx`、`.sln`、`.csproj`、`.vbproj` を明示します。
+
+適用すると、ユーザーのアプリケーションデータ配下にワークスペース専用の `navlyn-mcp` をインストールし、実行ファイルと対象の接続確認を行い、`.vscode/mcp.json` の `navlyn` 項目を書き込みます。無関係な JSONC の項目とコメントは保持し、VS Code の信頼設定は変更しません。そのワークスペースを開き、後述のサーバー起動と実際のツール呼び出しまで確認してください。ヘルパーの通信試験だけでは、クライアントからの接続確認は完了しません。
+
+ローカルの取得元を使う場合は `-Feed 'C:/packages/navlyn'` を追加します。インストールと更新には正確な `-Version` が必要です。同じワークスペースと対象で `-Action Update -Version <version> -Apply`、`-Action Undo -Apply`、`-Action Remove -Apply` を使えます。Undo は直前の管理対象の操作を戻し、Remove はヘルパーが登録・所有した設定とインストールを取り除きます。変更済みのファイルや所有を確認できない項目は、競合として保持します。表示された競合を解消してから再実行してください。
+
+`-Target Global` を指定すると、グローバルの `navlyn-mcp` が変更対象になります。復元用の検証済みパッケージを保持し、ほかのツールは保持します。別の管理対象ワークスペースがそのパッケージを参照中なら、復元を拒否します。導入済みの方が新しい場合は保持し、戻すには `-AllowDowngrade` の明示が必要です。途中で操作が止まった場合の回復手順は、バンドルの README を参照してください。
+
+導入と更新では、パッケージ操作を始める前に SDK と VS Code CLI の有無を確認します。前提条件や接続確認で失敗したら、表示された SDK・クライアントの導入先と対象・実行ファイルを確認するか、以下の手動手順を使います。Copilot CLI、Codex、Claude Code の設定は個別に必要です。このバンドルが設定するのは VS Code です。
+
+## MCP の手動インストール
+
+`dotnet tool list --global` で `navlyn-mcp` が導入済みか確認してください。未導入なら以下を実行します。同じ版があればインストールを省略し、古い版なら `dotnet tool update --global navlyn-mcp --version 0.8.2` を実行します。
+
+```powershell
+dotnet tool install --global navlyn-mcp --version 0.8.2
+$toolHome = if ($env:DOTNET_CLI_HOME) { $env:DOTNET_CLI_HOME } else { $HOME }
+$mcpExe = Join-Path $toolHome '.dotnet/tools/navlyn-mcp.exe'
 Test-Path $mcpExe
 $mcpExe
 ```

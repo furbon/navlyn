@@ -1,6 +1,6 @@
 # Navlyn First 15 Minutes
 
-Use the [Windows first 10 minutes guide](navlyn-first-10-minutes.md) to install 0.8.1 into an isolated tool path and ask one semantic question using the installed absolute executable. This guide starts after that install.
+Use the [Windows first 10 minutes guide](navlyn-first-10-minutes.md) to install 0.8.2 into an isolated tool path and ask one semantic question using the installed absolute executable. This guide starts after that install.
 
 ## 0–3 Minutes: Diagnose
 

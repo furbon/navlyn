@@ -2,6 +2,13 @@
 
 All notable public release changes for Navlyn are tracked here.
 
+## 0.8.2
+
+- Corrected selected-source paths when commands run from a nested workspace directory and synchronized first-time MSBuild registration.
+- Added a standalone VS Code setup bundle with an explicit plan, isolated or global installation, connection checks, and ownership-aware update, undo, and removal.
+- Added retained-artifact publication recovery with per-package verification and fail-closed recovery of uncertain publication attempts.
+
+
 ## 0.8.1
 
 - Reorganized the English and Japanese README files around direct paths to terminal, VS Code, GitHub Copilot CLI, Codex, and Claude Code setup.

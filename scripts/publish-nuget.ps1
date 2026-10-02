@@ -21,6 +21,10 @@ $manifestPath = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $Manifest))
 if (!(Test-Path -LiteralPath $manifestPath)) {
     throw "Package manifest was not found: $manifestPath"
 }
+
+if ($Publish) {
+    throw 'Publication requires the protected exact-artifact workflow and invoke-exact-publication.ps1. This legacy entry point remains available for dry-run package inspection.'
+}
 $manifestJson = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
 $manifestPackages = @($manifestJson.packages)
 if ($manifestJson.schemaVersion -ne 'navlyn.release-pack.v1' -or $manifestPackages.Count -ne 2 -or
@@ -55,32 +59,9 @@ foreach ($entry in $manifestEntries) {
 }
 
 if ($DryRun -or !$Publish) {
-    Write-Host 'Dry run only. Pass -Publish to push packages.'
+    Write-Host 'Dry run only. Publication requires the protected exact-artifact workflow.'
     foreach ($package in $resolvedPackages) {
         Write-Host "Would push $package to $PackageSource"
     }
     exit 0
-}
-
-$apiKey = [Environment]::GetEnvironmentVariable($ApiKeyEnvironmentVariable)
-if ([string]::IsNullOrWhiteSpace($apiKey)) {
-    throw "Environment variable $ApiKeyEnvironmentVariable is required to publish. In GitHub Actions, set it from the NuGet/login Trusted Publishing output."
-}
-
-foreach ($package in $resolvedPackages) {
-    $entry = @($manifestEntries | Where-Object { $_.path -eq $package })[0]
-    if ($PackageSource -eq 'https://api.nuget.org/v3/index.json') {
-        $index = Invoke-RestMethod -Uri "https://api.nuget.org/v3-flatcontainer/$($entry.id)/index.json"
-        if (@($index.versions) -contains $entry.version) {
-            throw "$($entry.id) $($entry.version) already exists on NuGet; inspect published bytes before any retry."
-        }
-    }
-    if ((Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash -ine $entry.sha256) {
-        throw "Package changed after manifest validation: $package"
-    }
-    Write-Host "Publishing $package..."
-    & dotnet nuget push $package --api-key $apiKey --source $PackageSource
-    if ($LASTEXITCODE -ne 0) {
-        throw "dotnet nuget push failed for $package with exit code $LASTEXITCODE."
-    }
 }

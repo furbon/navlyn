@@ -11,6 +11,8 @@ namespace Navlyn.Workspaces;
 
 internal sealed class WorkspaceLoader
 {
+    private static readonly object MSBuildRegistrationGate = new();
+
     private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase
         : StringComparer.Ordinal;
@@ -1009,8 +1011,13 @@ internal sealed class WorkspaceLoader
 
     private static void RegisterMSBuild()
     {
-        if (!MSBuildLocator.IsRegistered)
+        lock (MSBuildRegistrationGate)
         {
+            if (MSBuildLocator.IsRegistered)
+            {
+                return;
+            }
+
             try
             {
                 MSBuildLocator.RegisterDefaults();
