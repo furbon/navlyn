@@ -93,6 +93,12 @@ $noServers = '{"nested":{"navlyn":{}}}'
 Assert ((Remove-NavlynJsoncServer -Text $noServers -Name navlyn) -ceq $noServers) 'Remove without root servers changed the input.'
 
 $fixtureBase=if($FixtureRoot){[IO.Path]::GetFullPath($FixtureRoot)}else{[IO.Path]::GetFullPath([IO.Path]::GetTempPath())}
+if(!$FixtureRoot -and !$IsWindows){
+    # macOS exposes its temporary directory through /var, a system symlink.
+    $canonicalBase=& realpath $fixtureBase
+    if($LASTEXITCODE -ne 0 -or !$canonicalBase){throw 'Could not resolve the test fixture root.'}
+    $fixtureBase=[IO.Path]::GetFullPath($canonicalBase)
+}
 if($GlobalLifecycle){
     if(!$FixtureRoot -or !$env:NAVLYN_SETUP_TEST_ROOT -or $fixtureBase -cne [IO.Path]::GetFullPath($env:NAVLYN_SETUP_TEST_ROOT) -or !(Test-Path -LiteralPath (Join-Path $fixtureBase '.navlyn-owned-test-fixture') -PathType Leaf)){throw 'Global lifecycle requires the reviewed absolute owned fixture environment.'}
     foreach($name in @('USERPROFILE','DOTNET_CLI_HOME','NUGET_PACKAGES','LOCALAPPDATA','APPDATA')){$value=[Environment]::GetEnvironmentVariable($name);if(![IO.Path]::IsPathFullyQualified($value) -or ![IO.Path]::GetFullPath($value).StartsWith($fixtureBase.TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)){throw "Global test environment escaped owned root: $name"}}
@@ -114,19 +120,21 @@ try {
     [IO.Directory]::CreateDirectory((Join-Path $fakeStore 'tools/net8.0/any'))|Out-Null
     [IO.File]::WriteAllText((Join-Path $fakeStore 'navlyn-mcp.nuspec'),'<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd"><metadata><id>navlyn-mcp</id><version>0.8.1</version></metadata></package>')
     [IO.File]::WriteAllText((Join-Path $fakeStore 'tools/net8.0/any/DotnetToolSettings.xml'),'<DotNetCliTool Version="1"><Commands><Command Name="navlyn-mcp" EntryPoint="navlyn.Mcp.dll" Runner="dotnet"/><Command Name="navlyn" EntryPoint="navlyn.Mcp.dll" Runner="dotnet"/></Commands></DotNetCliTool>')
-    [IO.File]::WriteAllBytes((Join-Path $fakeGlobalRoot 'navlyn-mcp.exe'),[byte[]](1,2,3,4));[IO.File]::WriteAllBytes((Join-Path $fakeGlobalRoot 'navlyn.exe'),[byte[]](5,6,7,8));$env:USERPROFILE=$fakeUserProfile;$env:DOTNET_CLI_HOME=$fakeCliHome
+    $fakeMcpShim=Join-Path $fakeGlobalRoot $(if($IsWindows){'navlyn-mcp.exe'}else{'navlyn-mcp'})
+    $fakeCliShim=Join-Path $fakeGlobalRoot $(if($IsWindows){'navlyn.exe'}else{'navlyn'})
+    [IO.File]::WriteAllBytes($fakeMcpShim,[byte[]](1,2,3,4));[IO.File]::WriteAllBytes($fakeCliShim,[byte[]](5,6,7,8));$env:USERPROFILE=$fakeUserProfile;$env:DOTNET_CLI_HOME=$fakeCliHome
     $globalPlanOutput = & (Join-Path $PSScriptRoot 'setup-navlyn.ps1') -Workspace $fixture -Target Global -Version 0.8.2 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) { $failures.Add("Global Plan invocation failed: $globalPlanOutput") }
     $globalPlan = $globalPlanOutput | ConvertFrom-Json
     Assert ($globalPlan.target -eq 'Global' -and $globalPlan.packageTarget -eq $fakeGlobalRoot -and $globalPlan.config -like '*\.vscode\mcp.json') 'Global Plan must identify the DOTNET_CLI_HOME global package target and workspace config separately.'
-    Assert ($globalPlan.globalPackageVersion -eq '0.8.1' -and $globalPlan.globalShim -eq (Join-Path $fakeGlobalRoot 'navlyn-mcp.exe')) 'Global Plan must resolve version from package nuspec and exact shim metadata.'
+    Assert ($globalPlan.globalPackageVersion -eq '0.8.1' -and $globalPlan.globalShim -eq $fakeMcpShim) 'Global Plan must resolve version from package nuspec and exact shim metadata.'
     Assert ($globalPlan.effects.writes -eq $false -and $globalPlan.effects.network -eq $false -and $globalPlan.effects.installation -eq $false -and $globalPlan.effects.clientLaunch -eq $false) 'Global Plan must report no effects.'
     $globalApplyRejected = $false
-    $shimHashBefore=(Get-FileHash -LiteralPath (Join-Path $fakeGlobalRoot 'navlyn-mcp.exe')).Hash
+    $shimHashBefore=(Get-FileHash -LiteralPath $fakeMcpShim).Hash
     try { & (Join-Path $PSScriptRoot 'setup-navlyn.ps1') -Workspace $fixture -Target Global -Version 0.8.2 -Feed $fixture -Apply 2>&1 | Out-Null } catch { $globalApplyRejected = $_.Exception.Message -like '*Exact local package*missing*' }
     Assert $globalApplyRejected 'Global Apply must fail before SDK/package mutation if the exact feed input is missing.'
     Assert (!(Test-Path -LiteralPath (Join-Path $fixture '.vscode'))) 'Rejected Global Apply changed workspace config.'
-    Assert ((Get-FileHash -LiteralPath (Join-Path $fakeGlobalRoot 'navlyn-mcp.exe')).Hash -ceq $shimHashBefore) 'Global Plan or rejected Apply changed the shim.'
+    Assert ((Get-FileHash -LiteralPath $fakeMcpShim).Hash -ceq $shimHashBefore) 'Global Plan or rejected Apply changed the shim.'
 
     if($OfflineFeed){
         if(!(Get-Command dotnet -ErrorAction SilentlyContinue) -or !(Get-Command code -ErrorAction SilentlyContinue)){throw 'Offline package lifecycle test requires both dotnet and the VS Code CLI.'}
