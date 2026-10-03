@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param(
-    [switch]$ShowOutput
+    [switch]$ShowOutput,
+    [switch]$NoBuild,
+    [switch]$SkipDotnetTest
 )
 
 Set-StrictMode -Version Latest
@@ -31,35 +33,41 @@ Initialize-NavlynTestHarness -RepoRoot $RepoRoot -ShowOutput:$ShowOutput
 
 Push-Location $RepoRoot
 try {
-    Write-Host 'Restoring navlyn...'
-    Invoke-CheckedProcess `
-        -Name 'dotnet restore' `
-        -FilePath 'dotnet' `
-        -Arguments @('restore', $script:NavlynTestSolutionPath) `
-        -ExpectedExitCode 0 | Out-Null
+    if (!$NoBuild) {
+        Write-Host 'Restoring navlyn...'
+        Invoke-CheckedProcess `
+            -Name 'dotnet restore' `
+            -FilePath 'dotnet' `
+            -Arguments @('restore', $script:NavlynTestSolutionPath) `
+            -ExpectedExitCode 0 | Out-Null
 
-    Write-Host 'Building navlyn...'
-    Invoke-CheckedProcess `
-        -Name 'dotnet build' `
-        -FilePath 'dotnet' `
-        -Arguments @('build', $script:NavlynTestSolutionPath, '--no-restore') `
-        -ExpectedExitCode 0 | Out-Null
+        Write-Host 'Building navlyn...'
+        Invoke-CheckedProcess `
+            -Name 'dotnet build' `
+            -FilePath 'dotnet' `
+            -Arguments @('build', $script:NavlynTestSolutionPath, '--no-restore') `
+            -ExpectedExitCode 0 | Out-Null
 
-    Write-Host 'Running xUnit tests on net8.0...'
-    Invoke-CheckedProcess `
-        -Name 'dotnet test net8.0' `
-        -FilePath 'dotnet' `
-        -Arguments @('test', $script:NavlynTestSolutionPath, '--framework', 'net8.0', '--no-build') `
-        -ExpectedExitCode 0 | Out-Null
+    }
+    if (!$SkipDotnetTest) {
+        Write-Host 'Running xUnit tests on net8.0...'
+        Invoke-CheckedProcess `
+            -Name 'dotnet test net8.0' `
+            -FilePath 'dotnet' `
+            -Arguments @('test', $script:NavlynTestSolutionPath, '--framework', 'net8.0', '--no-build') `
+            -ExpectedExitCode 0 | Out-Null
 
-    Write-Host 'Running xUnit tests on net10.0...'
-    Invoke-CheckedProcess `
-        -Name 'dotnet test net10.0' `
-        -FilePath 'dotnet' `
-        -Arguments @('test', $script:NavlynTestSolutionPath, '--framework', 'net10.0', '--no-build') `
-        -ExpectedExitCode 0 | Out-Null
+        Write-Host 'Running xUnit tests on net10.0...'
+        Invoke-CheckedProcess `
+            -Name 'dotnet test net10.0' `
+            -FilePath 'dotnet' `
+            -Arguments @('test', $script:NavlynTestSolutionPath, '--framework', 'net10.0', '--no-build') `
+            -ExpectedExitCode 0 | Out-Null
 
+    }
     & $FormatCheckScript -Quiet
+    & (Join-Path $PSScriptRoot 'test-release-version.ps1')
+    & (Join-Path $PSScriptRoot 'test-validated-release.ps1')
     & $QuickScript -NoBuild -SkipDotnetTest -ShowOutput:$ShowOutput
     & $CliContractScript -NoBuild -Suite all -ShowOutput:$ShowOutput
     & $ToolSelectionEvalScript -UseBaselineTraces -NoBuild -Output 'artifacts/evals/tool-selection-release-report.json'

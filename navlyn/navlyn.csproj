@@ -18,7 +18,6 @@
 		<RepositoryUrl>https://github.com/furbon/navlyn</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageProjectUrl>https://github.com/furbon/navlyn</PackageProjectUrl>
-		<PackageReleaseNotes>0.8.4 improves symbol-kind guidance, prevents temporary setup PATH changes, and waits for normal NuGet indexing.</PackageReleaseNotes>
 		<Copyright>Copyright (c) 2026 furbon.tech</Copyright>
 		<NeutralLanguage>en-US</NeutralLanguage>
 		<PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>

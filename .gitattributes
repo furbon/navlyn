@@ -1,1 +1,5 @@
 *.cs text eol=crlf
+# Retained setup sources must have identical bytes in Windows CI and Linux publication.
+/scripts/setup-navlyn.ps1 text eol=lf
+/scripts/lib/navlyn-jsonc.ps1 text eol=lf
+/scripts/setup-bundle/README.md text eol=lf

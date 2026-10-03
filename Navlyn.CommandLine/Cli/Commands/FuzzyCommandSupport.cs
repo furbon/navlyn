@@ -12,7 +12,7 @@ internal static class FuzzyCommandSupport
     {
         return new Option<string[]>("--assume-kind")
         {
-            Description = "Roslyn symbol kind hints, e.g. NamedType (class/interface/struct), Method, Property, Field, or Event.",
+            Description = "Symbol kind hints, case-insensitive: class/interface/struct/record/enum/delegate (NamedType), method, property, field, or event.",
             AllowMultipleArgumentsPerToken = true
         };
     }
@@ -149,7 +149,7 @@ internal static class FuzzyCommandSupport
 
         options = new FuzzyQueryOptions(
             Query: query.Trim(),
-            AssumeKinds: NormalizeStrings(assumeKinds),
+            AssumeKinds: SymbolKindNames.NormalizeMany(assumeKinds),
             Match: match,
             CaseSensitive: caseSensitive ? true : null,
             ExcludeGenerated: excludeGenerated,
@@ -352,7 +352,7 @@ internal static class FuzzyCommandSupport
                 return "Symbol kind must not be empty.";
             }
 
-            if (!Enum.GetNames<SymbolKind>().Contains(kind, StringComparer.Ordinal))
+            if (!SymbolKindNames.TryNormalize(kind, out _))
             {
                 return UnknownKindMessage(kind);
             }
@@ -363,6 +363,6 @@ internal static class FuzzyCommandSupport
 
     internal static string UnknownKindMessage(string kind)
     {
-        return $"Unknown symbol kind: {kind}. Use NamedType for classes, interfaces, structs, enums, or delegates. Supported kinds (case-sensitive): {string.Join(", ", Enum.GetNames<SymbolKind>())}.";
+        return $"Unknown symbol kind: {kind}. Kinds are case-insensitive; class, interface, struct, record, enum, delegate, and type map to NamedType. Supported kinds: {string.Join(", ", Enum.GetNames<SymbolKind>())}.";
     }
 }

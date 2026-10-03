@@ -8,12 +8,13 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build:
     name: Build and test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -56,13 +57,24 @@ jobs:
         shell: pwsh
         run: ./scripts/test-csharp-file-format.ps1
 
+      - name: Release version and artifact reuse checks
+        shell: pwsh
+        run: |
+          ./scripts/test-release-version.ps1
+          ./scripts/test-validated-release.ps1
+
+      - name: Release validation
+        if: matrix.os == 'windows-latest' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: ./scripts/test-release.ps1 -NoBuild -SkipDotnetTest
+
       - name: Quick validation
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && github.event_name != 'push'
         shell: pwsh
         run: ./scripts/test-quick.ps1 -NoBuild -SkipDotnetTest
 
       - name: CLI contract core validation
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && github.event_name != 'push'
         shell: pwsh
         run: ./scripts/test-cli-contract.ps1 -NoBuild -Suite core
 
@@ -74,7 +86,12 @@ jobs:
       - name: Pack candidate packages
         if: matrix.os == 'windows-latest'
         shell: pwsh
-        run: ./scripts/pack-release.ps1 -NoValidation -Output artifacts/ci-candidate
+        run: |
+          if ($env:GITHUB_EVENT_NAME -eq 'push') {
+            ./scripts/pack-release.ps1 -NoValidation -NoBuild -Output artifacts/ci-candidate
+          } else {
+            ./scripts/pack-release.ps1 -NoValidation -Output artifacts/ci-candidate
+          }
 
       - name: Candidate package contract validation
         if: matrix.os == 'windows-latest'
@@ -89,7 +106,41 @@ jobs:
           ./scripts/test-routing-skill-install.ps1 -OutputReport (Join-Path $PWD 'artifacts/ci-checks/skill-lifecycle.json')
 
       - name: Publication recovery and orchestration validation
+        if: matrix.os != 'windows-latest' || github.event_name != 'push'
         shell: pwsh
         run: |
           ./scripts/test-publish-recovery.ps1
           ./scripts/test-publish-orchestration.ps1
+
+      - name: Isolated consumer installation validation
+        if: matrix.os == 'windows-latest' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts/ci-checks -Force | Out-Null
+          ./scripts/test-consumer-install.ps1 -Manifest artifacts/ci-candidate/navlyn-release-pack.json -OutputReport (Join-Path $PWD 'artifacts/ci-checks/consumer-install.json')
+
+      - name: Routing skill fresh-process discovery validation
+        if: matrix.os == 'windows-latest' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          npm install --prefix artifacts/ci-tools --no-save --no-audit --no-fund @openai/codex@0.155.0-alpha.16
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned Codex CLI installation failed.' }
+          $codex = Join-Path $PWD 'artifacts/ci-tools/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe'
+          if ((& $codex --version) -ne 'codex-cli 0.155.0-alpha.16' -or $LASTEXITCODE -ne 0) { throw 'Pinned Codex CLI version mismatch.' }
+          ./scripts/test-routing-skill-discovery.ps1 -CodexExecutable $codex -OutputReport (Join-Path $PWD 'artifacts/ci-checks/skill-discovery.json')
+
+      - name: Prepare validated release inputs
+        if: matrix.os == 'windows-latest' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          ./scripts/build-setup-bundle.ps1 -Output artifacts/setup-bundle -SourceCommit $env:GITHUB_SHA
+          ./scripts/prepare-publication-inputs.ps1 -SourceSha $env:GITHUB_SHA -SetupBundle artifacts/setup-bundle.zip -Manifest artifacts/ci-candidate/navlyn-release-pack.json
+
+      - name: Retain validated release inputs
+        if: matrix.os == 'windows-latest' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: navlyn-validated-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/publication-inputs
+          if-no-files-found: error
+          retention-days: 90

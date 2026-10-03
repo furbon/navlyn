@@ -141,6 +141,7 @@ foreach ($trackedLocalPath in $trackedLocalPaths) {
     Add-Issue -Issues $Issues -Code 'NAVLYN-PUBLIC-TRACKED-LOCAL-ARTIFACT' -Path $trackedLocalPath -Message 'Local scratch or build output is tracked.'
 }
 
+[xml]$sharedProperties = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot 'Directory.Build.props')
 foreach ($projectRelativePath in @('navlyn/navlyn.csproj', 'navlyn.Mcp/navlyn.Mcp.csproj')) {
     $projectPath = Join-Path $RepoRoot $projectRelativePath
     if (Test-Path -LiteralPath $projectPath) {
@@ -152,6 +153,7 @@ foreach ($projectRelativePath in @('navlyn/navlyn.csproj', 'navlyn.Mcp/navlyn.Mc
 
         foreach ($propertyName in @('Authors', 'PackageLicenseExpression', 'Description', 'PackageReadmeFile', 'RepositoryUrl', 'RepositoryType', 'PackageProjectUrl', 'PackageIcon', 'PackageTags', 'PackageReleaseNotes', 'Copyright', 'NeutralLanguage', 'PackageRequireLicenseAcceptance')) {
             $propertyNode = $projectXml.SelectSingleNode("//PropertyGroup/$propertyName")
+            if ($null -eq $propertyNode) { $propertyNode = $sharedProperties.SelectSingleNode("//PropertyGroup/$propertyName") }
             $value = if ($null -eq $propertyNode) { '' } else { [string]$propertyNode.InnerText }
             if ([string]::IsNullOrWhiteSpace($value)) {
                 Add-Issue -Issues $Issues -Code "NAVLYN-PUBLIC-PACKAGE-$($propertyName.ToUpperInvariant())-MISSING" -Path $projectRelativePath -Message "Package metadata '$propertyName' is missing."
@@ -172,6 +174,7 @@ foreach ($projectRelativePath in @('navlyn/navlyn.csproj', 'navlyn.Mcp/navlyn.Mc
 
         foreach ($expected in $expectedValues.GetEnumerator()) {
             $node = $projectXml.SelectSingleNode("//PropertyGroup/$($expected.Key)")
+            if ($null -eq $node) { $node = $sharedProperties.SelectSingleNode("//PropertyGroup/$($expected.Key)") }
             $actual = if ($null -eq $node) { '' } else { [string]$node.InnerText }
             if ($actual -ne $expected.Value) {
                 Add-Issue -Issues $Issues -Code "NAVLYN-PUBLIC-PACKAGE-$($expected.Key.ToUpperInvariant())-UNEXPECTED" -Path $projectRelativePath -Message "Package metadata '$($expected.Key)' should be '$($expected.Value)' but was '$actual'."

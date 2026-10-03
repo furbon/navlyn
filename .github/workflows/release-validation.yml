@@ -3,13 +3,12 @@ name: Release Validation
 on:
   workflow_dispatch:
   push:
-    branches:
-      - release/**
     tags:
       - v*
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: release-validation-${{ github.ref }}
@@ -19,72 +18,31 @@ jobs:
   validate:
     name: Release validation (Windows)
     runs-on: windows-latest
-    timeout-minutes: 120
-
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: |
             8.0.x
             10.0.x
-
-      - name: Release validation
+      - name: Verify annotated tag and tested public release
         shell: pwsh
-        run: ./scripts/test-release.ps1
-
-      - name: Pack release candidate
-        shell: pwsh
-        run: ./scripts/pack-release.ps1 -NoValidation -Output artifacts/ci-candidate
-
-      - name: Candidate package contract validation
-        shell: pwsh
-        run: ./scripts/test-package-contract.ps1 -Manifest artifacts/ci-candidate/navlyn-release-pack.json
-
-      - name: NuGet publication dry run
-        shell: pwsh
-        run: ./scripts/publish-nuget.ps1 -Manifest artifacts/ci-candidate/navlyn-release-pack.json -DryRun
-
-      - name: Isolated consumer installation validation
-        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          New-Item -ItemType Directory -Path artifacts/ci-checks -Force | Out-Null
-          ./scripts/test-consumer-install.ps1 -Manifest artifacts/ci-candidate/navlyn-release-pack.json -OutputReport (Join-Path $PWD 'artifacts/ci-checks/consumer-install.json')
-
-      - name: Routing skill lifecycle validation
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path artifacts/ci-checks -Force | Out-Null
-          ./scripts/test-routing-skill-install.ps1 -OutputReport (Join-Path $PWD 'artifacts/ci-checks/skill-lifecycle.json')
-
-      - name: Install pinned Codex CLI for isolated skill discovery
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path artifacts/ci-tools -Force | Out-Null
-          npm install --prefix artifacts/ci-tools --no-save --no-audit --no-fund @openai/codex@0.155.0-alpha.16
-          if ($LASTEXITCODE -ne 0) { throw 'Pinned Codex CLI installation failed.' }
-          $codex = Join-Path $PWD 'artifacts/ci-tools/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe'
-          if (!(Test-Path -LiteralPath $codex -PathType Leaf)) { throw 'Pinned Codex CLI Windows executable was not found at the expected npm package path.' }
-          $version = & $codex --version
-          if ($LASTEXITCODE -ne 0 -or $version -ne 'codex-cli 0.155.0-alpha.16') { throw 'Pinned Codex CLI version check failed.' }
-          "NAVLYN_CODEX_EXE=$codex" >> $env:GITHUB_ENV
-
-      - name: Routing skill fresh-process discovery validation
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path artifacts/ci-checks -Force | Out-Null
-          ./scripts/test-routing-skill-discovery.ps1 -CodexExecutable $env:NAVLYN_CODEX_EXE -OutputReport (Join-Path $PWD 'artifacts/ci-checks/skill-discovery.json')
-
-      - name: Upload candidate evidence
+          if ($env:GITHUB_REF -notlike 'refs/tags/v*') { throw 'Dispatch this workflow on an annotated release tag.' }
+          ./scripts/test-published-release.ps1 -SourceSha $env:GITHUB_SHA -Tag $env:GITHUB_REF_NAME
+      - name: Retain tag verification
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: navlyn-release-candidate-windows
+          name: navlyn-tag-verification-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            artifacts/ci-candidate/*
-            artifacts/ci-checks/*
+            artifacts/tag-provenance
+            artifacts/validated-release-provenance
+            artifacts/tag-public-verification
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 90

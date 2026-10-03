@@ -8,7 +8,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$ExpectedVersion = '0.8.4'
+. (Join-Path $PSScriptRoot 'lib/navlyn-release-version.ps1')
+$ExpectedVersion = Get-NavlynReleaseVersion
 $ExpectedFrameworks = @('net8.0', 'net10.0')
 $Failures = [System.Collections.Generic.List[string]]::new()
 $PackageResults = [System.Collections.Generic.List[object]]::new()

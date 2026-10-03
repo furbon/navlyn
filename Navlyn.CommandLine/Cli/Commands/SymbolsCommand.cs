@@ -207,10 +207,7 @@ internal static class SymbolsCommand
 
     private static IReadOnlyList<string> NormalizeKinds(IReadOnlyList<string> kinds)
     {
-        return [.. kinds
-            .Where(kind => !string.IsNullOrWhiteSpace(kind))
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(kind => kind, StringComparer.Ordinal)];
+        return SymbolKindNames.NormalizeMany(kinds);
     }
 
     private static IReadOnlyList<string> NormalizeStrings(IReadOnlyList<string> values)
@@ -260,7 +257,7 @@ internal static class SymbolsCommand
 
     private static bool IsKnownSymbolKind(string kind)
     {
-        return Enum.GetNames<SymbolKind>().Contains(kind, StringComparer.Ordinal);
+        return SymbolKindNames.TryNormalize(kind, out _);
     }
 
     private static SymbolMatchMode ParseMatchMode(string match)

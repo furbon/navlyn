@@ -2,6 +2,8 @@
 param([string]$OutputDirectory)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'lib/navlyn-release-version.ps1')
+$ReleaseVersion = Get-NavlynReleaseVersion
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $helper = Join-Path $PSScriptRoot 'setup-navlyn.ps1'
 $shellPath = Join-Path $PSHOME $(if ($IsWindows) { 'pwsh.exe' } else { 'pwsh' })
@@ -54,7 +56,7 @@ foreach ($mode in @('missing-sdk', 'missing-client')) {
             if ($IsWindows) { $environment.SYSTEMROOT = $env:SYSTEMROOT; $environment.WINDIR = $env:WINDIR; $environment.COMSPEC = $env:COMSPEC; $environment.PATHEXT = '.COM;.EXE;.BAT;.CMD' }
             if ($mode -eq 'missing-client') { $environment.PATH = $sdkRoot; $environment.DOTNET_ROOT = $sdkRoot }
             foreach ($entry in $environment.GetEnumerator()) { $start.Environment[$entry.Key] = $entry.Value }
-            foreach ($argument in @('-NoProfile', '-File', $helper, '-Workspace', $workspace, '-WorkspaceFile', $project, '-Version', '0.8.4', '-Target', $target)) { $start.ArgumentList.Add($argument) }
+            foreach ($argument in @('-NoProfile', '-File', $helper, '-Workspace', $workspace, '-WorkspaceFile', $project, '-Version', $ReleaseVersion, '-Target', $target)) { $start.ArgumentList.Add($argument) }
             if ($apply) { $start.ArgumentList.Add('-Apply') }
             $before = Get-ProtectedFiles $caseRoot
             $process = [Diagnostics.Process]::Start($start); $out = $process.StandardOutput.ReadToEndAsync(); $err = $process.StandardError.ReadToEndAsync()

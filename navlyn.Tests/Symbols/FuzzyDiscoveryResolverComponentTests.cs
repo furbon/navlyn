@@ -7,6 +7,22 @@ namespace Navlyn.Tests.Symbols;
 [Collection(ResolverComponentTestCollection.Name)]
 public sealed class FuzzyDiscoveryResolverComponentTests(ResolverComponentTestFixture fixture)
 {
+    [Theory]
+    [InlineData("class")]
+    [InlineData("INTERFACE")]
+    [InlineData("namedtype")]
+    public async Task FindAsync_NaturalKindHint_SelectsAndEmitsCanonicalKind(string kind)
+    {
+        FuzzyFindResult result = await new FuzzyDiscoveryResolver().FindAsync(
+            fixture.FuzzyDiscoveryWorkspace,
+            new FuzzyQueryOptions("EnemyManagerTools", [kind], "smart", null, true, null),
+            Projects(), projectFilters: null, CancellationToken.None);
+
+        Assert.Equal("EnemyManagerTools", result.SelectedCandidate!.Name);
+        Assert.Equal("NamedType", result.SelectedCandidate.Kind);
+        Assert.Equal(["NamedType"], result.Assumptions.Kinds);
+    }
+
     [Fact]
     public async Task FindAsync_NestedWorkingDirectory_PreservesSelectorPathAndCandidateIdentity()
     {

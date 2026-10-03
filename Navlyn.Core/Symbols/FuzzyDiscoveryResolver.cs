@@ -422,7 +422,7 @@ internal sealed class FuzzyDiscoveryResolver
         }
 
         IReadOnlyList<string> assumedKinds = options.CandidateId is null
-            ? NormalizeStrings(options.AssumeKinds)
+            ? SymbolKindNames.NormalizeMany(options.AssumeKinds)
             : [];
         IReadOnlyList<RankedCandidate> rankedCandidates = [.. declarations
             .Select(declaration => CreateRankedCandidate(declaration, options, assumedKinds, projects))
@@ -753,7 +753,7 @@ internal sealed class FuzzyDiscoveryResolver
             Intent: intent,
             Match: options.Match,
             CaseSensitive: options.CaseSensitive,
-            Assumptions: new FuzzyAssumptions(NormalizeStrings(options.AssumeKinds)),
+            Assumptions: new FuzzyAssumptions(SymbolKindNames.NormalizeMany(options.AssumeKinds)),
             Confidence: resolution.Confidence,
             CandidateCount: candidates.Count,
             TotalCandidates: resolution.TotalCandidates,

@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$Output = 'artifacts/packages',
-    [switch]$NoValidation
+    [switch]$NoValidation,
+    [switch]$NoBuild
 )
 
 Set-StrictMode -Version Latest
@@ -74,11 +75,14 @@ Push-Location $RepoRoot
 try {
     if (!$NoValidation) {
         & ./scripts/test-release.ps1
+        # The release suite already built and exercised the Release configuration.
+        $NoBuild = $true
     }
 
     [System.IO.Directory]::CreateDirectory($OutputPath) | Out-Null
-    Invoke-Checked -Name 'pack navlyn' -Arguments @('pack', 'navlyn/navlyn.csproj', '-c', 'Release', '-o', $OutputPath)
-    Invoke-Checked -Name 'pack navlyn-mcp' -Arguments @('pack', 'navlyn.Mcp/navlyn.Mcp.csproj', '-c', 'Release', '-o', $OutputPath)
+    if (!$NoBuild) { Invoke-Checked -Name 'release build' -Arguments @('build', 'navlyn.slnx', '-c', 'Release') }
+    Invoke-Checked -Name 'pack navlyn' -Arguments @('pack', 'navlyn/navlyn.csproj', '-c', 'Release', '--no-build', '-o', $OutputPath)
+    Invoke-Checked -Name 'pack navlyn-mcp' -Arguments @('pack', 'navlyn.Mcp/navlyn.Mcp.csproj', '-c', 'Release', '--no-build', '-o', $OutputPath)
 
     $navlynVersion = Get-ProjectVersion -ProjectPath (Join-Path $RepoRoot 'navlyn/navlyn.csproj')
     $mcpVersion = Get-ProjectVersion -ProjectPath (Join-Path $RepoRoot 'navlyn.Mcp/navlyn.Mcp.csproj')

@@ -282,7 +282,7 @@ function Invoke-NavigationContractGate {
     { "id": "type-hierarchy", "command": "type-hierarchy", "file": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs", "line": 6, "column": 23 },
     { "id": "definition", "command": "definition", "file": "Navlyn.CommandLine/Cli/NavlynCli.cs", "line": 59, "column": 37 },
     { "id": "references", "command": "references", "file": "Navlyn.CommandLine/Cli/NavlynCli.cs", "line": 59, "column": 37 },
-    { "id": "find", "command": "find", "query": "CheckCommand", "assumeKind": "NamedType" },
+    { "id": "find", "command": "find", "query": "CheckCommand", "assumeKind": "CLASS" },
     { "id": "where-used", "command": "where-used", "candidateIdFrom": "find", "limit": 1, "includeSnippets": true, "snippetLines": 0 },
     { "id": "about", "command": "about", "candidateIdFrom": "find", "memberLimit": 2, "referenceLimit": 1 },
     { "id": "related", "command": "related", "candidateIdFrom": "find", "limit": 2 },
@@ -1315,7 +1315,7 @@ try {
 
     $symbolsKind = Invoke-Navlyn `
         -Name 'symbols kind filter query' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--query', 'Check', '--kind', 'NamedType') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--query', 'Check', '--kind', 'cLaSs') `
         -ExpectedExitCode 0
 
     $symbolsKindJson = $symbolsKind.Stdout | ConvertFrom-Json

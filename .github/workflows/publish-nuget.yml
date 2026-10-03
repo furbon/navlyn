@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Normal packs new exact inputs; resume reuses retained immutable inputs
+        description: Normal reuses validated main inputs; resume reuses retained immutable inputs
         required: true
         type: choice
         options: [normal, resume]
@@ -72,10 +72,14 @@ jobs:
             8.0.x
             10.0.x
 
-      - name: Source validation
+      - name: Reuse validated exact-main release inputs
         if: inputs.mode == 'normal'
+        id: prepare-inputs
         shell: pwsh
-        run: ./scripts/test-publish-prerequisites.ps1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ inputs.expected-main-sha }}
+        run: ./scripts/reuse-validated-release.ps1 -ExpectedSha $env:EXPECTED_SHA
 
       - name: Validate publication recovery
         shell: pwsh
@@ -84,26 +88,6 @@ jobs:
           if (!$?) { throw 'Publication recovery core tests failed.' }
           ./scripts/test-publish-orchestration.ps1
           if (!$?) { throw 'Publication recovery orchestration tests failed.' }
-
-      - name: Pack release
-        if: inputs.mode == 'normal'
-        shell: pwsh
-        run: ./scripts/pack-release.ps1 -NoValidation -Output artifacts/packages
-
-      - name: Validate package contract
-        if: inputs.mode == 'normal'
-        shell: pwsh
-        run: ./scripts/test-package-contract.ps1 -Manifest artifacts/packages/navlyn-release-pack.json
-
-      - name: Prepare exact release assets
-        if: inputs.mode == 'normal'
-        id: prepare-inputs
-        shell: pwsh
-        env:
-          EXPECTED_SHA: ${{ inputs.expected-main-sha }}
-        run: |
-          ./scripts/build-setup-bundle.ps1 -Output artifacts/setup-bundle -SourceCommit $env:EXPECTED_SHA
-          ./scripts/prepare-publication-inputs.ps1 -SourceSha $env:EXPECTED_SHA -SetupBundle artifacts/setup-bundle.zip
 
       - name: Retain immutable exact inputs before publication
         if: inputs.mode == 'normal'

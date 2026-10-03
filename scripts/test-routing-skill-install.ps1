@@ -6,6 +6,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'lib/navlyn-release-version.ps1')
+$ReleaseVersion = Get-NavlynReleaseVersion
 
 $repo = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $installer = Join-Path $PSScriptRoot 'install-routing-skill.ps1'
@@ -255,7 +257,7 @@ try {
 $report = [ordered]@{
     schema = 'navlyn.routing-skill-install-test.v1'
     status = $(if ($null -eq $failure) { 'passed' } else { 'failed' })
-    releaseVersion = '0.8.4'
+    releaseVersion = $ReleaseVersion
     layouts = @($results)
     cleanup = $(if (Test-Path -LiteralPath $tempRoot) { 'failed' } else { 'passed' })
     failure = $failure
