@@ -233,7 +233,7 @@ internal static class SymbolsCommand
 
             if (!IsKnownSymbolKind(kind))
             {
-                return $"Unknown symbol kind: {kind}.";
+                return FuzzyCommandSupport.UnknownKindMessage(kind);
             }
         }
 

@@ -2870,7 +2870,7 @@ internal static partial class BatchCommand
 
             if (!Enum.GetNames<SymbolKind>().Contains(kind, StringComparer.Ordinal))
             {
-                return $"Unknown symbol kind: {kind}.";
+                return FuzzyCommandSupport.UnknownKindMessage(kind);
             }
         }
 

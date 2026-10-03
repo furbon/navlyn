@@ -13,6 +13,8 @@ The server is intentionally facts-only:
 
 Successful tool calls return a Navlyn MCP result envelope with the Navlyn command JSON under `result`; the inner result shapes remain documented in [`navlyn-cli-commands.md`](navlyn-cli-commands.md).
 
+For an explicit workspace path, initial cache discovery checks the selected workspace and ancestor configuration before inventorying the loaded project roots. Unrelated artifact-directory links do not block startup. Loaded source, project, configuration, and dependency changes still trigger freshness checks; links inside an inventoried project remain an inspection error.
+
 For normal use, install only `navlyn-mcp` for MCP clients. A separate `navlyn` CLI installation is not required. The `navlyn` CLI and `navlyn-mcp` server share the same Navlyn core engine and command runtime.
 
 ## When To Use It
@@ -106,7 +108,7 @@ Equivalent MCP client configuration for local development:
 }
 ```
 
-For the 0.8.3 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
+For the 0.8.4 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
 
 ## Server Options
 

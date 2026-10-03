@@ -49,7 +49,8 @@ internal sealed class WorkspaceInputState
         IEnumerable<string> loadedInputs,
         IEnumerable<string>? additionalRoots = null,
         CancellationToken cancellationToken = default,
-        IEnumerable<string>? projectDirectories = null)
+        IEnumerable<string>? projectDirectories = null,
+        bool scanSourceTrees = true)
     {
         string root = Path.GetFullPath(workspaceRoot);
         HashSet<string> paths = new(PathComparer);
@@ -66,7 +67,10 @@ internal sealed class WorkspaceInputState
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                AddTreeInputs(sweepRoot, paths, inventoryErrors, cancellationToken);
+                if (scanSourceTrees)
+                {
+                    AddTreeInputs(sweepRoot, paths, inventoryErrors, cancellationToken);
+                }
             }
             catch (Exception exception) when (IsFileSystemException(exception))
             {

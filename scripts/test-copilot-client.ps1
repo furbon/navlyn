@@ -64,6 +64,7 @@ function Invoke-Process {
     $info.Environment['COPILOT_HOME'] = (Join-Path $script:rootPath 'copilot-home')
     $info.Environment['COPILOT_CACHE_HOME'] = (Join-Path $script:rootPath 'copilot-cache')
     $info.Environment['DOTNET_CLI_HOME'] = (Join-Path $script:rootPath 'dotnet-home')
+    $info.Environment['DOTNET_ADD_GLOBAL_TOOLS_TO_PATH'] = 'false'
     $info.Environment['NUGET_PACKAGES'] = (Join-Path $script:rootPath 'nuget-packages')
     $info.Environment['NUGET_HTTP_CACHE_PATH'] = (Join-Path $script:rootPath 'nuget-http-cache')
     foreach ($argument in $Arguments) { [void]$info.ArgumentList.Add($argument) }
@@ -110,7 +111,7 @@ Assert-NoReparsePoint $manifestPath
 $manifestDoc = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 if ($manifestDoc.schemaVersion -cne 'navlyn.release-pack.v1' -or @($manifestDoc.packages).Count -ne 2) { throw 'The package manifest has an unsupported shape.' }
 $package = @($manifestDoc.packages | Where-Object { $_.id -ceq 'navlyn-mcp' })
-if ($package.Count -ne 1 -or $package[0].version -cne '0.8.3') { throw 'The manifest must identify exactly one locked navlyn-mcp 0.8.3 package.' }
+if ($package.Count -ne 1 -or $package[0].version -cne '0.8.4') { throw 'The manifest must identify exactly one locked navlyn-mcp 0.8.4 package.' }
 $packagePath = Resolve-InputPath ([string]$package[0].path)
 if (!(Test-Path -LiteralPath $packagePath -PathType Leaf)) { throw 'The manifest package file was not found.' }
 Assert-NoReparsePoint $packagePath

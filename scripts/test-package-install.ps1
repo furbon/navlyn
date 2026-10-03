@@ -319,16 +319,10 @@ else {
 [System.IO.Directory]::CreateDirectory($PackageOutput) | Out-Null
 [System.IO.Directory]::CreateDirectory($ToolRoot) | Out-Null
 
-$packArgs = @('pack', 'navlyn/navlyn.csproj', '-c', 'Release', '-o', $PackageOutput)
-if ($NoBuild) {
-    $packArgs += '--no-build'
-}
+$packArgs = @('pack', 'navlyn/navlyn.csproj', '-c', 'Release', '-o', $PackageOutput, '--no-build')
 Invoke-Checked -Name 'pack navlyn' -FilePath 'dotnet' -Arguments $packArgs
 
-$mcpPackArgs = @('pack', 'navlyn.Mcp/navlyn.Mcp.csproj', '-c', 'Release', '-o', $PackageOutput)
-if ($NoBuild) {
-    $mcpPackArgs += '--no-build'
-}
+$mcpPackArgs = @('pack', 'navlyn.Mcp/navlyn.Mcp.csproj', '-c', 'Release', '-o', $PackageOutput, '--no-build')
 Invoke-Checked -Name 'pack navlyn-mcp' -FilePath 'dotnet' -Arguments $mcpPackArgs
 
 $navlynVersion = Get-ProjectVersion -ProjectPath (Join-Path $RepoRoot 'navlyn/navlyn.csproj')

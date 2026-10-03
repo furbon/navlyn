@@ -266,7 +266,7 @@ Common options:
 - `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, `.vbproj`, or `auto`.
 - `--workspace-root-policy <mode>`: optional `repo-relative`, `allow-listed`, or `all` override.
 - `--query <text>`: required fuzzy symbol query.
-- `--assume-kind <kind>`: optional repeated Roslyn symbol kind used for ranking.
+- `--assume-kind <kind>`: optional repeated, case-sensitive Roslyn symbol kind used for ranking. Use `NamedType` for classes, interfaces, structs, enums, or delegates, and `Method`, `Property`, `Field`, or `Event` for members. Invalid kinds report the supported values on stderr; hints rank candidates rather than filtering them.
 - `--match smart|exact|contains|regex`: defaults to `smart`.
 - `--case-sensitive`: makes name matching case-sensitive where applicable.
 - `--candidate-id <id>`: selects a candidate returned by a previous fuzzy command. Supported by fuzzy workflows such as `resolve-target`, `where-used`, `about`, `related`, `impact`, `entrypoints`, and `context-pack`; exact source-navigation commands such as `symbol-at`, `symbol-info`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, and `calls`; test/DI/application-domain commands such as `tests-for-symbol`, `where-registered`, `di-impact`, `where-handled`, `message-flow`, and `entity-impact`; not supported by `find`.

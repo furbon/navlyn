@@ -49,7 +49,7 @@ function Exercise([string]$Name, [string[]]$Prior, [hashtable]$Behavior, [switch
         $directory = Join-Path $root ([guid]::NewGuid().ToString('N')); [IO.Directory]::CreateDirectory($directory) | Out-Null
         $path = Join-Path $directory 'navlyn-publication-journal.json'
         $journal = New-NavlynPublicationJournal $identity 101 1 @{ runId = 100; runAttempt = 1; sha256 = 'f' * 64 }
-        $state = @{ pushes = [Collections.Generic.List[string]]::new(); counts = @{} }
+        $state = @{ pushes = [Collections.Generic.List[string]]::new(); counts = @{}; seconds = 0; pushedAt = @{} }
         $publicExact = $exact
         $observe = {
             param($Package, $File)
@@ -62,6 +62,7 @@ function Exercise([string]$Name, [string[]]$Prior, [hashtable]$Behavior, [switch
             if ($spec -ceq 'mismatch') { return @{ status = 'present'; signatureTrusted = $true; canonicalMatch = $false; signedSha256 = 'd' * 64; signatureFingerprint = 'e' * 64 } }
             if ($spec -ceq 'signature') { return @{ status = 'present'; signatureTrusted = $false; canonicalMatch = $true; signedSha256 = 'd' * 64; signatureFingerprint = 'e' * 64 } }
             if ($spec -cin @('push', 'acceptedFailure') -and $state.pushes.Contains($id)) { return $publicExact }
+            if ($spec -ceq 'delayed' -and $state.pushes.Contains($id) -and $state.seconds - $state.pushedAt[$id] -ge 45) { return $publicExact }
             return @{ status = 'absent' }
         }.GetNewClosure()
         $push = {
@@ -72,10 +73,14 @@ function Exercise([string]$Name, [string[]]$Prior, [hashtable]$Behavior, [switch
             if (!$packageState.intentUtc) { throw 'Intent not durable before push callback.' }
             if ((Get-FileHash -LiteralPath $File -Algorithm SHA256).Hash.ToLowerInvariant() -cne $Package.sha256) { throw 'Push bytes changed' }
             $state.pushes.Add($Package.id)
+            $state.pushedAt[$Package.id] = $state.seconds
             if ($Behavior[$Package.id] -ceq 'throw') { throw 'synthetic timeout after acceptance uncertainty' }
             @{ exitCode = if ($Behavior[$Package.id] -ceq 'acceptedFailure') { 1 } else { 0 } }
         }.GetNewClosure()
-        try { Invoke-NavlynExactPublication $manifest $inputRoot $journal $path $Prior $observe $push -PollSeconds 0 }
+        $wait = { param($Seconds) $state.seconds += $Seconds }.GetNewClosure()
+        $now = { [DateTime]::new(2026, 10, 3).AddSeconds($state.seconds) }.GetNewClosure()
+        $pollSeconds = if ('delayed' -cin $Behavior.Values) { 600 } else { 0 }
+        try { Invoke-NavlynExactPublication $manifest $inputRoot $journal $path $Prior $observe $push -PollSeconds $pollSeconds -Wait $wait -Now $now }
         finally {
             $saved = Read-NavlynPublicationJson $path
             foreach ($id in $state.pushes) { $s = @($saved.packages | Where-Object { $_.id -ceq $id })[0]; if (!$s.intentUtc -or $s.state -ceq 'notAttempted') { throw 'Push intent was lost on failure.' } }
@@ -83,7 +88,7 @@ function Exercise([string]$Name, [string[]]$Prior, [hashtable]$Behavior, [switch
             $expectedPushes = if ($Behavior.navlyn -ceq 'throw' -or $Behavior.navlyn -ceq 'absent' -and 'navlyn' -cnotin $Prior) { 1 }
                 elseif ($Behavior.'navlyn-mcp' -ceq 'throw') { 2 }
                 elseif ($Reject) { 0 }
-                else { @($Behavior.Values | Where-Object { $_ -cin @('push', 'acceptedFailure') }).Count }
+                else { @($Behavior.Values | Where-Object { $_ -cin @('push', 'acceptedFailure', 'delayed') }).Count }
             if ($state.pushes.Count -ne $expectedPushes) { throw "Expected $expectedPushes exact pushes; observed $($state.pushes.Count)." }
             if (@($state.pushes | Select-Object -Unique).Count -ne $state.pushes.Count) { throw 'An ID was repushed within the attempt.' }
             if (!$Reject -and $saved.phase -cne 'complete') { throw 'Successful publication did not complete the retained journal.' }
@@ -93,6 +98,7 @@ function Exercise([string]$Name, [string[]]$Prior, [hashtable]$Behavior, [switch
     $results.Add(@{ name = $Name; passed = $passed; expected = if ($Reject) { 'reject' } else { 'accept' }; error = $exception; elapsedMs = ([DateTime]::UtcNow - $started).TotalMilliseconds })
 }
 Exercise 'zero present: both exact retained inputs and intent before every push' @() @{ navlyn = 'push'; 'navlyn-mcp' = 'push' }
+Exercise 'both packages indexed after 45 seconds complete in one attempt without repush' @() @{ navlyn = 'delayed'; 'navlyn-mcp' = 'delayed' }
 Exercise 'one present: exact skip then second retained push' @() @{ navlyn = 'present'; 'navlyn-mcp' = 'push' }
 Exercise 'two present: both exact verified skips' @('navlyn', 'navlyn-mcp') @{ navlyn = 'present'; 'navlyn-mcp' = 'present' }
 Exercise 'first push accepted despite failure exit: verify then continue' @() @{ navlyn = 'acceptedFailure'; 'navlyn-mcp' = 'push' }
