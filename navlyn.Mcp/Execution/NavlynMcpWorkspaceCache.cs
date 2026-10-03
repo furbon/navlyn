@@ -252,7 +252,11 @@ internal sealed class NavlynMcpWorkspaceCache(NavlynMcpServerOptions options) : 
     {
         return WorkspaceInputState.Capture(
             spec.Root, spec.SelectedInputs, spec.LoadedInputs, spec.AdditionalRoots, cancellationToken,
-            spec.ProjectDirectories);
+            spec.ProjectDirectories,
+            // An explicit workspace starts with its selected file and ancestor configuration.
+            // The first load discovers project roots; the stable-load retry then inventories them.
+            // Sweeping the solution directory before that discovery would include unrelated artifacts.
+            scanSourceTrees: spec.LoadedInputs.Count > 0 || spec.SelectedInputs.Count == 0);
     }
 
     private static bool IsInspectable(WorkspaceInputState state)

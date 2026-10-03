@@ -78,6 +78,7 @@ function Invoke-SetupGlobalDotnet([string[]]$Arguments,[string]$LogRoot) {
     }
     $psi.Environment['DOTNET_CLI_UI_LANGUAGE']='en-US';$psi.Environment['DOTNET_NOLOGO']='1';$psi.Environment['DOTNET_CLI_TELEMETRY_OPTOUT']='1';$psi.Environment['DOTNET_SKIP_FIRST_TIME_EXPERIENCE']='1'
     if($env:NAVLYN_SETUP_TEST_ROOT){
+        $psi.Environment['DOTNET_ADD_GLOBAL_TOOLS_TO_PATH']='false'
         $boundary=[IO.Path]::GetFullPath($env:NAVLYN_SETUP_TEST_ROOT).TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar
         foreach($name in @('USERPROFILE','DOTNET_CLI_HOME','NUGET_PACKAGES','LOCALAPPDATA','APPDATA')){
             if(!$psi.Environment.ContainsKey($name) -or ![IO.Path]::IsPathFullyQualified($psi.Environment[$name]) -or ![IO.Path]::GetFullPath($psi.Environment[$name]).StartsWith($boundary,(Get-SetupPathComparison))){throw "Global fixture environment escaped its reviewed root: $name"}
@@ -662,9 +663,10 @@ if ($Action -in @('Undo','Remove') -and (Test-Path -LiteralPath $configPath) -an
             $cachePathXml=[Security.SecurityElement]::Escape((Join-Path $stagePath '.nuget'))
             Write-SetupAtomicText $configFile "<?xml version=`"1.0`" encoding=`"utf-8`"?><configuration><packageSources><clear/>$sourceXml</packageSources><config><add key=`"globalPackagesFolder`" value=`"$cachePathXml`"/></config></configuration>" $false
             $arguments=@('tool','install','navlyn-mcp','--tool-path',$stagePath,'--version',$Version,'--framework','net8.0','--configfile',$configFile,'--verbosity','quiet')
-            $oldCliHome=$env:DOTNET_CLI_HOME;$oldPackages=$env:NUGET_PACKAGES;$oldFirst=$env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE;$oldTelemetry=$env:DOTNET_CLI_TELEMETRY_OPTOUT;$oldLocal=$env:LOCALAPPDATA;$oldRoam=$env:APPDATA;$oldNoLogo=$env:DOTNET_NOLOGO
+            $oldCliHome=$env:DOTNET_CLI_HOME;$oldPackages=$env:NUGET_PACKAGES;$oldFirst=$env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE;$oldTelemetry=$env:DOTNET_CLI_TELEMETRY_OPTOUT;$oldLocal=$env:LOCALAPPDATA;$oldRoam=$env:APPDATA;$oldNoLogo=$env:DOTNET_NOLOGO;$oldAddToolsPath=$env:DOTNET_ADD_GLOBAL_TOOLS_TO_PATH
             $env:DOTNET_CLI_HOME=Join-Path $stagePath '.dotnet-home';$env:NUGET_PACKAGES=Join-Path $stagePath '.nuget';$env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE='1';$env:DOTNET_CLI_TELEMETRY_OPTOUT='1';$env:LOCALAPPDATA=Join-Path $stagePath '.localappdata';$env:APPDATA=Join-Path $stagePath '.appdata';$env:DOTNET_NOLOGO='1'
-            try { $installOutput=& $dotnet.Source @arguments 2>&1;$installExit=$LASTEXITCODE } finally { $env:DOTNET_CLI_HOME=$oldCliHome;$env:NUGET_PACKAGES=$oldPackages;$env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE=$oldFirst;$env:DOTNET_CLI_TELEMETRY_OPTOUT=$oldTelemetry;$env:LOCALAPPDATA=$oldLocal;$env:APPDATA=$oldRoam;$env:DOTNET_NOLOGO=$oldNoLogo }
+            $env:DOTNET_ADD_GLOBAL_TOOLS_TO_PATH='false'
+            try { $installOutput=& $dotnet.Source @arguments 2>&1;$installExit=$LASTEXITCODE } finally { $env:DOTNET_CLI_HOME=$oldCliHome;$env:NUGET_PACKAGES=$oldPackages;$env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE=$oldFirst;$env:DOTNET_CLI_TELEMETRY_OPTOUT=$oldTelemetry;$env:LOCALAPPDATA=$oldLocal;$env:APPDATA=$oldRoam;$env:DOTNET_NOLOGO=$oldNoLogo;$env:DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=$oldAddToolsPath }
             if($installExit -ne 0){throw "dotnet tool install failed with exit code $installExit. $($installOutput -join ' ')"}
             $executable=Join-Path $stagePath $(if($IsWindows){'navlyn-mcp.exe'}else{'navlyn-mcp'})
             if(!(Test-Path -LiteralPath $executable -PathType Leaf)){throw 'Installed MCP executable is missing.'}

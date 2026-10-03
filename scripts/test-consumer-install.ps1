@@ -138,6 +138,7 @@ function Invoke-Process {
     $info.Environment['TMP'] = Join-Path $script:RootPath 'transient-reports'
     $info.Environment['DOTNET_NOLOGO'] = '1'
     $info.Environment['DOTNET_CLI_TELEMETRY_OPTOUT'] = '1'
+    $info.Environment['DOTNET_ADD_GLOBAL_TOOLS_TO_PATH'] = 'false'
     $info.Environment['PATH'] = Get-ConsumerPath
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $info
@@ -308,7 +309,7 @@ $script:WorkspacePath = Join-Path $script:RootPath 'consumer-workspace'
 $markerName = '.navlyn-consumer-install-owner.json'
 $packages = Get-ManifestPackages -Path $Manifest
 $rollbackPackages = if ([string]::IsNullOrWhiteSpace($RollbackManifest)) { $null } else { Get-ManifestPackages -Path $RollbackManifest }
-if ($packages.navlyn.version -cne '0.8.3') { throw 'Current package manifest must identify version 0.8.3.' }
+if ($packages.navlyn.version -cne '0.8.4') { throw 'Current package manifest must identify version 0.8.4.' }
 if ($null -ne $rollbackPackages -and ($rollbackPackages.navlyn.version -eq $packages.navlyn.version -or $rollbackPackages['navlyn-mcp'].version -ne $rollbackPackages.navlyn.version)) { throw 'Rollback manifest must contain a different synchronized package version.' }
 
 $report = [ordered]@{

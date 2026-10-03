@@ -49,12 +49,12 @@ foreach ($mode in @('missing-sdk', 'missing-client')) {
                 LOCALAPPDATA = (Join-Path $caseRoot 'local'); APPDATA = (Join-Path $caseRoot 'roaming')
                 XDG_DATA_HOME = (Join-Path $caseRoot 'local'); DOTNET_CLI_HOME = (Join-Path $caseRoot 'cli-home')
                 NUGET_PACKAGES = (Join-Path $caseRoot 'packages'); TEMP = (Join-Path $caseRoot 'temp'); TMP = (Join-Path $caseRoot 'temp')
-                DOTNET_CLI_TELEMETRY_OPTOUT = '1'; DOTNET_NOLOGO = '1'; PATH = $bin
+                DOTNET_CLI_TELEMETRY_OPTOUT = '1'; DOTNET_NOLOGO = '1'; DOTNET_ADD_GLOBAL_TOOLS_TO_PATH = 'false'; PATH = $bin
             }
             if ($IsWindows) { $environment.SYSTEMROOT = $env:SYSTEMROOT; $environment.WINDIR = $env:WINDIR; $environment.COMSPEC = $env:COMSPEC; $environment.PATHEXT = '.COM;.EXE;.BAT;.CMD' }
             if ($mode -eq 'missing-client') { $environment.PATH = $sdkRoot; $environment.DOTNET_ROOT = $sdkRoot }
             foreach ($entry in $environment.GetEnumerator()) { $start.Environment[$entry.Key] = $entry.Value }
-            foreach ($argument in @('-NoProfile', '-File', $helper, '-Workspace', $workspace, '-WorkspaceFile', $project, '-Version', '0.8.3', '-Target', $target)) { $start.ArgumentList.Add($argument) }
+            foreach ($argument in @('-NoProfile', '-File', $helper, '-Workspace', $workspace, '-WorkspaceFile', $project, '-Version', '0.8.4', '-Target', $target)) { $start.ArgumentList.Add($argument) }
             if ($apply) { $start.ArgumentList.Add('-Apply') }
             $before = Get-ProtectedFiles $caseRoot
             $process = [Diagnostics.Process]::Start($start); $out = $process.StandardOutput.ReadToEndAsync(); $err = $process.StandardError.ReadToEndAsync()

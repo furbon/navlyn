@@ -255,7 +255,7 @@ try {
 $report = [ordered]@{
     schema = 'navlyn.routing-skill-install-test.v1'
     status = $(if ($null -eq $failure) { 'passed' } else { 'failed' })
-    releaseVersion = '0.8.3'
+    releaseVersion = '0.8.4'
     layouts = @($results)
     cleanup = $(if (Test-Path -LiteralPath $tempRoot) { 'failed' } else { 'passed' })
     failure = $failure

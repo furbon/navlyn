@@ -487,6 +487,43 @@ public sealed class NavlynMcpWorkspaceCacheTests
     }
 
     [Fact]
+    public async Task SolutionCache_FirstLoad_DoesNotInspectUnrelatedArtifactLinks()
+    {
+        using TemporaryDirectory directory = TemporaryDirectory.Create();
+        using TemporaryDirectory external = TemporaryDirectory.Create();
+        string projectRoot = Path.Combine(directory.Path, "src");
+        Directory.CreateDirectory(projectRoot);
+        CreateProject(projectRoot);
+        string solutionPath = Path.Combine(directory.Path, "Fixture.slnx");
+        await File.WriteAllTextAsync(solutionPath, "<Solution><Project Path=\"src/Fixture.csproj\" /></Solution>");
+        await File.WriteAllTextAsync(Path.Combine(projectRoot, "Alpha.cs"), "namespace Fixture; public sealed class Alpha { }\n");
+        string artifacts = Path.Combine(directory.Path, "artifacts");
+        Directory.CreateDirectory(artifacts);
+        string link = Path.Combine(artifacts, "unrelated");
+        if (OperatingSystem.IsWindows())
+        {
+            CreateJunction(link, external.Path);
+        }
+        else
+        {
+            Directory.CreateSymbolicLink(link, external.Path);
+        }
+
+        try
+        {
+            using NavlynMcpWorkspaceCache cache = new(CreateOptions(solutionPath));
+            NavlynMcpWorkspaceCacheResult result = await cache.GetAsync(CancellationToken.None);
+            Assert.Null(result.Error);
+            await using NavlynMcpWorkspaceCache.WorkspaceLease lease = Assert.IsType<NavlynMcpWorkspaceCache.WorkspaceLease>(result.Lease);
+            Assert.Contains(lease.CachedWorkspace.Workspace.Solution.Projects.SelectMany(project => project.Documents), document => document.Name == "Alpha.cs");
+        }
+        finally
+        {
+            Directory.Delete(link);
+        }
+    }
+
+    [Fact]
     public async Task DirectCall_FailsClosedWhenAReparseDirectoryAppearsAfterInitialSuccess()
     {
         if (!OperatingSystem.IsWindows())

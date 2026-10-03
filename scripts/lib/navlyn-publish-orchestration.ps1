@@ -4,8 +4,9 @@ Set-StrictMode -Version Latest
 function Invoke-NavlynExactPublication {
     param([Collections.IDictionary]$Manifest, [string]$InputRoot, [Collections.IDictionary]$Journal,
         [string]$JournalPath, [string[]]$PriorIntentIds, [scriptblock]$Observe, [scriptblock]$Push,
-        [scriptblock]$Wait = { param($Seconds) Start-Sleep -Seconds $Seconds }, [int]$PollSeconds = 30)
-    if ($PollSeconds -lt 0 -or $PollSeconds -gt 60) { throw 'Publication polling must be bounded at 60 seconds.' }
+        [scriptblock]$Wait = { param($Seconds) Start-Sleep -Seconds $Seconds }, [int]$PollSeconds = 600,
+        [scriptblock]$Now = { [DateTime]::UtcNow })
+    if ($PollSeconds -lt 0 -or $PollSeconds -gt 900) { throw 'Publication polling must be bounded at 900 seconds.' }
     if ($Journal.phase -cne 'initialized') { throw 'Only a new retained attempt may execute publication.' }
     # Initialize durably even if observation, credentials or the first push fails.
     Write-NavlynPublicationJournal $JournalPath $Journal
@@ -27,7 +28,6 @@ function Invoke-NavlynExactPublication {
             if ((Get-NavlynPublicationHash $file) -cne $entry.sha256) { throw 'Retained package changed before push.' }
             Assert-NavlynPublicationPackageIdentity $file $id $entry.version $Manifest.sourceSha
             Set-NavlynPublicationIntent $Journal $id $JournalPath
-            $started = [DateTime]::UtcNow
             try {
                 $result = & $Push $entry $file
                 $state.result = $result
@@ -39,12 +39,15 @@ function Invoke-NavlynExactPublication {
                 throw
             }
             # A failed/timed-out push may have been accepted. Observe it, never repeat it.
+            $started = & $Now
             do {
                 $observed = & $Observe $entry $file
                 $after = Get-NavlynPublicationDecision $id $true $observed
                 if ($after -ceq 'skipExactPublic') { break }
-                if (([DateTime]::UtcNow - $started).TotalSeconds -ge $PollSeconds) { break }
-                & $Wait ([Math]::Min(5, $PollSeconds))
+                $remaining = $PollSeconds - ((& $Now) - $started).TotalSeconds
+                if ($remaining -le 0) { break }
+                [Console]::Error.WriteLine("Waiting for NuGet indexing of $id $($entry.version) ($([int]$remaining)s remaining).")
+                & $Wait ([Math]::Min(15, $remaining))
             } while ($true)
             if ($after -cne 'skipExactPublic') {
                 $state.state = 'indeterminate'

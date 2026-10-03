@@ -3,13 +3,13 @@
   "isRoot": true,
   "tools": {
     "navlyn": {
-      "version": "0.8.3",
+      "version": "0.8.4",
       "commands": [
         "navlyn"
       ]
     },
     "navlyn-mcp": {
-      "version": "0.8.3",
+      "version": "0.8.4",
       "commands": [
         "navlyn-mcp"
       ]

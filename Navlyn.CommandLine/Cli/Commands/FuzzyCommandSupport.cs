@@ -12,7 +12,7 @@ internal static class FuzzyCommandSupport
     {
         return new Option<string[]>("--assume-kind")
         {
-            Description = "Assume one or more symbol kinds when ranking fuzzy candidates.",
+            Description = "Roslyn symbol kind hints, e.g. NamedType (class/interface/struct), Method, Property, Field, or Event.",
             AllowMultipleArgumentsPerToken = true
         };
     }
@@ -354,10 +354,15 @@ internal static class FuzzyCommandSupport
 
             if (!Enum.GetNames<SymbolKind>().Contains(kind, StringComparer.Ordinal))
             {
-                return $"Unknown symbol kind: {kind}.";
+                return UnknownKindMessage(kind);
             }
         }
 
         return null;
+    }
+
+    internal static string UnknownKindMessage(string kind)
+    {
+        return $"Unknown symbol kind: {kind}. Use NamedType for classes, interfaces, structs, enums, or delegates. Supported kinds (case-sensitive): {string.Join(", ", Enum.GetNames<SymbolKind>())}.";
     }
 }

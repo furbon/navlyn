@@ -2,6 +2,13 @@
 
 All notable public release changes for Navlyn are tracked here.
 
+## 0.8.4
+
+- Explain valid Roslyn symbol kinds in CLI/MCP guidance and invalid-kind errors, including `NamedType` for classes and interfaces.
+- Fix first MCP loads of explicit workspaces being rejected because unrelated artifact directories contain links; freshness checks still track loaded projects and source.
+- Wait up to ten minutes for NuGet indexing in the existing publication attempt, retaining exact-package verification and recovery.
+- Prevent isolated setup and consumer checks from adding temporary .NET tool paths to the user's persistent PATH, and reuse the release build in package smoke.
+
 ## 0.8.3
 
 - Ambiguous `target` results now offer an exact `candidateId` selection action for each visible candidate instead of suggesting a broader search.
