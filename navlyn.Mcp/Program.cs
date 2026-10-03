@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
@@ -10,6 +11,15 @@ using Navlyn.Symbols;
 
 if (await ExternalMemberWorker.RunIfRequestedAsync(args, CancellationToken.None))
 {
+    return 0;
+}
+
+if (args is ["--version"])
+{
+    Assembly assembly = typeof(NavlynMcpServerOptions).Assembly;
+    Console.Out.WriteLine(
+        assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ??
+        assembly.GetName().Version?.ToString());
     return 0;
 }
 

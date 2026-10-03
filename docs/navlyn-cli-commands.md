@@ -362,7 +362,7 @@ Result shape:
 }
 ```
 
-When query mode cannot safely select one target, `selectedTarget` and `candidateId` are omitted, `ambiguityReason` is populated, limited `candidates` are returned, and `ambiguitySummary` explains why the agent should narrow or ask before reading/editing source. `ambiguitySummary.reasonCodes` can include values such as `ambiguous-candidates`, `multiple-projects`, `multiple-target-frameworks`, `same-file-duplicates`, `test-project-candidates`, `generated-candidates`, `metadata-candidates`, and `candidate-limit-reached`. Treat these as fail-closed hints: add `--project`, use a source position, ask the user, or select an explicit returned `candidateId`.
+When query mode cannot safely select one target, `selectedTarget` and `candidateId` are omitted, `ambiguityReason` is populated, limited `candidates` are returned, and `ambiguitySummary` explains why the agent should narrow or ask before reading/editing source. `ambiguitySummary.reasonCodes` can include values such as `ambiguous-candidates`, `multiple-projects`, `multiple-target-frameworks`, `same-file-duplicates`, `test-project-candidates`, `generated-candidates`, `metadata-candidates`, and `candidate-limit-reached`. The `recommendedNextActions` for visible ambiguous candidates provide exact `candidateId` selection calls. Treat these as choices, not instructions to select the first candidate: add `--project`, use a source position, ask the user, or select one explicit returned `candidateId`.
 
 Ambiguous excerpt:
 

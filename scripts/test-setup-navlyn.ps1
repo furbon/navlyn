@@ -108,7 +108,7 @@ $fixture = Join-Path $fixtureBase "navlyn-setup-plan-$([guid]::NewGuid().ToStrin
 Set-Content -LiteralPath (Join-Path $fixture '.navlyn-owned-test-fixture') -Value 'owned' -NoNewline
 try {
     $snapshot = (Get-ChildItem -LiteralPath $fixture -Force | Measure-Object).Count
-    $output = & (Join-Path $PSScriptRoot 'setup-navlyn.ps1') -Workspace $fixture -Version 0.8.2 2>&1 | Out-String
+    $output = & (Join-Path $PSScriptRoot 'setup-navlyn.ps1') -Workspace $fixture -Version 0.8.3 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) { $failures.Add("Plan invocation failed: $output") }
     Assert ((Get-ChildItem -LiteralPath $fixture -Force | Measure-Object).Count -eq $snapshot) 'Plan wrote into the selected workspace.'
     Assert (!(Test-Path -LiteralPath (Join-Path $fixture '.vscode'))) 'Plan created VS Code config directory.'
@@ -123,7 +123,7 @@ try {
     $fakeMcpShim=Join-Path $fakeGlobalRoot $(if($IsWindows){'navlyn-mcp.exe'}else{'navlyn-mcp'})
     $fakeCliShim=Join-Path $fakeGlobalRoot $(if($IsWindows){'navlyn.exe'}else{'navlyn'})
     [IO.File]::WriteAllBytes($fakeMcpShim,[byte[]](1,2,3,4));[IO.File]::WriteAllBytes($fakeCliShim,[byte[]](5,6,7,8));$env:USERPROFILE=$fakeUserProfile;$env:DOTNET_CLI_HOME=$fakeCliHome
-    $globalPlanOutput = & (Join-Path $PSScriptRoot 'setup-navlyn.ps1') -Workspace $fixture -Target Global -Version 0.8.2 2>&1 | Out-String
+    $globalPlanOutput = & (Join-Path $PSScriptRoot 'setup-navlyn.ps1') -Workspace $fixture -Target Global -Version 0.8.3 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) { $failures.Add("Global Plan invocation failed: $globalPlanOutput") }
     $globalPlan = $globalPlanOutput | ConvertFrom-Json
     Assert ($globalPlan.target -eq 'Global' -and $globalPlan.packageTarget -eq $fakeGlobalRoot -and $globalPlan.config -eq (Join-Path $fixture '.vscode/mcp.json')) 'Global Plan must identify the DOTNET_CLI_HOME global package target and workspace config separately.'
@@ -131,7 +131,7 @@ try {
     Assert ($globalPlan.effects.writes -eq $false -and $globalPlan.effects.network -eq $false -and $globalPlan.effects.installation -eq $false -and $globalPlan.effects.clientLaunch -eq $false) 'Global Plan must report no effects.'
     $globalApplyError = $null
     $shimHashBefore=(Get-FileHash -LiteralPath $fakeMcpShim).Hash
-    try { & (Join-Path $PSScriptRoot 'setup-navlyn.ps1') -Workspace $fixture -Target Global -Version 0.8.2 -Feed $fixture -Apply 2>&1 | Out-Null } catch { $globalApplyError = $_.Exception.Message }
+    try { & (Join-Path $PSScriptRoot 'setup-navlyn.ps1') -Workspace $fixture -Target Global -Version 0.8.3 -Feed $fixture -Apply 2>&1 | Out-Null } catch { $globalApplyError = $_.Exception.Message }
     $globalApplyRejected = $globalApplyError -like '*Exact local package*missing*' -or $globalApplyError -like '*VS Code command-line client was not found*' -or $globalApplyError -like '*A .NET SDK is required*'
     Assert $globalApplyRejected "Global Apply must fail before SDK/package mutation on a missing prerequisite or exact feed input. Actual: $globalApplyError"
     Assert (!(Test-Path -LiteralPath (Join-Path $fixture '.vscode'))) 'Rejected Global Apply changed workspace config.'
@@ -224,9 +224,9 @@ try {
                     foreach($path in @($actualProfile,$actualCliHome,$actualPackages,$actualRoaming)){[IO.Directory]::CreateDirectory($path)|Out-Null}
                     $actualGlobalRoot=Join-Path $actualCliHome '.dotnet/tools';[IO.Directory]::CreateDirectory($actualGlobalRoot)|Out-Null
                     $foreignShim=Join-Path $actualGlobalRoot $(if($IsWindows){'navlyn.exe'}else{'navlyn'});[IO.File]::WriteAllBytes($foreignShim,[byte[]](9,8,7,6));$foreignHash=(Get-FileHash -LiteralPath $foreignShim).Hash
-                    $candidatePackage=Join-Path ([IO.Path]::GetFullPath($CandidateFeed)) 'navlyn-mcp.0.8.2.nupkg'
-                    if(!(Test-Path -LiteralPath $candidatePackage -PathType Leaf)){throw 'Exact early 0.8.2 package is required for global lifecycle verification.'}
-                    Copy-Item -LiteralPath $candidatePackage -Destination (Join-Path $feed 'navlyn-mcp.0.8.2.nupkg')
+                    $candidatePackage=Join-Path ([IO.Path]::GetFullPath($CandidateFeed)) 'navlyn-mcp.0.8.3.nupkg'
+                    if(!(Test-Path -LiteralPath $candidatePackage -PathType Leaf)){throw 'Exact early 0.8.3 package is required for global lifecycle verification.'}
+                    Copy-Item -LiteralPath $candidatePackage -Destination (Join-Path $feed 'navlyn-mcp.0.8.3.nupkg')
                     function GlobalFiles {
                         $map=[ordered]@{};foreach($file in @(Get-ChildItem -LiteralPath $actualGlobalRoot -File -Recurse -Force)){$map[$file.FullName.Substring($actualGlobalRoot.Length).Replace('\','/')]=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash};return $map
                     }
@@ -240,8 +240,8 @@ try {
                     $idempotent=& (Join-Path $PSScriptRoot 'setup-navlyn.ps1') @globalCommon|Out-String|ConvertFrom-Json
                     Assert ($idempotent.result-eq 'Unchanged') 'Same-version global install was not idempotent.'
                     SameGlobalFiles $initialGlobalFiles 'Same version changed global bytes.'
-                    $updated=& (Join-Path $PSScriptRoot 'setup-navlyn.ps1') -Workspace $workspace -WorkspaceFile $project -Target Global -Action Update -Version 0.8.2 -Feed $feed -Apply|Out-String|ConvertFrom-Json
-                    Assert ($updated.packageAction-eq 'Updated' -and $updated.version-eq '0.8.2') 'Actual global update did not reach the exact early candidate.'
+                    $updated=& (Join-Path $PSScriptRoot 'setup-navlyn.ps1') -Workspace $workspace -WorkspaceFile $project -Target Global -Action Update -Version 0.8.3 -Feed $feed -Apply|Out-String|ConvertFrom-Json
+                    Assert ($updated.packageAction-eq 'Updated' -and $updated.version-eq '0.8.3') 'Actual global update did not reach the exact early candidate.'
                     $updatedFiles=GlobalFiles;$updatedConfigHash=(Get-FileHash -LiteralPath $config).Hash
                     # Recreate the interruption after journal commit but before pending cleanup.
                     # Hash the journal in the producer's ordered field sequence, not its parsed file order.
@@ -259,19 +259,19 @@ try {
                     SameGlobalFiles $updatedFiles 'Completed pending recovery incorrectly rolled back a committed update.'
                     Assert ((Get-FileHash -LiteralPath $committedJournalFile.FullName).Hash-ceq $committedJournalHash) 'Completed pending recovery rewrote the committed ownership journal.'
                     Assert ((Get-FileHash -LiteralPath $config).Hash-ceq $updatedConfigHash) 'Completed pending recovery changed committed config.'
-                    # Synthetic feed: package identity 0.8.3 retains the 0.8.2 MCP binary.
+                    # Synthetic feed: package identity 0.8.4 retains the 0.8.3 MCP binary.
                     # It must install successfully, then fail initialize-version verification and roll back.
                     $badFeed=Join-Path $fixture 'wrong-protocol-feed';[IO.Directory]::CreateDirectory($badFeed)|Out-Null
-                    $badPackage=Join-Path $badFeed 'navlyn-mcp.0.8.3.nupkg';Copy-Item -LiteralPath $candidatePackage -Destination $badPackage
+                    $badPackage=Join-Path $badFeed 'navlyn-mcp.0.8.4.nupkg';Copy-Item -LiteralPath $candidatePackage -Destination $badPackage
                     $badZip=[IO.Compression.ZipFile]::Open($badPackage,[IO.Compression.ZipArchiveMode]::Update)
                     try{
                         $badNuspec=$badZip.GetEntry('navlyn-mcp.nuspec');$reader=[IO.StreamReader]::new($badNuspec.Open());try{$badText=$reader.ReadToEnd()}finally{$reader.Dispose()}
-                        if(!$badText.Contains('<version>0.8.2</version>')){throw 'Synthetic rollback package has unexpected source metadata.'}
-                        $badNuspec.Delete();$replacement=$badZip.CreateEntry('navlyn-mcp.nuspec');$writer=[IO.StreamWriter]::new($replacement.Open(),[Text.UTF8Encoding]::new($false));try{$writer.Write($badText.Replace('<version>0.8.2</version>','<version>0.8.3</version>'))}finally{$writer.Dispose()}
+                        if(!$badText.Contains('<version>0.8.3</version>')){throw 'Synthetic rollback package has unexpected source metadata.'}
+                        $badNuspec.Delete();$replacement=$badZip.CreateEntry('navlyn-mcp.nuspec');$writer=[IO.StreamWriter]::new($replacement.Open(),[Text.UTF8Encoding]::new($false));try{$writer.Write($badText.Replace('<version>0.8.3</version>','<version>0.8.4</version>'))}finally{$writer.Dispose()}
                         $signature=$badZip.GetEntry('.signature.p7s');if($signature){$signature.Delete()}
                     }finally{$badZip.Dispose()}
                     $rollbackJournalHash=(Get-FileHash -LiteralPath $committedJournalFile.FullName).Hash
-                    $protocolRefused=$false;try{& (Join-Path $PSScriptRoot 'setup-navlyn.ps1') -Workspace $workspace -WorkspaceFile $project -Target Global -Action Update -Version 0.8.3 -Feed $badFeed -Apply|Out-Null}catch{$protocolRefused=$_.Exception.Message-like '*MCP initialize metadata/version*'}
+                    $protocolRefused=$false;try{& (Join-Path $PSScriptRoot 'setup-navlyn.ps1') -Workspace $workspace -WorkspaceFile $project -Target Global -Action Update -Version 0.8.4 -Feed $badFeed -Apply|Out-Null}catch{$protocolRefused=$_.Exception.Message-like '*MCP initialize metadata/version*'}
                     Assert $protocolRefused 'Synthetic package did not reach the intended wrong-server-version protocol failure.'
                     SameGlobalFiles $updatedFiles 'Failed global protocol update did not restore exact prior package/shim bytes.'
                     Assert ((Get-FileHash -LiteralPath $config).Hash-ceq $updatedConfigHash) 'Failed global protocol update changed config.'
@@ -309,7 +309,7 @@ try {
                         Write-Output 'Global committed-pending/protocol-rollback/ownership-drift focused checks completed.'
                     }else{
                     $kept=& (Join-Path $PSScriptRoot 'setup-navlyn.ps1') @globalCommon|Out-String|ConvertFrom-Json
-                    Assert ($kept.result-eq 'Unchanged' -and $kept.packageAction-eq 'KeepNewer' -and $kept.version-eq '0.8.2') 'Global downgrade without consent did not keep newer.'
+                    Assert ($kept.result-eq 'Unchanged' -and $kept.packageAction-eq 'KeepNewer' -and $kept.version-eq '0.8.3') 'Global downgrade without consent did not keep newer.'
                     SameGlobalFiles $updatedFiles 'Keep newer changed global bytes.'
                     Assert ((Get-FileHash -LiteralPath $config).Hash-ceq $updatedConfigHash) 'Keep newer changed config bytes.'
                     & (Join-Path $PSScriptRoot 'setup-navlyn.ps1') @globalCommon -AllowDowngrade|Out-Null

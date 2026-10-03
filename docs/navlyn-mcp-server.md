@@ -106,7 +106,7 @@ Equivalent MCP client configuration for local development:
 }
 ```
 
-For the 0.8.2 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
+For the 0.8.3 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
 
 ## Server Options
 
@@ -118,6 +118,7 @@ For the 0.8.2 candidate, use the unique-output pack, package-contract, and isola
 - `--timeout-ms <number>`: per-tool timeout. Defaults to `120000`.
 - `--max-json-chars <number>`: maximum command JSON size accepted by the MCP wrapper. Defaults to `4000000`.
 - `--daemon-pipe <name>`: optional local `navlyn serve --pipe <name>` daemon used for `navlyn_workspace_status` and `navlyn_workspace_refresh`. If the pipe is unavailable, the in-process server falls back to its normal direct workspace path.
+- `--version`: print the installed MCP server version and exit without starting a session.
 - `--tool-profile <reader|review|edit|full>`: deprecated compatibility alias. Valid old values are accepted and ignored; Navlyn MCP now exposes one read-only tool surface. Invalid values still fail so config typos are caught. `NAVLYN_MCP_TOOL_PROFILE` is accepted with the same compatibility behavior.
 
 The server writes MCP protocol messages to stdout. Logs and diagnostics go to stderr.

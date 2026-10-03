@@ -2,6 +2,11 @@
 
 All notable public release changes for Navlyn are tracked here.
 
+## 0.8.3
+
+- Ambiguous `target` results now offer an exact `candidateId` selection action for each visible candidate instead of suggesting a broader search.
+- `navlyn-mcp --version` prints the installed server version without opening an MCP session.
+
 ## 0.8.2
 
 - Corrected selected-source paths when commands run from a nested workspace directory and synchronized first-time MSBuild registration.

@@ -22,7 +22,7 @@ public sealed class PathDisplayTests
 
         IReadOnlyList<string> candidates = PathDisplay.GetInputPathCandidates(
             "Navlyn.CommandLine/Cli/NavlynCli.cs",
-            anchorPath: null);
+            anchorPath: repoRoot);
 
         Assert.Contains(Path.Combine(repoRoot, "Navlyn.CommandLine", "Cli", "NavlynCli.cs"), candidates);
     }
@@ -34,7 +34,7 @@ public sealed class PathDisplayTests
 
         IReadOnlyList<string> candidates = PathDisplay.GetInputPathCandidates(
             @"Navlyn.CommandLine\Cli\NavlynCli.cs",
-            anchorPath: null);
+            anchorPath: repoRoot);
 
         Assert.Contains(Path.Combine(repoRoot, "Navlyn.CommandLine", "Cli", "NavlynCli.cs"), candidates);
     }

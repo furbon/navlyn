@@ -224,6 +224,7 @@ internal sealed record NavlynMcpServerOptions(
         builder.AppendLine("Usage: navlyn-mcp [--workspace <path|auto>] [options]");
         builder.AppendLine();
         builder.AppendLine("Options:");
+        builder.AppendLine("  --version                      Print the installed server version and exit.");
         builder.AppendLine("  --workspace <path|auto>        Optional navlyn.workspace.json, .code-workspace, .slnx, .sln, .csproj, or .vbproj path.");
         builder.AppendLine("                                  Defaults to auto discovery from the working directory or repository root.");
         builder.AppendLine("  --navlyn-executable <command>  Legacy external Navlyn CLI command or executable. Omit for standalone in-process execution.");

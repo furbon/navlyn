@@ -18,7 +18,7 @@
 		<RepositoryUrl>https://github.com/furbon/navlyn</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageProjectUrl>https://github.com/furbon/navlyn</PackageProjectUrl>
-		<PackageReleaseNotes>0.8.2 fixes nested-workspace source selection and MSBuild startup registration, adds a standalone VS Code setup helper, and verifies retained-artifact publication recovery.</PackageReleaseNotes>
+		<PackageReleaseNotes>0.8.3 gives ambiguous target results explicit candidate selection actions for multi-project and multi-target workspaces.</PackageReleaseNotes>
 		<Copyright>Copyright (c) 2026 furbon.tech</Copyright>
 		<NeutralLanguage>en-US</NeutralLanguage>
 		<PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
