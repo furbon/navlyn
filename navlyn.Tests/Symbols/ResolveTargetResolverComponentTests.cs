@@ -84,5 +84,14 @@ public sealed class ResolveTargetResolverComponentTests(ResolverComponentTestFix
         Assert.Contains("same-file-duplicates", result.AmbiguitySummary.ReasonCodes);
         Assert.Contains(result.AmbiguitySummary.Groups, group => group.Reason == "same-file-duplicates");
         Assert.Contains("--project", result.AmbiguitySummary.RecommendedAction, StringComparison.Ordinal);
+        Assert.Equal(result.Candidates!.Count, result.RecommendedNextActions.Count);
+        Assert.All(result.RecommendedNextActions, action =>
+        {
+            Assert.Equal("target", action.Command);
+            Assert.Equal("select-explicit-candidate", action.Reason);
+            Assert.Equal("navlyn_target", action.McpTool);
+            Assert.Contains(result.Candidates, candidate => candidate.CandidateId == action.CandidateId);
+            Assert.Equal(action.CandidateId, action.Arguments!["candidateId"]);
+        });
     }
 }

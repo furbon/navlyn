@@ -10,11 +10,11 @@ VS Code では、設定バンドルを使って計画の確認、インストー
 
 ## VS Code の設定バンドル
 
-リリースの添付ファイル `navlyn-setup-0.8.2.zip` を専用ディレクトリへ展開します。`integrity.json` にはソースのコミットと各ファイルのハッシュがあります。展開先で、次の二つのパスを実際のものに置き換えて実行します。
+リリースの添付ファイル `navlyn-setup-0.8.3.zip` を専用ディレクトリへ展開します。`integrity.json` にはソースのコミットと各ファイルのハッシュがあります。展開先で、次の二つのパスを実際のものに置き換えて実行します。
 
 ```powershell
-./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.8.2
-./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.8.2 -Apply
+./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.8.3
+./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.8.3 -Apply
 ```
 
 最初のコマンドは計画を表示します。ファイルの書き込み、パッケージのダウンロード、クライアントの起動は行いません。パス、バージョン、取得元、変更内容を確認してから適用してください。自動選択で対象が決まらない場合は、`-WorkspaceFile` に使いたい `.slnx`、`.sln`、`.csproj`、`.vbproj` を明示します。
@@ -29,17 +29,17 @@ VS Code では、設定バンドルを使って計画の確認、インストー
 
 ## MCP の手動インストール
 
-`dotnet tool list --global` で `navlyn-mcp` が導入済みか確認してください。未導入なら以下を実行します。同じ版があればインストールを省略し、古い版なら `dotnet tool update --global navlyn-mcp --version 0.8.2` を実行します。
+`dotnet tool list --global` で `navlyn-mcp` が導入済みか確認してください。未導入なら以下を実行します。同じ版があればインストールを省略し、古い版なら `dotnet tool update --global navlyn-mcp --version 0.8.3` を実行します。
 
 ```powershell
-dotnet tool install --global navlyn-mcp --version 0.8.2
+dotnet tool install --global navlyn-mcp --version 0.8.3
 $toolHome = if ($env:DOTNET_CLI_HOME) { $env:DOTNET_CLI_HOME } else { $HOME }
 $mcpExe = Join-Path $toolHome '.dotnet/tools/navlyn-mcp.exe'
 Test-Path $mcpExe
-$mcpExe
+$mcpExe --version
 ```
 
-導入済みの場合も、上の `$mcpExe` 以降を実行します。`Test-Path` が `True` を返したら、最後に表示されたパスで以下の `C:\path\to\navlyn-mcp.exe` を置き換えます。調べたいリポジトリを開いてから設定してください。
+導入済みの場合も、上の `$mcpExe` 以降を実行します。表示された版が 0.8.3 であることを確認し、以下の `C:\path\to\navlyn-mcp.exe` を `$mcpExe` のパスで置き換えます。調べたいリポジトリを開いてから設定してください。
 
 ## VS Code と GitHub Copilot
 

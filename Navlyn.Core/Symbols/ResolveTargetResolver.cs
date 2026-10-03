@@ -37,7 +37,19 @@ internal sealed class ResolveTargetResolver
             CandidateCount: find.CandidateCount,
             TotalCandidates: find.TotalCandidates,
             Candidates: selected is null ? find.Candidates : null,
-            RecommendedNextActions: find.NextActions,
+            RecommendedNextActions: selected is null && find.Candidates.Count > 0
+                ? [.. find.Candidates.Select(candidate => new FuzzyNextAction(
+                    "target",
+                    workspace.DisplayPath,
+                    Query: null,
+                    File: candidate.Path,
+                    Line: candidate.Line,
+                    Column: candidate.Column,
+                    Reason: "select-explicit-candidate",
+                    CandidateId: candidate.CandidateId,
+                    McpTool: "navlyn_target",
+                    Arguments: new Dictionary<string, object?> { ["candidateId"] = candidate.CandidateId }))]
+                : find.NextActions,
             Warnings: find.Warnings);
     }
 
