@@ -12,6 +12,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'lib/navlyn-release-version.ps1')
+$ReleaseVersion = Get-NavlynReleaseVersion
 $repoRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $pathComparison = if ($IsWindows) { [System.StringComparison]::OrdinalIgnoreCase } else { [System.StringComparison]::Ordinal }
 
@@ -111,7 +113,7 @@ Assert-NoReparsePoint $manifestPath
 $manifestDoc = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 if ($manifestDoc.schemaVersion -cne 'navlyn.release-pack.v1' -or @($manifestDoc.packages).Count -ne 2) { throw 'The package manifest has an unsupported shape.' }
 $package = @($manifestDoc.packages | Where-Object { $_.id -ceq 'navlyn-mcp' })
-if ($package.Count -ne 1 -or $package[0].version -cne '0.8.4') { throw 'The manifest must identify exactly one locked navlyn-mcp 0.8.4 package.' }
+if ($package.Count -ne 1 -or $package[0].version -cne $ReleaseVersion) { throw "The manifest must identify exactly one locked navlyn-mcp $ReleaseVersion package." }
 $packagePath = Resolve-InputPath ([string]$package[0].path)
 if (!(Test-Path -LiteralPath $packagePath -PathType Leaf)) { throw 'The manifest package file was not found.' }
 Assert-NoReparsePoint $packagePath

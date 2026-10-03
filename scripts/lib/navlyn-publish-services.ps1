@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 
 function Invoke-NavlynGitHubJson {
     param([string]$Route, [string]$EvidenceRoot)
-    if ($Route -cnotmatch '^/repos/furbon/navlyn/actions/[a-zA-Z0-9_./?=&%-]+$') { throw 'Unexpected GitHub API route.' }
+    if ($Route -cnotmatch '^/repos/furbon/navlyn/(?:actions/[a-zA-Z0-9_./?=&%-]+|git/ref/tags/[0-9A-Za-z.-]+|git/tags/[a-f0-9]{40})$') { throw 'Unexpected GitHub API route.' }
     if ([string]::IsNullOrWhiteSpace($env:GH_TOKEN)) { throw 'Authenticated Actions read token is required.' }
     $response = Invoke-WebRequest -Uri ('https://api.github.com' + $Route) -Headers @{
         Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2026-03-10'

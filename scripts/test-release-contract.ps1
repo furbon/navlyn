@@ -5,7 +5,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$ExpectedVersion = '0.8.4'
+. (Join-Path $PSScriptRoot 'lib/navlyn-release-version.ps1')
+$ExpectedVersion = Get-NavlynReleaseVersion
+$ExpectedNumericVersion = Get-NavlynNumericVersion $ExpectedVersion
 $Failures = [System.Collections.Generic.List[string]]::new()
 
 function Get-RequiredXmlValue {
@@ -40,13 +42,14 @@ foreach ($versionName in @('Version', 'PackageVersion', 'AssemblyVersion', 'File
     $validValues = switch ($versionName) {
         'Version' { @($ExpectedVersion); break }
         'PackageVersion' { @($ExpectedVersion, '$(Version)'); break }
-        { $_ -in @('AssemblyVersion', 'FileVersion') } { @('0.8.4.0'); break }
+        'AssemblyVersion' { @($ExpectedNumericVersion, '$(Version.Split(''-'')[0]).0'); break }
+        'FileVersion' { @($ExpectedNumericVersion, '$(AssemblyVersion)'); break }
     }
     if ($value -notin $validValues) {
         $expectedDescription = switch ($versionName) {
             'Version' { "'$ExpectedVersion'" }
             'PackageVersion' { "'$ExpectedVersion' or the shared Version property" }
-            default { "numeric '0.8.4.0'" }
+            default { "numeric '$ExpectedNumericVersion' or its shared property expression" }
         }
         Add-ContractFailure "Directory.Build.props $versionName is '$value'; expected $expectedDescription."
     }
@@ -82,7 +85,7 @@ foreach ($package in $packages) {
     }
 
     [xml]$project = Get-Content -Raw -LiteralPath $projectPath
-    foreach ($versionName in @('Version', 'PackageVersion', 'AssemblyVersion', 'FileVersion', 'InformationalVersion')) {
+    foreach ($versionName in @('Version', 'PackageVersion', 'AssemblyVersion', 'FileVersion', 'InformationalVersion', 'PackageReleaseNotes')) {
         $localOverride = $project.SelectSingleNode("//PropertyGroup/$versionName")
         if ($null -ne $localOverride) {
             Add-ContractFailure "$($package.Project) overrides $versionName locally; release versions must come from Directory.Build.props."
@@ -107,8 +110,8 @@ foreach ($package in $packages) {
         }
     }
 
-    $releaseNotes = Get-RequiredXmlValue -Document $project -XPath '/Project/PropertyGroup/PackageReleaseNotes' -Label "$($package.Id) PackageReleaseNotes"
-    if (!$releaseNotes.StartsWith($ExpectedVersion, [System.StringComparison]::Ordinal)) {
+    $releaseNotes = Get-RequiredXmlValue -Document $props -XPath '/Project/PropertyGroup/PackageReleaseNotes' -Label 'shared PackageReleaseNotes'
+    if (!$releaseNotes.StartsWith($ExpectedVersion, [System.StringComparison]::Ordinal) -and !$releaseNotes.StartsWith('$(Version) ', [System.StringComparison]::Ordinal)) {
         Add-ContractFailure "$($package.Project) PackageReleaseNotes must start with locked identity '$ExpectedVersion'."
     }
 

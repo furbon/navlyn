@@ -40,6 +40,10 @@ The repository includes `.editorconfig` and `.gitattributes` for editor and Git 
 
 ## Validation Layers
 
+Release identity comes from `Directory.Build.props`. Run `./scripts/update-release-version.ps1 -Version <version>` to update the shared version and current documentation/tool-manifest examples; historical changelog entries stay intact. Assembly/file versions, package release notes, and script expectations derive from that value. Keep intentional historical and mismatch fixtures separate.
+
+When restore/build/xUnit have already passed for the current outputs, continue with `./scripts/test-release.ps1 -NoBuild -SkipDotnetTest` to run the remaining release checks. Exact-main CI uses this continuation after its platform tests, then retains the tested package/setup inputs. Protected publication and tag verification reuse those artifacts, preserving branch/environment protections and exact-artifact recovery.
+
 Navlyn uses separate validation layers so small changes can be checked quickly while release preparation still has a full quality gate.
 
 - Quick validation: `./scripts/test-quick.ps1`

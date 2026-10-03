@@ -10,11 +10,11 @@ For VS Code, the standalone setup bundle provides a plan, installation, connecti
 
 ## VS Code setup bundle
 
-Extract the `navlyn-setup-0.8.4.zip` release asset into a separate directory. Its `integrity.json` records the source commit and file hashes. Run these commands from the extracted directory, replacing both workspace paths:
+Extract the `navlyn-setup-0.8.5.zip` release asset into a separate directory. Its `integrity.json` records the source commit and file hashes. Run these commands from the extracted directory, replacing both workspace paths:
 
 ```powershell
-./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.8.4
-./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.8.4 -Apply
+./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.8.5
+./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.8.5 -Apply
 ```
 
 The first command displays a plan without writing files, downloading packages, or launching a client. Review the paths, version, feed, and effects before applying. Choose an explicit `.slnx`, `.sln`, `.csproj`, or `.vbproj` with `-WorkspaceFile` when automatic selection is ambiguous or cannot find it.
@@ -29,17 +29,17 @@ Installation and update check SDK and VS Code CLI availability before starting p
 
 ## Manual MCP installation
 
-Run `dotnet tool list --global` to check for `navlyn-mcp`. If it is absent, install it below. If version 0.8.4 is listed, skip installation. For an older version, run `dotnet tool update --global navlyn-mcp --version 0.8.4`.
+Run `dotnet tool list --global` to check for `navlyn-mcp`. If it is absent, install it below. If version 0.8.5 is listed, skip installation. For an older version, run `dotnet tool update --global navlyn-mcp --version 0.8.5`.
 
 ```powershell
-dotnet tool install --global navlyn-mcp --version 0.8.4
+dotnet tool install --global navlyn-mcp --version 0.8.5
 $toolHome = if ($env:DOTNET_CLI_HOME) { $env:DOTNET_CLI_HOME } else { $HOME }
 $mcpExe = Join-Path $toolHome '.dotnet/tools/navlyn-mcp.exe'
 Test-Path $mcpExe
 $mcpExe --version
 ```
 
-If the tool was already installed, still run the `$mcpExe` lines above. Confirm that the version is 0.8.4, then use the `$mcpExe` path to replace `C:\path\to\navlyn-mcp.exe` below. Open the repository you want to inspect before configuring a client.
+If the tool was already installed, still run the `$mcpExe` lines above. Confirm that the version is 0.8.5, then use the `$mcpExe` path to replace `C:\path\to\navlyn-mcp.exe` below. Open the repository you want to inspect before configuring a client.
 
 ## VS Code with GitHub Copilot
 

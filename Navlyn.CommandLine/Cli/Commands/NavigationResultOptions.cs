@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis;
 using Navlyn.Diagnostics;
 using Navlyn.Paths;
+using Navlyn.Symbols;
 using Navlyn.Workspaces;
 
 namespace Navlyn.Cli.Commands;
@@ -30,7 +31,7 @@ internal static class NavigationResultOptions
     {
         return new Option<string[]>("--result-kind")
         {
-            Description = "Restrict result symbols to a case-sensitive symbol kind string. Can be specified more than once.",
+            Description = "Restrict result symbols to a case-insensitive kind, including natural aliases such as class or method. Can be specified more than once.",
             AllowMultipleArgumentsPerToken = true
         };
     }
@@ -180,10 +181,7 @@ internal static class NavigationResultOptions
 
     private static IReadOnlyList<string> NormalizeKinds(IReadOnlyList<string> kinds)
     {
-        return [.. kinds
-            .Where(kind => !string.IsNullOrWhiteSpace(kind))
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(kind => kind, StringComparer.Ordinal)];
+        return SymbolKindNames.NormalizeMany(kinds);
     }
 
     private static string? GetKindError(IReadOnlyList<string> kinds)
@@ -195,7 +193,7 @@ internal static class NavigationResultOptions
                 return "Result symbol kind must not be empty.";
             }
 
-            if (!Enum.GetNames<SymbolKind>().Contains(kind, StringComparer.Ordinal))
+            if (!SymbolKindNames.TryNormalize(kind, out _))
             {
                 return $"Unknown result symbol kind: {kind}.";
             }

@@ -266,7 +266,7 @@ Common options:
 - `--workspace <path|auto>`: `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, `.vbproj`, or `auto`.
 - `--workspace-root-policy <mode>`: optional `repo-relative`, `allow-listed`, or `all` override.
 - `--query <text>`: required fuzzy symbol query.
-- `--assume-kind <kind>`: optional repeated, case-sensitive Roslyn symbol kind used for ranking. Use `NamedType` for classes, interfaces, structs, enums, or delegates, and `Method`, `Property`, `Field`, or `Event` for members. Invalid kinds report the supported values on stderr; hints rank candidates rather than filtering them.
+- `--assume-kind <kind>`: optional repeated, case-insensitive symbol kind used for ranking. `class`, `interface`, `struct`, `record`, `enum`, `delegate`, and `type` map to `NamedType`; Roslyn names such as `method`, `property`, `field`, and `event` accept any casing. Whitespace is trimmed and JSON uses canonical Roslyn names. Invalid kinds report the supported values on stderr; hints rank candidates rather than filtering them. Type aliases all mean `NamedType`, not a restriction to a particular C# type category.
 - `--match smart|exact|contains|regex`: defaults to `smart`.
 - `--case-sensitive`: makes name matching case-sensitive where applicable.
 - `--candidate-id <id>`: selects a candidate returned by a previous fuzzy command. Supported by fuzzy workflows such as `resolve-target`, `where-used`, `about`, `related`, `impact`, `entrypoints`, and `context-pack`; exact source-navigation commands such as `symbol-at`, `symbol-info`, `definition`, `references`, `implementations`, `type-hierarchy`, `callers`, and `calls`; test/DI/application-domain commands such as `tests-for-symbol`, `where-registered`, `di-impact`, `where-handled`, `message-flow`, and `entity-impact`; not supported by `find`.
@@ -1613,7 +1613,7 @@ Optional options:
 - `--match contains|exact|regex`: defaults to `contains`.
 - `--case-sensitive`: defaults to case-insensitive matching.
 - `--limit <number>`: returns at most the first matching declarations from the deterministic result order. Must be 1 or greater.
-- `--kind <kind>`: filters by the case-sensitive stable symbol kind string emitted in `matches[].kind`. Can be specified more than once.
+- `--kind <kind>`: filters by a case-insensitive symbol kind; accepts the same natural aliases as `--assume-kind` and emits canonical names in `kinds` and `matches[].kind`. Can be specified more than once. Type aliases all filter `NamedType` declarations.
 - `--project <project>`: filters by exact project name or repository-relative `.csproj`/`.vbproj` path. Can be specified more than once. Project names are case-sensitive. Project names that match multiple loaded projects are ambiguous and produce a usage error.
 - `--exclude-generated`: excludes generated source files from declaration search.
 - `--namespace <namespace>`: filters by containing namespace. Can be specified more than once.

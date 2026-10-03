@@ -2,6 +2,12 @@
 
 All notable public release changes for Navlyn are tracked here.
 
+## 0.8.5
+
+- Accept case-insensitive symbol kinds and natural type aliases such as `class`, `interface`, and `record`, with canonical JSON kinds across CLI, MCP, and batch operations.
+- Derive release identity, assembly versions, package notes, and script expectations from the shared version, with one command to update current installation examples.
+- Reuse packages validated on the exact merged-main commit in protected publication and annotated-tag verification, avoiding repeated source tests and release packing.
+
 ## 0.8.4
 
 - Explain valid Roslyn symbol kinds in CLI/MCP guidance and invalid-kind errors, including `NamedType` for classes and interfaces.

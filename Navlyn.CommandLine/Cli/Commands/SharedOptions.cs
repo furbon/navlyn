@@ -87,7 +87,7 @@ internal static class SharedOptions
     {
         return new Option<string[]>("--kind")
         {
-            Description = "Restrict symbol matches to a case-sensitive symbol kind string. Can be specified more than once.",
+            Description = "Restrict symbol matches to a case-insensitive kind, including natural aliases such as class or method. Can be specified more than once.",
             AllowMultipleArgumentsPerToken = true
         };
     }

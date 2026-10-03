@@ -7,6 +7,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'lib/navlyn-release-version.ps1')
+$ReleaseVersion = Get-NavlynReleaseVersion
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $evidenceRoot = [System.IO.Path]::GetFullPath((Join-Path $repoRoot 'artifacts'))
@@ -128,7 +130,7 @@ function Invoke-UserDiscovery([string]$Name, [string]$WorkingDirectory, [string]
     [void]$process.Start()
     $stderrTask = $process.StandardError.ReadToEndAsync()
     try {
-        $initialize = @{ method = 'initialize'; id = 1; params = @{ clientInfo = @{ name = 'navlyn_release_readiness'; title = 'Navlyn skill discovery check'; version = '0.8.4' }; capabilities = @{ experimentalApi = $true } } } | ConvertTo-Json -Depth 10 -Compress
+        $initialize = @{ method = 'initialize'; id = 1; params = @{ clientInfo = @{ name = 'navlyn_release_readiness'; title = 'Navlyn skill discovery check'; version = $ReleaseVersion }; capabilities = @{ experimentalApi = $true } } } | ConvertTo-Json -Depth 10 -Compress
         $process.StandardInput.WriteLine($initialize)
         $process.StandardInput.Flush()
         $handshake = Read-AppServerResponse -Reader $process.StandardOutput -Id 1 -Stage 'initialize'

@@ -2202,7 +2202,7 @@ internal static partial class BatchCommand
 
         options = new FuzzyQueryOptions(
             Query: query,
-            AssumeKinds: hasCandidateId ? [] : NormalizeStrings(assumeKinds),
+            AssumeKinds: hasCandidateId ? [] : SymbolKindNames.NormalizeMany(assumeKinds),
             Match: match,
             CaseSensitive: hasCandidateId ? null : caseSensitive == true ? true : null,
             ExcludeGenerated: excludeGenerated,
@@ -2844,10 +2844,7 @@ internal static partial class BatchCommand
 
     private static IReadOnlyList<string> NormalizeKinds(IReadOnlyList<string> kinds)
     {
-        return [.. kinds
-            .Where(kind => !string.IsNullOrWhiteSpace(kind))
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(kind => kind, StringComparer.Ordinal)];
+        return SymbolKindNames.NormalizeMany(kinds);
     }
 
     private static IReadOnlyList<string> NormalizeStrings(IReadOnlyList<string> values)
@@ -2868,7 +2865,7 @@ internal static partial class BatchCommand
                 return "Symbol kind must not be empty.";
             }
 
-            if (!Enum.GetNames<SymbolKind>().Contains(kind, StringComparer.Ordinal))
+            if (!SymbolKindNames.TryNormalize(kind, out _))
             {
                 return FuzzyCommandSupport.UnknownKindMessage(kind);
             }

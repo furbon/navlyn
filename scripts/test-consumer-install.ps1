@@ -13,6 +13,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'lib/navlyn-release-version.ps1')
+$ReleaseVersion = Get-NavlynReleaseVersion
 $RepoRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $PathComparison = if ($IsWindows) { [System.StringComparison]::OrdinalIgnoreCase } else { [System.StringComparison]::Ordinal }
 $RequiredTools = @(
@@ -220,7 +222,7 @@ function Invoke-McpExchange {
     if ($listing.id -ne 2 -or $null -eq $listing.result.tools) { throw 'MCP tools/list response was malformed.' }
     $actualNames = @($listing.result.tools | ForEach-Object { [string]$_.name })
     if (($actualNames -join "`n") -cne ($script:RequiredTools -join "`n")) { throw 'MCP tools/list did not match the locked 25-tool order.' }
-    Write-McpMessage -Process $Process -Payload @{ jsonrpc = '2.0'; id = 3; method = 'tools/call'; params = @{ name = 'navlyn_target'; arguments = @{ query = 'ConsumerProbe'; assumeKind = 'NamedType'; limit = 3 } } }
+    Write-McpMessage -Process $Process -Payload @{ jsonrpc = '2.0'; id = 3; method = 'tools/call'; params = @{ name = 'navlyn_target'; arguments = @{ query = 'ConsumerProbe'; assumeKind = 'CLASS'; limit = 3 } } }
     $call = Read-McpMessage -Process $Process
     if ($call.jsonrpc -ne '2.0' -or $call.id -ne 3 -or $null -eq $call.result -or $call.result.isError -eq $true -or $null -eq $call.result.structuredContent) { throw 'MCP semantic tool call did not return successful structured content.' }
     if ($call.result.structuredContent.ok -ne $true -or $call.result.structuredContent.result.selectedTarget.name -ne 'ConsumerProbe') { throw 'MCP semantic tool call did not select the consumer fixture symbol.' }
@@ -309,7 +311,7 @@ $script:WorkspacePath = Join-Path $script:RootPath 'consumer-workspace'
 $markerName = '.navlyn-consumer-install-owner.json'
 $packages = Get-ManifestPackages -Path $Manifest
 $rollbackPackages = if ([string]::IsNullOrWhiteSpace($RollbackManifest)) { $null } else { Get-ManifestPackages -Path $RollbackManifest }
-if ($packages.navlyn.version -cne '0.8.4') { throw 'Current package manifest must identify version 0.8.4.' }
+if ($packages.navlyn.version -cne $ReleaseVersion) { throw "Current package manifest must identify version $ReleaseVersion." }
 if ($null -ne $rollbackPackages -and ($rollbackPackages.navlyn.version -eq $packages.navlyn.version -or $rollbackPackages['navlyn-mcp'].version -ne $rollbackPackages.navlyn.version)) { throw 'Rollback manifest must contain a different synchronized package version.' }
 
 $report = [ordered]@{
@@ -395,7 +397,7 @@ try {
             if ($shape -in @('cli-only', 'combined')) {
                 $cli = Get-ToolPath -Name 'navlyn' -Directory $toolDirectory
                 $doctor = Invoke-Process -Name "doctor-$framework-$shape" -FilePath $cli -Arguments @('doctor', '--workspace', $projectPath) -WorkingDirectory $script:WorkspacePath -JsonOutput
-                $target = Invoke-Process -Name "target-$framework-$shape" -FilePath $cli -Arguments @('target', '--workspace', $projectPath, '--query', 'ConsumerProbe', '--assume-kind', 'NamedType', '--limit', '3') -WorkingDirectory $script:WorkspacePath -JsonOutput
+                $target = Invoke-Process -Name "target-$framework-$shape" -FilePath $cli -Arguments @('target', '--workspace', $projectPath, '--query', 'ConsumerProbe', '--assume-kind', 'class', '--limit', '3') -WorkingDirectory $script:WorkspacePath -JsonOutput
                 if ($doctor.json.ok -ne $true) { throw 'CLI doctor did not report a successful readiness result.' }
                 if ($target.json.selectedTarget.name -ne 'ConsumerProbe') { throw 'CLI target did not select the consumer fixture symbol.' }
                 if ($null -eq $report.firstQueryDurationMs) { $report.firstQueryDurationMs = [DateTimeOffset]::UtcNow.Subtract([DateTimeOffset]::Parse($report.startedUtc)).TotalMilliseconds }
