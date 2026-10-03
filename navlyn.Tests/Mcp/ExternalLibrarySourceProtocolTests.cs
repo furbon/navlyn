@@ -328,7 +328,7 @@ public sealed class ExternalLibrarySourceProtocolTests
                 throw new InvalidOperationException($"Refusing to remove unowned protocol fixture: {fullRoot}");
             }
 
-            Directory.Delete(fullRoot, recursive: true);
+            TemporaryDirectoryCleanup.Delete(fullRoot);
         }
 
         private static int FindBytes(byte[] haystack, byte[] needle, int start = 0)

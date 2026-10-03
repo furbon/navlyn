@@ -749,7 +749,7 @@ public sealed class NavlynMcpStdioTests
         }
         finally
         {
-            Directory.Delete(fixtureRoot, recursive: true);
+            TemporaryDirectoryCleanup.Delete(fixtureRoot);
         }
     }
 
@@ -792,7 +792,7 @@ public sealed class NavlynMcpStdioTests
         }
         finally
         {
-            Directory.Delete(fixtureRoot, recursive: true);
+            TemporaryDirectoryCleanup.Delete(fixtureRoot);
         }
     }
 
@@ -837,7 +837,7 @@ public sealed class NavlynMcpStdioTests
         }
         finally
         {
-            Directory.Delete(fixtureRoot, recursive: true);
+            TemporaryDirectoryCleanup.Delete(fixtureRoot);
         }
     }
 

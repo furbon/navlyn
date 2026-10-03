@@ -709,7 +709,7 @@ public sealed class NavlynMcpWorkspaceCacheTests
         {
             if (Directory.Exists(Path))
             {
-                Directory.Delete(Path, recursive: true);
+                TemporaryDirectoryCleanup.Delete(Path);
             }
         }
     }

@@ -81,9 +81,9 @@ jobs:
         shell: pwsh
         run: |
           ./scripts/test-publish-recovery.ps1
-          if ($LASTEXITCODE -ne 0) { throw 'Publication recovery core tests failed.' }
+          if (!$?) { throw 'Publication recovery core tests failed.' }
           ./scripts/test-publish-orchestration.ps1
-          if ($LASTEXITCODE -ne 0) { throw 'Publication recovery orchestration tests failed.' }
+          if (!$?) { throw 'Publication recovery orchestration tests failed.' }
 
       - name: Pack release
         if: inputs.mode == 'normal'
