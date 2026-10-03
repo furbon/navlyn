@@ -1,11 +1,20 @@
 Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'navlyn-publish-services.ps1')
 
+function Write-NavlynPublicationProgress {
+    param([string]$Id, [string]$Stage, [int]$RemainingSeconds)
+    if ($env:GITHUB_STEP_SUMMARY) {
+        $remaining = if ($Stage -ceq 'waitingForIndexing') { "; ${RemainingSeconds}s remaining" } else { '' }
+        "- $([DateTime]::UtcNow.ToString('HH:mm:ss')) UTC: $Id — $Stage$remaining" | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+    }
+}
+
 function Invoke-NavlynExactPublication {
     param([Collections.IDictionary]$Manifest, [string]$InputRoot, [Collections.IDictionary]$Journal,
         [string]$JournalPath, [string[]]$PriorIntentIds, [scriptblock]$Observe, [scriptblock]$Push,
         [scriptblock]$Wait = { param($Seconds) Start-Sleep -Seconds $Seconds }, [int]$PollSeconds = 600,
-        [scriptblock]$Now = { [DateTime]::UtcNow })
+        [scriptblock]$Now = { [DateTime]::UtcNow },
+        [scriptblock]$Progress = { param($Id, $Stage, $Remaining) Write-NavlynPublicationProgress $Id $Stage $Remaining })
     if ($PollSeconds -lt 0 -or $PollSeconds -gt 900) { throw 'Publication polling must be bounded at 900 seconds.' }
     if ($Journal.phase -cne 'initialized') { throw 'Only a new retained attempt may execute publication.' }
     # Initialize durably even if observation, credentials or the first push fails.
@@ -15,6 +24,7 @@ function Invoke-NavlynExactPublication {
             $package = @($Manifest.packages | Where-Object { $_.id -ceq $id })
             if ($package.Count -ne 1) { throw 'Both retained package identities are required.' }
             $entry = $package[0]
+            & $Progress $id 'observing' 0
             $file = Get-NavlynPublicationInputFile $InputRoot $entry.path
             $observation = & $Observe $entry $file
             $decision = Get-NavlynPublicationDecision $id ($id -cin $PriorIntentIds) $observation
@@ -22,20 +32,24 @@ function Invoke-NavlynExactPublication {
             if ($decision -ceq 'skipExactPublic') {
                 $state.state = 'alreadyPublic'; $state.result = $observation
                 Write-NavlynPublicationJournal $JournalPath $Journal
+                & $Progress $id 'alreadyPublic' 0
                 continue
             }
             if ($decision -ceq 'indeterminate') { throw "Publication of $id is indeterminate; absent indexing cannot authorize retry." }
             if ((Get-NavlynPublicationHash $file) -cne $entry.sha256) { throw 'Retained package changed before push.' }
             Assert-NavlynPublicationPackageIdentity $file $id $entry.version $Manifest.sourceSha
             Set-NavlynPublicationIntent $Journal $id $JournalPath
+            & $Progress $id 'intentRetained' 0
             try {
                 $result = & $Push $entry $file
                 $state.result = $result
                 $state.state = if ($result.exitCode -eq 0) { 'intent' } else { 'failed' }
                 Write-NavlynPublicationJournal $JournalPath $Journal
+                & $Progress $id $(if ($result.exitCode -eq 0) { 'pushSubmitted' } else { 'pushFailedAwaitingVerification' }) 0
             } catch {
                 $state.state = 'indeterminate'; $state.result = @{ error = $_.Exception.Message }
                 Write-NavlynPublicationJournal $JournalPath $Journal
+                & $Progress $id 'indeterminate' 0
                 throw
             }
             # A failed/timed-out push may have been accepted. Observe it, never repeat it.
@@ -47,15 +61,18 @@ function Invoke-NavlynExactPublication {
                 $remaining = $PollSeconds - ((& $Now) - $started).TotalSeconds
                 if ($remaining -le 0) { break }
                 [Console]::Error.WriteLine("Waiting for NuGet indexing of $id $($entry.version) ($([int]$remaining)s remaining).")
+                & $Progress $id 'waitingForIndexing' ([int]$remaining)
                 & $Wait ([Math]::Min(15, $remaining))
             } while ($true)
             if ($after -cne 'skipExactPublic') {
                 $state.state = 'indeterminate'
                 Write-NavlynPublicationJournal $JournalPath $Journal
+                & $Progress $id 'indeterminate' 0
                 throw "Acceptance/public verification of $id is indeterminate; reconcile this retained intent before resuming."
             }
             $state.state = 'verified'; $state.result = @{ push = $result; public = $observed }
             Write-NavlynPublicationJournal $JournalPath $Journal
+            & $Progress $id 'verified' 0
         }
         $Journal.phase = 'complete'
     } catch {

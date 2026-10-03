@@ -12,8 +12,9 @@ internal static class NavlynCli
         return RunAsync(args, CancellationToken.None);
     }
 
-    public static Task<int> RunAsync(string[] args, CancellationToken cancellationToken)
+    public static async Task<int> RunAsync(string[] args, CancellationToken cancellationToken)
     {
+        using CliInvocationContext invocation = CliInvocationContext.Begin(args);
         RootCommand rootCommand = CreateRootCommand();
         ParseResult parseResult = rootCommand.Parse(args);
 
@@ -30,10 +31,10 @@ internal static class NavlynCli
                 WriteRootHelp(rootCommand);
             }
 
-            return Task.FromResult(ExitCodes.UsageError);
+            return ExitCodes.UsageError;
         }
 
-        return parseResult.InvokeAsync(new InvocationConfiguration(), cancellationToken);
+        return await parseResult.InvokeAsync(new InvocationConfiguration(), cancellationToken);
     }
 
     private static void WriteRootHelp(RootCommand rootCommand)

@@ -102,6 +102,10 @@ Focused schemas also cover high-risk automation surfaces: `navlyn-resolve-target
 
 ## Output Profiles
 
+Natural type aliases describe Roslyn symbol kinds. For example, `navlyn symbols --workspace auto --query PaymentService --kind interface` can return a class named `PaymentService`, because `interface`, `class`, and `record` all normalize to `NamedType`. They do not apply C# `TypeKind` filtering. Repeated equivalent hints normalize to one canonical JSON kind.
+
+`reproCommand` contains `executable: "navlyn"`, the original argument array, and `workingDirectory`. Replay the array as process arguments from that directory to preserve target selection, diff revisions, project filters, limits, profiles, and repository configuration discovery. Arguments are separate values, not a shell command to concatenate. Batch workflows read from stdin also include `standardInput`; a nested result reproduces its enclosing batch invocation and its stdin. Replay assumes the workspace, config, referenced input files, and Git revisions have not changed. Direct MCP workflows use their equivalent CLI arguments and configured working directory.
+
 High-level workflow commands support `--profile compact|evidence|full`. The default is `full`.
 
 - `full` preserves the rich command result and adds workflow metadata such as `schemaVersion`, `navlynVersion`, `profile`, `configuration`, and `reproCommand`.
@@ -1464,7 +1468,7 @@ Input shape:
       "id": "navlyncli-symbol",
       "command": "symbol-at",
       "file": "Navlyn.CommandLine/Cli/NavlynCli.cs",
-      "line": 53,
+      "line": 60,
       "column": 37
     },
     {
@@ -1558,7 +1562,7 @@ Result shape:
       "ok": true,
       "result": {
         "file": "Navlyn.CommandLine/Cli/NavlynCli.cs",
-        "line": 53,
+        "line": 60,
         "column": 37,
         "symbol": {
           "name": "CheckCommand",
@@ -1680,8 +1684,8 @@ Partial declarations produce one match per source declaration.
 Lists C# or Visual Basic symbols resolved from identifier tokens on a source line or column span. This is an exploratory helper for choosing an exact position before calling `symbol-at`, `definition`, or `references`.
 
 ```powershell
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --start-column 37 --end-column 49 --project Navlyn.CommandLine
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --start-column 37 --end-column 49 --project Navlyn.CommandLine
 ```
 
 Required options:
@@ -1702,7 +1706,7 @@ Result shape:
 ```json
 {
   "file": "Navlyn.CommandLine/Cli/NavlynCli.cs",
-  "line": 53,
+  "line": 60,
   "startColumn": 1,
   "endColumn": 60,
   "project": {
@@ -1845,7 +1849,7 @@ Generated source files with `--exclude-generated` produce `NAVLYN1307` on stderr
 Returns the selected symbol plus expression and binding facts at a source position. This command is additive exploration; it does not change the single-symbol contract of `symbol-at`, `definition`, or `references`.
 
 ```powershell
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-info --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-info --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --column 37
 ```
 
 Required options:
@@ -1863,7 +1867,7 @@ Result shape:
 ```json
 {
   "file": "Navlyn.CommandLine/Cli/NavlynCli.cs",
-  "line": 53,
+  "line": 60,
   "column": 37,
   "symbol": {
     "name": "CheckCommand",
@@ -1897,7 +1901,7 @@ When applicable, `symbol-info` may include `invocation`, `attribute`, `return`, 
 Returns enclosing C# scope facts for a source position. Unlike `symbol-at`, this command is useful on positions inside a member body because it reports the surrounding namespace, type, member, local function, lambda, or top-level statement stack.
 
 ```powershell
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- scope-at --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- scope-at --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --column 37
 ```
 
 Required options:
@@ -1915,7 +1919,7 @@ Result shape:
 ```json
 {
   "file": "Navlyn.CommandLine/Cli/NavlynCli.cs",
-  "line": 53,
+  "line": 60,
   "column": 37,
   "projectContext": {
     "name": "navlyn(net10.0)",
@@ -2394,7 +2398,7 @@ Generated source files with `--exclude-generated` produce `NAVLYN1307` on stderr
 Finds source callees from the containing C# or Visual Basic member at a source position. The requested position selects the containing source member; it does not need to be on a specific invocation expression.
 
 ```powershell
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- calls --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- calls --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --column 37
 ```
 
 Required options:
@@ -2486,7 +2490,7 @@ Generated source files with `--exclude-generated` produce `NAVLYN1307` on stderr
 Finds source definitions for the C# or Visual Basic symbol at a source position.
 
 ```powershell
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- definition --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37 --project Navlyn.CommandLine
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- definition --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --column 37 --project Navlyn.CommandLine
 ```
 
 Required options:
@@ -2505,7 +2509,7 @@ Result shape:
 ```json
 {
   "file": "Navlyn.CommandLine/Cli/NavlynCli.cs",
-  "line": 53,
+  "line": 60,
   "column": 37,
   "project": {
     "filter": "navlyn(net10.0)",
@@ -2552,7 +2556,7 @@ Generated source files with `--exclude-generated` produce `NAVLYN1307` on stderr
 Finds source references for the C# or Visual Basic symbol at a source position. Declaration locations are not included unless Roslyn reports them as reference locations for that symbol kind.
 
 ```powershell
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- references --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37 --project Navlyn.CommandLine
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- references --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --column 37 --project Navlyn.CommandLine
 ```
 
 Required options:
@@ -2578,7 +2582,7 @@ Result shape:
 ```json
 {
   "file": "Navlyn.CommandLine/Cli/NavlynCli.cs",
-  "line": 53,
+  "line": 60,
   "column": 37,
   "limit": 10,
   "totalMatches": 1,

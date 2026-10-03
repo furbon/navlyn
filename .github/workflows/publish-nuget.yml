@@ -66,7 +66,7 @@ jobs:
           EXPECTED_SHA: ${{ inputs.expected-main-sha }}
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
             8.0.x
@@ -142,12 +142,21 @@ jobs:
 
       - name: Retain attempt journal on every outcome
         if: always()
+        id: journal
         uses: actions/upload-artifact@v7
         with:
           name: navlyn-publication-journal-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/publication-attempt/journal/navlyn-publication-journal.json
           if-no-files-found: warn
           retention-days: 90
+
+      - name: Summarize publication and exact recovery inputs
+        if: always()
+        shell: pwsh
+        env:
+          JOURNAL_ARTIFACT_ID: ${{ steps.journal.outputs.artifact-id }}
+          JOURNAL_ARTIFACT_DIGEST: ${{ steps.journal.outputs.artifact-digest }}
+        run: ./scripts/write-publication-summary.ps1
 
       - name: Retain publication diagnostics
         if: always()

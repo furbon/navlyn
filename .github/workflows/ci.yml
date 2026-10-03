@@ -25,116 +25,121 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
             8.0.x
             10.0.x
 
       - name: Restore
-        run: dotnet restore navlyn.slnx
+        shell: pwsh
+        run: ./scripts/invoke-ci-step.ps1 -Name restore -FilePath dotnet -Arguments @('restore','navlyn.slnx')
 
       - name: Build
-        run: dotnet build navlyn.slnx --no-restore
+        shell: pwsh
+        run: ./scripts/invoke-ci-step.ps1 -Name build -FilePath dotnet -Arguments @('build','navlyn.slnx','--no-restore')
 
       - name: Setup prerequisite and JSONC validation
         shell: pwsh
         run: |
-          ./scripts/test-setup-prerequisites.ps1
-          ./scripts/test-setup-navlyn.ps1
+          ./scripts/invoke-ci-step.ps1 -Name setup-prerequisites -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-setup-prerequisites.ps1')
+          ./scripts/invoke-ci-step.ps1 -Name setup-jsonc -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-setup-navlyn.ps1')
 
       - name: Test net8.0
+        shell: pwsh
         env:
           TMPDIR: ${{ runner.temp }}
-        run: dotnet test navlyn.slnx --no-build --framework net8.0
+        run: ./scripts/invoke-ci-step.ps1 -Name test-net8 -FilePath dotnet -Arguments @('test','navlyn.slnx','--no-build','--framework','net8.0','--logger','trx;LogFileName=net8.0.trx','--results-directory','artifacts/ci-diagnostics/tests/net8.0')
 
       - name: Test net10.0
+        shell: pwsh
         env:
           TMPDIR: ${{ runner.temp }}
-        run: dotnet test navlyn.slnx --no-build --framework net10.0
+        run: ./scripts/invoke-ci-step.ps1 -Name test-net10 -FilePath dotnet -Arguments @('test','navlyn.slnx','--no-build','--framework','net10.0','--logger','trx;LogFileName=net10.0.trx','--results-directory','artifacts/ci-diagnostics/tests/net10.0')
 
       - name: C# file format validation
         shell: pwsh
-        run: ./scripts/test-csharp-file-format.ps1
+        run: ./scripts/invoke-ci-step.ps1 -Name csharp-format -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-csharp-file-format.ps1')
 
       - name: Release version and artifact reuse checks
         shell: pwsh
         run: |
-          ./scripts/test-release-version.ps1
-          ./scripts/test-validated-release.ps1
+          ./scripts/invoke-ci-step.ps1 -Name release-version -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-release-version.ps1')
+          ./scripts/invoke-ci-step.ps1 -Name artifact-reuse -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-validated-release.ps1')
+          ./scripts/invoke-ci-step.ps1 -Name schema-wrapper -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-schema-wrapper.ps1')
+          ./scripts/invoke-ci-step.ps1 -Name ci-diagnostics -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-ci-diagnostics.ps1')
 
       - name: Release validation
         if: matrix.os == 'windows-latest' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
-        run: ./scripts/test-release.ps1 -NoBuild -SkipDotnetTest
+        run: ./scripts/invoke-ci-step.ps1 -Name release -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-release.ps1','-NoBuild','-SkipDotnetTest')
 
       - name: Quick validation
         if: matrix.os == 'windows-latest' && github.event_name != 'push'
         shell: pwsh
-        run: ./scripts/test-quick.ps1 -NoBuild -SkipDotnetTest
+        run: ./scripts/invoke-ci-step.ps1 -Name quick -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-quick.ps1','-NoBuild','-SkipDotnetTest')
 
       - name: CLI contract core validation
         if: matrix.os == 'windows-latest' && github.event_name != 'push'
         shell: pwsh
-        run: ./scripts/test-cli-contract.ps1 -NoBuild -Suite core
+        run: ./scripts/invoke-ci-step.ps1 -Name cli-core -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-cli-contract.ps1','-NoBuild','-Suite','core')
 
       - name: Release contract validation
         if: matrix.os == 'windows-latest'
         shell: pwsh
-        run: ./scripts/test-release-contract.ps1
+        run: ./scripts/invoke-ci-step.ps1 -Name release-contract -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-release-contract.ps1')
 
       - name: Pack candidate packages
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           if ($env:GITHUB_EVENT_NAME -eq 'push') {
-            ./scripts/pack-release.ps1 -NoValidation -NoBuild -Output artifacts/ci-candidate
+            ./scripts/invoke-ci-step.ps1 -Name pack -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/pack-release.ps1','-NoValidation','-NoBuild','-Output','artifacts/ci-candidate')
           } else {
-            ./scripts/pack-release.ps1 -NoValidation -Output artifacts/ci-candidate
+            ./scripts/invoke-ci-step.ps1 -Name pack -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/pack-release.ps1','-NoValidation','-Output','artifacts/ci-candidate')
           }
 
       - name: Candidate package contract validation
         if: matrix.os == 'windows-latest'
         shell: pwsh
-        run: ./scripts/test-package-contract.ps1 -Manifest artifacts/ci-candidate/navlyn-release-pack.json
+        run: ./scripts/invoke-ci-step.ps1 -Name package-contract -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-package-contract.ps1','-Manifest','artifacts/ci-candidate/navlyn-release-pack.json')
 
       - name: Routing skill lifecycle validation
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path artifacts/ci-checks -Force | Out-Null
-          ./scripts/test-routing-skill-install.ps1 -OutputReport (Join-Path $PWD 'artifacts/ci-checks/skill-lifecycle.json')
+          ./scripts/invoke-ci-step.ps1 -Name routing-lifecycle -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-routing-skill-install.ps1','-OutputReport',(Join-Path $PWD 'artifacts/ci-checks/skill-lifecycle.json'))
 
       - name: Publication recovery and orchestration validation
         if: matrix.os != 'windows-latest' || github.event_name != 'push'
         shell: pwsh
         run: |
-          ./scripts/test-publish-recovery.ps1
-          ./scripts/test-publish-orchestration.ps1
+          ./scripts/invoke-ci-step.ps1 -Name publication-recovery -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-publish-recovery.ps1')
+          ./scripts/invoke-ci-step.ps1 -Name publication-orchestration -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-publish-orchestration.ps1')
 
       - name: Isolated consumer installation validation
         if: matrix.os == 'windows-latest' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path artifacts/ci-checks -Force | Out-Null
-          ./scripts/test-consumer-install.ps1 -Manifest artifacts/ci-candidate/navlyn-release-pack.json -OutputReport (Join-Path $PWD 'artifacts/ci-checks/consumer-install.json')
+          ./scripts/invoke-ci-step.ps1 -Name consumer-install -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-consumer-install.ps1','-Manifest','artifacts/ci-candidate/navlyn-release-pack.json','-OutputReport',(Join-Path $PWD 'artifacts/ci-checks/consumer-install.json'))
 
       - name: Routing skill fresh-process discovery validation
         if: matrix.os == 'windows-latest' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
-          npm install --prefix artifacts/ci-tools --no-save --no-audit --no-fund @openai/codex@0.155.0-alpha.16
-          if ($LASTEXITCODE -ne 0) { throw 'Pinned Codex CLI installation failed.' }
+          ./scripts/invoke-ci-step.ps1 -Name codex-prerequisite -FilePath npm -Arguments @('install','--prefix','artifacts/ci-tools','--no-save','--no-audit','--no-fund','@openai/codex@0.155.0-alpha.16')
           $codex = Join-Path $PWD 'artifacts/ci-tools/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe'
           if ((& $codex --version) -ne 'codex-cli 0.155.0-alpha.16' -or $LASTEXITCODE -ne 0) { throw 'Pinned Codex CLI version mismatch.' }
-          ./scripts/test-routing-skill-discovery.ps1 -CodexExecutable $codex -OutputReport (Join-Path $PWD 'artifacts/ci-checks/skill-discovery.json')
+          ./scripts/invoke-ci-step.ps1 -Name routing-discovery -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-routing-skill-discovery.ps1','-CodexExecutable',$codex,'-OutputReport',(Join-Path $PWD 'artifacts/ci-checks/skill-discovery.json'))
 
       - name: Prepare validated release inputs
         if: matrix.os == 'windows-latest' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
-          ./scripts/build-setup-bundle.ps1 -Output artifacts/setup-bundle -SourceCommit $env:GITHUB_SHA
-          ./scripts/prepare-publication-inputs.ps1 -SourceSha $env:GITHUB_SHA -SetupBundle artifacts/setup-bundle.zip -Manifest artifacts/ci-candidate/navlyn-release-pack.json
+          ./scripts/invoke-ci-step.ps1 -Name setup-bundle -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/build-setup-bundle.ps1','-Output','artifacts/setup-bundle','-SourceCommit',$env:GITHUB_SHA)
+          ./scripts/invoke-ci-step.ps1 -Name publication-inputs -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/prepare-publication-inputs.ps1','-SourceSha',$env:GITHUB_SHA,'-SetupBundle','artifacts/setup-bundle.zip','-Manifest','artifacts/ci-candidate/navlyn-release-pack.json')
 
       - name: Retain validated release inputs
         if: matrix.os == 'windows-latest' && github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -144,3 +149,12 @@ jobs:
           path: artifacts/publication-inputs
           if-no-files-found: error
           retention-days: 90
+
+      - name: Retain CI diagnostics on every outcome
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: navlyn-ci-diagnostics-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/ci-diagnostics
+          if-no-files-found: warn
+          retention-days: 30

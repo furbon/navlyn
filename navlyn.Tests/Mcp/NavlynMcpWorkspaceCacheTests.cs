@@ -14,6 +14,26 @@ namespace Navlyn.Tests.Mcp;
 public sealed class NavlynMcpWorkspaceCacheTests
 {
     [Fact]
+    public async Task ServiceDeadline_DirectOutlineExpiresAndSameCacheRemainsUsable()
+    {
+        using TemporaryDirectory directory = TemporaryDirectory.Create();
+        string project = CreateProject(directory.Path);
+        await File.WriteAllTextAsync(Path.Combine(directory.Path, "Fixture.cs"), "namespace Fixture; public class Alpha { }");
+        NavlynMcpServerOptions options = CreateOptions(project);
+        using NavlynMcpWorkspaceCache cache = new(options);
+        NavlynMcpDirectToolRunner runner = new(options, cache);
+        CommandBuildResult command = NavlynToolCommandBuilder.FileOutline("Fixture.cs", null, null);
+        NavlynMcpToolService expired = new(new NavlynInProcessCommandAdapter(options), runner,
+            options with { TimeoutMilliseconds = 1 });
+        Assert.Equal("NAVLYN_MCP_TIMEOUT", (await expired.RunAsync("navlyn_file_outline", command, CancellationToken.None)).Error?.Code);
+        NavlynMcpToolService healthy = new(new NavlynInProcessCommandAdapter(options), runner, options);
+        NavlynToolResult result = await healthy.RunAsync("navlyn_file_outline", command, CancellationToken.None);
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.Equal("direct", result.Metadata?.ExecutionPath);
+        Assert.Contains("Alpha", result.Result!.Value.GetRawText());
+    }
+
+    [Fact]
     public async Task DirectTarget_SimpleQueryMatchesCliAndRefreshesAfterSourceEdit()
     {
         using TemporaryDirectory directory = TemporaryDirectory.Create();

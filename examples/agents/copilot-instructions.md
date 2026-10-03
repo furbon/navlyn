@@ -4,7 +4,7 @@ Use this guidance with GitHub Copilot CLI or VS Code + GitHub Copilot after conf
 
 - For Copilot CLI, copy `examples/install/copilot-cli-mcp.json` to the repository root as `.mcp.json` or `.github/mcp.json`; replace the command with the absolute path to your installed `navlyn-mcp.exe`. The Copilot CLI config uses `mcpServers`.
 - For VS Code, configure `.vscode/mcp.json` using VS Code's `servers` format and `${workspaceFolder}`. Do not use the Copilot CLI config file as the VS Code config.
-- A configuration file alone does not prove that MCP started. Confirm a live `navlyn_target` call against the installed 0.8.5 server in the repository you intend to inspect.
+- A configuration file alone does not prove that MCP started. Confirm a live `navlyn_target` call against the installed 0.8.6 server in the repository you intend to inspect.
 
 - Use normal file reads and `rg` first when text is enough.
 - Use Navlyn only when C# or Visual Basic semantic identity, project context, source relationships, diff facts, or bounded evidence would change the answer.

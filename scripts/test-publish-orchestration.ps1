@@ -49,7 +49,7 @@ function Exercise([string]$Name, [string[]]$Prior, [hashtable]$Behavior, [switch
         $directory = Join-Path $root ([guid]::NewGuid().ToString('N')); [IO.Directory]::CreateDirectory($directory) | Out-Null
         $path = Join-Path $directory 'navlyn-publication-journal.json'
         $journal = New-NavlynPublicationJournal $identity 101 1 @{ runId = 100; runAttempt = 1; sha256 = 'f' * 64 }
-        $state = @{ pushes = [Collections.Generic.List[string]]::new(); counts = @{}; seconds = 0; pushedAt = @{} }
+        $state = @{ pushes = [Collections.Generic.List[string]]::new(); counts = @{}; seconds = 0; pushedAt = @{}; progress = [Collections.Generic.List[object]]::new() }
         $publicExact = $exact
         $observe = {
             param($Package, $File)
@@ -80,7 +80,8 @@ function Exercise([string]$Name, [string[]]$Prior, [hashtable]$Behavior, [switch
         $wait = { param($Seconds) $state.seconds += $Seconds }.GetNewClosure()
         $now = { [DateTime]::new(2026, 10, 3).AddSeconds($state.seconds) }.GetNewClosure()
         $pollSeconds = if ('delayed' -cin $Behavior.Values) { 600 } else { 0 }
-        try { Invoke-NavlynExactPublication $manifest $inputRoot $journal $path $Prior $observe $push -PollSeconds $pollSeconds -Wait $wait -Now $now }
+        $progress = { param($Id, $Stage, $Remaining) $state.progress.Add(@{ id = $Id; stage = $Stage; remaining = $Remaining }) }.GetNewClosure()
+        try { Invoke-NavlynExactPublication $manifest $inputRoot $journal $path $Prior $observe $push -PollSeconds $pollSeconds -Wait $wait -Now $now -Progress $progress }
         finally {
             $saved = Read-NavlynPublicationJson $path
             foreach ($id in $state.pushes) { $s = @($saved.packages | Where-Object { $_.id -ceq $id })[0]; if (!$s.intentUtc -or $s.state -ceq 'notAttempted') { throw 'Push intent was lost on failure.' } }
@@ -92,6 +93,11 @@ function Exercise([string]$Name, [string[]]$Prior, [hashtable]$Behavior, [switch
             if ($state.pushes.Count -ne $expectedPushes) { throw "Expected $expectedPushes exact pushes; observed $($state.pushes.Count)." }
             if (@($state.pushes | Select-Object -Unique).Count -ne $state.pushes.Count) { throw 'An ID was repushed within the attempt.' }
             if (!$Reject -and $saved.phase -cne 'complete') { throw 'Successful publication did not complete the retained journal.' }
+            foreach ($id in $state.pushes) {
+                if (@($state.progress | Where-Object { $_.id -ceq $id -and $_.stage -ceq 'intentRetained' }).Count -ne 1) { throw 'Progress lost retained push intent.' }
+            }
+            if ('delayed' -cin $Behavior.Values -and @($state.progress | Where-Object { $_.stage -ceq 'waitingForIndexing' -and $_.remaining -gt 0 }).Count -lt 2) { throw 'Progress lost bounded indexing wait.' }
+            if (!$Reject -and @($state.progress | Where-Object { $_.stage -cin @('verified', 'alreadyPublic') }).Count -ne 2) { throw 'Progress lost verified package completion.' }
         }
     } catch { $exception = $_.Exception.Message }
     $passed = if ($Reject) { $null -ne $exception } else { $null -eq $exception }
@@ -107,6 +113,27 @@ Exercise 'second push uncertain timeout preserves both intents' @() @{ navlyn = 
 Exercise 'accepted but delayed public indexing never causes automatic repush' @() @{ navlyn = 'absent'; 'navlyn-mcp' = 'push' } -Reject
 Exercise 'second/third resume absent prior intent cannot reset' @('navlyn') @{ navlyn = 'absent'; 'navlyn-mcp' = 'push' } -Reject
 Exercise 'previous resume timeout second intent cannot reset' @('navlyn-mcp') @{ navlyn = 'present'; 'navlyn-mcp' = 'absent' } -Reject
+
+Case 'Actions recovery summary uses original immutable inputs and latest retained journal' {
+    $summary = Join-Path $root 'summary.md'; $path = Join-Path $root 'summary-journal.json'
+    $journal = New-NavlynPublicationJournal $identity 102 2 @{ runId = 101; runAttempt = 1; sha256 = 'f' * 64 }
+    $journal.phase = 'blocked'
+    Write-NavlynPublicationJournal $path $journal
+    $previous = $env:GITHUB_STEP_SUMMARY
+    try {
+        $env:GITHUB_STEP_SUMMARY = $summary
+        & (Join-Path $PSScriptRoot 'write-publication-summary.ps1') -JournalPath $path -JournalArtifactId 600 -JournalArtifactDigest ('f' * 64)
+        $text = Get-Content -Raw $summary
+        foreach ($expected in @('mode=resume', "expected-main-sha=$sha", 'input-run-attempt=100:1', 'input-artifact-id=500', ('input-artifact-sha256=' + 'b' * 64), ('manifest-sha256=' + 'c' * 64), 'latest-run-attempt=102:2', 'latest-journal-artifact-id=600', ('latest-journal-artifact-sha256=' + 'f' * 64))) {
+            if (!$text.Contains($expected)) { throw "Recovery summary lost $expected" }
+        }
+        $journal.phase = 'complete'; Write-NavlynPublicationJournal $path $journal
+        $env:GITHUB_STEP_SUMMARY = Join-Path $root 'completed-summary.md'
+        & (Join-Path $PSScriptRoot 'write-publication-summary.ps1') -JournalPath $path
+        $text = Get-Content -Raw $env:GITHUB_STEP_SUMMARY
+        if (!$text.Contains('No recovery is needed.') -or $text.Contains('mode=resume')) { throw 'Completed publication summary suggests another attempt.' }
+    } finally { $env:GITHUB_STEP_SUMMARY = $previous }
+}
 Exercise 'feed unavailable without intent is fail closed' @() @{ navlyn = 'unavailable'; 'navlyn-mcp' = 'push' } -Reject
 Exercise 'canonical mismatch is hard stop before push' @() @{ navlyn = 'mismatch'; 'navlyn-mcp' = 'push' } -Reject
 Exercise 'signature mismatch is hard stop before push' @() @{ navlyn = 'signature'; 'navlyn-mcp' = 'push' } -Reject

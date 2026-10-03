@@ -40,7 +40,7 @@ csharp, visual-basic, dotnet, roslyn, mcp, mcp-server, ai-agents, code-navigatio
 Suggested release note opening:
 
 ```text
-Navlyn 0.7.0 helps C#-first .NET coding agents avoid wrong-symbol edits, with Visual Basic support through Roslyn/MSBuild. It resolves fuzzy intent into stable Roslyn-backed targets, opens bounded source and relationship facts, builds compact context packs, and collects review evidence without editing files. The `navlyn` CLI and standalone `navlyn-mcp` server share the same Navlyn engine.
+Navlyn helps C#-first .NET coding agents select the intended symbol, with Visual Basic support through Roslyn/MSBuild. It opens bounded source and relationship facts, builds compact context packs, and collects review evidence. The `navlyn` CLI and standalone `navlyn-mcp` server share the same Navlyn engine.
 ```
 
 Package page distinction:
@@ -60,9 +60,9 @@ VS Code also documents an MCP installation URL shape:
 vscode:mcp/install?{url-encoded-json-server-configuration}
 ```
 
-Go/no-go for v0.7.0: no public install URL yet. VS Code supports installation URLs, and Navlyn can start without explicit args by using repository-local auto discovery. A public one-click link still needs validation across client behavior, multi-root workspaces, and multi-solution repositories before it becomes the recommended path.
+Use the current release's standalone setup bundle described in [client setup](navlyn-client-setup.md#vs-code-with-github-copilot). It provides an explicit plan, installation, connection checks, update, undo, and removal. A public one-click install URL is not a verified distribution channel; client behavior and multi-root/multi-solution handling still need separate validation.
 
-Manual setup remains the supported path for v0.7.0. If a future installer is tested, the least risky draft object shape is:
+Manual `.vscode/mcp.json` configuration remains supported. A minimal server entry is:
 
 ```json
 {

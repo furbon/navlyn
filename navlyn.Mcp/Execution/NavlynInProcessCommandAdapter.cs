@@ -123,7 +123,9 @@ internal sealed class NavlynInProcessCommandAdapter(NavlynMcpServerOptions optio
         string? standardInput,
         CancellationToken cancellationToken)
     {
-        await ConsoleLock.WaitAsync(cancellationToken);
+        using CancellationTokenSource timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutSource.CancelAfter(options.TimeoutMilliseconds);
+        await ConsoleLock.WaitAsync(timeoutSource.Token);
         TextWriter originalOut = Console.Out;
         TextWriter originalError = Console.Error;
         TextReader originalIn = Console.In;
@@ -131,9 +133,6 @@ internal sealed class NavlynInProcessCommandAdapter(NavlynMcpServerOptions optio
         using StringWriter stdout = new(CultureInfo.InvariantCulture);
         using StringWriter stderr = new(CultureInfo.InvariantCulture);
         using StringReader stdin = new(standardInput ?? "");
-        using CancellationTokenSource timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutSource.CancelAfter(options.TimeoutMilliseconds);
-
         try
         {
             Console.SetOut(stdout);

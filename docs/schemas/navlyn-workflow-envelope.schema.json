@@ -63,6 +63,15 @@
           "items": {
             "type": "string"
           }
+        },
+        "workingDirectory": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Run the argument array from this directory to preserve relative paths and configuration discovery."
+        },
+        "standardInput": {
+          "type": "string",
+          "description": "Original stdin for a batch invocation, when present."
         }
       }
     },

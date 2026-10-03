@@ -33,9 +33,9 @@ param(
 
     [string]$SourceFile = 'Navlyn.CommandLine/Cli/Commands/CheckCommand.cs',
 
-    [int]$SourceLine = 6,
+    [int]$SourceLine = 8,
 
-    [int]$SourceColumn = 23,
+    [int]$SourceColumn = 5,
 
     [string]$Base = $null,
 
@@ -647,6 +647,11 @@ function Invoke-McpToolScenario {
                 }
 
                 if ($parsed.PSObject.Properties.Name -contains 'result' -and
+                    $parsed.result.PSObject.Properties.Name -contains 'isError' -and $parsed.result.isError -eq $true) {
+                    $exitCode = 1
+                }
+
+                if ($parsed.PSObject.Properties.Name -contains 'result' -and
                     $parsed.result.PSObject.Properties.Name -contains 'structuredContent') {
                     if ($parsed.result.PSObject.Properties.Name -contains 'isError' -and $parsed.result.isError -eq $true) {
                         $exitCode = 1
@@ -789,7 +794,7 @@ function Get-ScenarioCommands {
             $commands += New-McpToolCall -Name 'navlyn_file_outline' -Arguments @{
                 file = $SourceFile
             }
-            $commands += New-McpToolCall -Name 'navlyn_symbol_source' -Arguments @{
+            $commands += New-McpToolCall -Name 'navlyn_read' -Arguments @{
                 file = $SourceFile
                 line = $SourceLine
                 column = $SourceColumn
@@ -797,7 +802,7 @@ function Get-ScenarioCommands {
                 maxLines = 80
                 budgetTokens = 2000
             }
-            $commands += New-McpToolCall -Name 'navlyn_symbol_edges' -Arguments @{
+            $commands += New-McpToolCall -Name 'navlyn_navigate' -Arguments @{
                 operation = 'calls'
                 file = $SourceFile
                 line = $SourceLine
@@ -904,8 +909,11 @@ $p95Index = if ($elapsedValues.Count -eq 0) { 0 } else { [int][Math]::Ceiling($e
 $p95 = if ($elapsedValues.Count -eq 0) { 0 } else { $elapsedValues[[Math]::Min($p95Index, $elapsedValues.Count - 1)] }
 $maxStdoutChars = if ($measured.Count -eq 0) { 0 } else { ($measured | Measure-Object -Property stdoutChars -Maximum).Maximum }
 $truncatedCount = @($measured | Where-Object { $_.truncated -eq $true }).Count
-$succeededCount = @($measured | Where-Object { $_.exitCode -eq 0 }).Count
-$failedCount = @($measured | Where-Object { $_.exitCode -ne 0 }).Count
+$failedCount = @($measured | Where-Object {
+    $_.exitCode -ne 0 -or !$_.jsonValid -or
+    ($_.PSObject.Properties.Name -contains 'diagnosticStderrChars' -and $_.diagnosticStderrChars -gt 0)
+}).Count
+$succeededCount = $measured.Count - $failedCount
 $skippedCount = @($measurements | Where-Object { $_.skipped -eq $true }).Count
 $reportWorkspace = $workspacePath.Replace('\', '/')
 if ($workspacePath.StartsWith($repoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -984,7 +992,7 @@ if ([string]::IsNullOrWhiteSpace($Output)) {
     $json
 }
 else {
-    $outputPath = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $Output))
+    $outputPath = [System.IO.Path]::GetFullPath($(if ([IO.Path]::IsPathFullyQualified($Output)) { $Output } else { Join-Path (Get-Location) $Output }))
     $outputDirectory = [System.IO.Path]::GetDirectoryName($outputPath)
     if (![string]::IsNullOrWhiteSpace($outputDirectory)) {
         [System.IO.Directory]::CreateDirectory($outputDirectory) | Out-Null
@@ -992,3 +1000,5 @@ else {
 
     Set-Content -LiteralPath $outputPath -Value $json -Encoding utf8
 }
+
+if ($failedCount -gt 0 -or $skippedCount -gt 0) { throw "Performance smoke recorded $failedCount failed/invalid measurements and $skippedCount skipped measurements. Inspect the saved report." }

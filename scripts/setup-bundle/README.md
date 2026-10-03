@@ -5,13 +5,13 @@ This self-contained bundle configures the Navlyn MCP server for a VS Code worksp
 Start with a no-write plan:
 
 ```powershell
-./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.8.5
+./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.8.6
 ```
 
 Apply only after reviewing the displayed workspace, exact version, feed, config path and effects:
 
 ```powershell
-./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.8.5 -Apply
+./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.8.6 -Apply
 ```
 
 Use `-Action Update`, `-Action Remove`, or `-Action Undo` for lifecycle operations. A local package feed can be selected with `-Feed <directory>`. The default installation is task-owned under the current user's local application data, keyed by workspace path. The helper edits `.vscode/mcp.json`, keeps unrelated JSONC text intact, and refuses entries it cannot prove it owns. It does not change client trust settings.

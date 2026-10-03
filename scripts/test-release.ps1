@@ -67,9 +67,12 @@ try {
     }
     & $FormatCheckScript -Quiet
     & (Join-Path $PSScriptRoot 'test-release-version.ps1')
+    & (Join-Path $PSScriptRoot 'test-schema-wrapper.ps1')
+    & (Join-Path $PSScriptRoot 'test-ci-diagnostics.ps1')
     & (Join-Path $PSScriptRoot 'test-validated-release.ps1')
     & $QuickScript -NoBuild -SkipDotnetTest -ShowOutput:$ShowOutput
     & $CliContractScript -NoBuild -Suite all -ShowOutput:$ShowOutput
+    & (Join-Path $PSScriptRoot 'test-reproduction-kind-parity.ps1') -NoBuild
     & $ToolSelectionEvalScript -UseBaselineTraces -NoBuild -Output 'artifacts/evals/tool-selection-release-report.json'
     & $AgentEvidenceEvalScript -NoBuild -SkipMcpLatency -OutputDirectory 'artifacts/evals/release-agent-evidence'
     & $WrongSymbolEvalScript -NoBuild -Output 'artifacts/evals/wrong-symbol-avoidance-release-report.json'
@@ -82,6 +85,8 @@ try {
 
     & $AuditScript
     & $PerformanceScript -Workspace $script:NavlynTestSolutionPath -Scenario quick -Iterations 1 -Warmup 0 -NoBuild -Output 'artifacts/performance-smoke/navlyn-quick.json'
+    & (Join-Path $PSScriptRoot 'test-performance-contract.ps1')
+    & $PerformanceScript -Workspace $script:NavlynTestSolutionPath -Scenario mcp -Profile compact -Iterations 1 -Warmup 0 -NoBuild -Output 'artifacts/performance-smoke/navlyn-mcp.json'
     & $PackageInstallScript
 
     & (Join-Path $PSScriptRoot 'test-setup-prerequisites.ps1')

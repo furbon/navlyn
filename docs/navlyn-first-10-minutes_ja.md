@@ -11,11 +11,11 @@ PowerShell で次を実行します。Navlyn を一時ディレクトリに入�
 ```powershell
 $tools = Join-Path $env:TEMP "navlyn-tools-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory $tools | Out-Null
-dotnet tool install navlyn --tool-path $tools --version 0.8.5
+dotnet tool install navlyn --tool-path $tools --version 0.8.6
 dotnet tool list --tool-path $tools
 ```
 
-一覧に `navlyn` が `0.8.5` と表示されることを確認します。
+一覧に `navlyn` が `0.8.6` と表示されることを確認します。
 
 ## 2. 調べるリポジトリで実行する
 
