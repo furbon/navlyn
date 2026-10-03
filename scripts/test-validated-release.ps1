@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'lib/navlyn-validated-release.ps1')
 $sha = 'a' * 40
 $run = @{ repository=@{full_name='furbon/navlyn'}; head_repository=@{full_name='furbon/navlyn'}; head_sha=$sha; head_branch='main'; event='push'; path='.github/workflows/ci.yml'; status='completed'; conclusion='success' }
-$jobs = @('windows','ubuntu','macos') | ForEach-Object { @{name="Build and test ($_-latest)"; status='completed'; conclusion='success'} }
+$jobs = @('windows','ubuntu','macos') | ForEach-Object { @{name="Build and test ($_-latest)"; status='completed'; conclusion='success'; run_attempt=2} }
 Assert-NavlynValidatedReleaseRun $run $sha $jobs
 foreach ($case in @(@('head_sha',('b'*40)),@('head_branch','codex/candidate'),@('event','pull_request'),@('path','.github/workflows/other.yml'),@('conclusion','failure'),@('status','in_progress'))) {
     $changed = $run.Clone(); $changed[$case[0]] = $case[1]
@@ -27,9 +27,10 @@ $state = @{run=$run; jobs=$jobs; artifacts=@($artifact)}
 $read = {
     param($Route)
     if ($Route -like '*/workflows/ci.yml/runs?*') { return @{total_count=1; workflow_runs=@($state.run)} }
-    if ($Route -like '*/attempts/2/jobs?*') { return @{total_count=3; jobs=$state.jobs} }
+    if ($Route -like '*/123/jobs?filter=latest*') { return @{total_count=3; jobs=$state.jobs} }
     if ($Route -like '*/123/artifacts?*') { return @{total_count=$state.artifacts.Count; artifacts=$state.artifacts} }
     if ($Route -ceq '/repos/furbon/navlyn/actions/runs/123/attempts/2') { return $state.run }
+    if ($Route -ceq '/repos/furbon/navlyn/actions/runs/123/attempts/1') { return $state.origin }
     throw "Unexpected fixture route: $Route"
 }.GetNewClosure()
 $validated = Get-NavlynValidatedRelease $sha $read
@@ -44,4 +45,16 @@ $state.artifacts = @($artifact, $artifact)
 $rejected = $false
 try { Get-NavlynValidatedRelease $sha $read | Out-Null } catch { $rejected = $true }
 if (!$rejected) { throw 'Ambiguous retained release accepted.' }
+$origin = $run.Clone(); $origin.run_attempt = 1; $origin.conclusion = 'failure'
+$state.origin = $origin
+$run.run_started_at = '2026-10-03T03:00:00Z'; $run.updated_at = '2026-10-03T04:00:00Z'
+$jobs[0].run_attempt = 1
+$priorArtifact = $artifact.Clone(); $priorArtifact.name = 'navlyn-validated-release-123-1'
+$state.artifacts = @($priorArtifact)
+$validated = Get-NavlynValidatedRelease $sha $read
+if ($validated.artifactRun.run_attempt -ne 1 -or $validated.run.run_attempt -ne 2) { throw 'Successful Windows inputs were lost on a failed-only platform rerun.' }
+$origin.head_sha = 'b' * 40
+$rejected = $false
+try { Get-NavlynValidatedRelease $sha $read | Out-Null } catch { $rejected = $true }
+if (!$rejected) { throw 'Older Windows inputs from different source accepted.' }
 Write-Output 'Validated release source and required-platform checks passed.'

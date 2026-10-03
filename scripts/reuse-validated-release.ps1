@@ -15,5 +15,5 @@ Expand-NavlynPublicationArtifact $zip $outputPath
 $hash = Get-NavlynPublicationHash (Join-Path $outputPath 'navlyn-publication-inputs.json')
 $inputs = Read-NavlynPublicationInputs $outputPath $ExpectedSha $hash -RequireAssets
 Assert-NavlynReleaseAssets $outputPath $inputs $repo
-Write-Output "Reused tested release inputs from exact-main CI $($validated.run.id), attempt $($validated.run.run_attempt)."
+Write-Output "Reused tested release inputs from exact-main CI $($validated.run.id), Windows attempt $($validated.artifactRun.run_attempt); latest CI attempt $($validated.run.run_attempt) succeeded."
 if ($env:GITHUB_OUTPUT) { "manifest-sha256=$hash" | Add-Content -LiteralPath $env:GITHUB_OUTPUT }
