@@ -177,7 +177,7 @@ Use `public-api-diff` when package or library compatibility matters. It compares
 
 ```powershell
 navlyn public-api-diff --workspace navlyn.slnx --base main --head HEAD --profile evidence
-navlyn public-api-diff --workspace navlyn.slnx --base main --project "navlyn(net10.0)" --change-limit 50
+navlyn public-api-diff --workspace navlyn.slnx --base main --project "navlyn" --change-limit 50
 ```
 
 Navlyn reports source and binary compatibility risk fields, but it does not emit a SemVer conclusion. Treat the output as compatibility evidence for release review.

@@ -694,7 +694,7 @@ Invalid pack values, invalid limits, invalid diff option combinations, and expli
 
 ```powershell
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- public-api-diff --workspace navlyn.slnx --base main
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- public-api-diff --workspace navlyn.slnx --base main --head HEAD --project "navlyn(net10.0)"
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- public-api-diff --workspace navlyn.slnx --base main --head HEAD --project "navlyn"
 ```
 
 Required options:
@@ -1283,7 +1283,7 @@ Result shape:
   "kind": "solution",
   "projects": [
     {
-      "name": "navlyn(net10.0)",
+      "name": "navlyn",
       "path": "navlyn/navlyn.csproj",
       "language": "C#",
       "assemblyName": "navlyn",
@@ -1303,7 +1303,7 @@ Reports deterministic repository, project, package, and relationship facts for a
 
 ```powershell
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- repo-graph --workspace navlyn.slnx
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- repo-graph --workspace navlyn.slnx --project "navlyn(net10.0)"
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- repo-graph --workspace navlyn.slnx --project "navlyn"
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- repo-graph --workspace navlyn.slnx --relationship-limit 50
 ```
 
@@ -1332,12 +1332,12 @@ Result shape:
     "items": [
       {
         "id": "project:navlyn/navlyn.csproj:net10.0",
-        "name": "navlyn(net10.0)",
+        "name": "navlyn",
         "path": "navlyn/navlyn.csproj",
         "language": "C#",
         "assemblyName": "navlyn",
         "targetFramework": "net10.0",
-        "targetFrameworks": ["net10.0", "net10.0-windows7.0"],
+        "targetFrameworks": ["net10.0"],
         "outputType": "Exe",
         "sdk": "Microsoft.NET.Sdk",
         "nullable": "enable",
@@ -1387,7 +1387,7 @@ Reports compiler diagnostics for the loaded workspace.
 
 ```powershell
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- diagnostics --workspace navlyn.slnx
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- diagnostics --workspace navlyn.slnx --project "navlyn(net10.0)"
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- diagnostics --workspace navlyn.slnx --project "navlyn"
 ```
 
 Required options:
@@ -1415,7 +1415,7 @@ Result shape:
   "diagnostics": [
     {
       "project": {
-        "name": "navlyn(net10.0)",
+        "name": "navlyn",
         "path": "navlyn/navlyn.csproj",
         "targetFramework": "net10.0"
       },
@@ -1466,7 +1466,7 @@ Input shape:
 ```json
 {
   "defaults": {
-    "project": "navlyn(net10.0)",
+    "project": "navlyn",
     "excludeGenerated": false
   },
   "requests": [
@@ -1545,7 +1545,7 @@ Example agent investigation batch:
 ```json
 {
   "requests": [
-    { "id": "target", "command": "resolve-target", "query": "CheckCommand", "assumeKind": "NamedType", "project": "Navlyn.CommandLine(net10.0)" },
+    { "id": "target", "command": "resolve-target", "query": "CheckCommand", "assumeKind": "NamedType", "project": "Navlyn.CommandLine" },
     { "id": "source", "command": "symbol-source", "candidateIdFrom": "target", "view": "declaration" },
     { "id": "refs", "command": "references", "candidateIdFrom": "target", "groupBy": ["file"], "limit": 10 }
   ]
@@ -1609,7 +1609,7 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols -
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query check --case-sensitive
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query Command --limit 5
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query Command --kind NamedType
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query CheckCommand --project "navlyn(net10.0)"
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query CheckCommand --project "navlyn"
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols --workspace tests/fixtures/MultiProjectFixture/MultiProjectFixture.slnx --query SharedWidget --project Library
 ```
 
@@ -1647,8 +1647,8 @@ Result shape:
   "accessibilities": ["Public"],
   "projects": [
     {
-      "filter": "navlyn(net10.0)",
-      "name": "navlyn(net10.0)",
+      "filter": "navlyn",
+      "name": "navlyn",
       "path": "navlyn/navlyn.csproj",
       "targetFramework": "net10.0"
     }
@@ -1691,7 +1691,7 @@ Lists C# or Visual Basic symbols resolved from identifier tokens on a source lin
 
 ```powershell
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --start-column 37 --end-column 49 --project "Navlyn.CommandLine(net10.0)"
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 8 --start-column 21 --end-column 32 --project "Navlyn.CommandLine"
 ```
 
 Required options:
@@ -1716,8 +1716,8 @@ Result shape:
   "startColumn": 1,
   "endColumn": 60,
   "project": {
-    "filter": "navlyn(net10.0)",
-    "name": "navlyn(net10.0)",
+    "filter": "navlyn",
+    "name": "navlyn",
     "path": "navlyn/navlyn.csproj"
   },
   "symbols": [
@@ -1799,7 +1799,7 @@ Outline entries include additive `candidateId` values that can be reused with ca
 Resolves the C# or Visual Basic symbol at a source position.
 
 ```powershell
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-at --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23 --project "Navlyn.CommandLine(net10.0)"
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-at --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23 --project "Navlyn.CommandLine"
 ```
 
 Required options:
@@ -1820,8 +1820,8 @@ Result shape:
   "line": 6,
   "column": 23,
   "project": {
-    "filter": "navlyn(net10.0)",
-    "name": "navlyn(net10.0)",
+    "filter": "navlyn",
+    "name": "navlyn",
     "path": "navlyn/navlyn.csproj"
   },
   "symbol": {
@@ -1855,7 +1855,7 @@ Generated source files with `--exclude-generated` produce `NAVLYN1307` on stderr
 Returns the selected symbol plus expression and binding facts at a source position. This command is additive exploration; it does not change the single-symbol contract of `symbol-at`, `definition`, or `references`.
 
 ```powershell
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-info --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --column 37
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-info --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 8 --column 21
 ```
 
 Required options:
@@ -1907,7 +1907,7 @@ When applicable, `symbol-info` may include `invocation`, `attribute`, `return`, 
 Returns enclosing C# scope facts for a source position. Unlike `symbol-at`, this command is useful on positions inside a member body because it reports the surrounding namespace, type, member, local function, lambda, or top-level statement stack.
 
 ```powershell
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- scope-at --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --column 37
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- scope-at --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 8 --column 21
 ```
 
 Required options:
@@ -1928,7 +1928,7 @@ Result shape:
   "line": 60,
   "column": 37,
   "projectContext": {
-    "name": "navlyn(net10.0)",
+    "name": "navlyn",
     "path": "navlyn/navlyn.csproj",
     "targetFramework": "net10.0",
     "languageVersion": "CSharp14",
@@ -2404,7 +2404,7 @@ Generated source files with `--exclude-generated` produce `NAVLYN1307` on stderr
 Finds source callees from the containing C# or Visual Basic member at a source position. The requested position selects the containing source member; it does not need to be on a specific invocation expression.
 
 ```powershell
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- calls --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --column 37
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- calls --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 8 --column 21
 ```
 
 Required options:
@@ -2496,7 +2496,7 @@ Generated source files with `--exclude-generated` produce `NAVLYN1307` on stderr
 Finds source definitions for the C# or Visual Basic symbol at a source position.
 
 ```powershell
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- definition --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --column 37 --project "Navlyn.CommandLine(net10.0)"
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- definition --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 8 --column 21 --project "Navlyn.CommandLine"
 ```
 
 Required options:
@@ -2518,8 +2518,8 @@ Result shape:
   "line": 60,
   "column": 37,
   "project": {
-    "filter": "navlyn(net10.0)",
-    "name": "navlyn(net10.0)",
+    "filter": "navlyn",
+    "name": "navlyn",
     "path": "navlyn/navlyn.csproj"
   },
   "symbol": {
@@ -2562,7 +2562,7 @@ Generated source files with `--exclude-generated` produce `NAVLYN1307` on stderr
 Finds source references for the C# or Visual Basic symbol at a source position. Declaration locations are not included unless Roslyn reports them as reference locations for that symbol kind.
 
 ```powershell
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- references --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --column 37 --project "Navlyn.CommandLine(net10.0)"
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- references --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 8 --column 21 --project "Navlyn.CommandLine"
 ```
 
 Required options:
@@ -2608,8 +2608,8 @@ Result shape:
     }
   ],
   "project": {
-    "filter": "navlyn(net10.0)",
-    "name": "navlyn(net10.0)",
+    "filter": "navlyn",
+    "name": "navlyn",
     "path": "navlyn/navlyn.csproj"
   },
   "symbol": {
