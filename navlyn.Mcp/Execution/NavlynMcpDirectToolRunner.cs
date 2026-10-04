@@ -40,9 +40,10 @@ internal sealed class NavlynMcpDirectToolRunner(
 
     public bool CanRun(CommandBuildResult command)
     {
-        return command.StandardInput is null &&
-            (command.Command is "repo-graph" or "outline" or "read" or "symbol-source" or "workspace-status" or "workspace-refresh" ||
-             command.Command == "target" && IsSimpleTargetQuery(command.Arguments) && HasRepositoryDisplayRoot());
+        return command.StandardInput is null && command.Command is
+            "repo-graph" or "outline" or "read" or "symbol-source" or "workspace-status" or "workspace-refresh" or
+            "target" or "find" or "definition" or "references" or "implementations" or "callers" or "calls" or
+            "type-hierarchy" or "symbol-info";
     }
 
     public async Task<NavlynToolResult> RunAsync(
@@ -95,7 +96,8 @@ internal sealed class NavlynMcpDirectToolRunner(
                     "workspace-refresh" => await RunWorkspaceRefreshAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
                     "repo-graph" => RunRepoGraph(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments),
                     "outline" => await RunOutlineAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
-                    "target" => await RunTargetAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
+                    "target" or "find" or "definition" or "references" or "implementations" or "callers" or "calls" or "type-hierarchy" or "symbol-info"
+                        => await RunCachedCommandAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command, cancellationToken),
                         _ => Failed(toolName, sourceCommand, "NAVLYN_MCP_DIRECT_UNSUPPORTED", $"Direct MCP execution is not available for {command.Command}.")
                     };
                 }
@@ -325,56 +327,14 @@ internal sealed class NavlynMcpDirectToolRunner(
         return Succeeded(toolName, sourceCommand, output, CreateMetadata(cachedWorkspace, cacheHit, "cheap-file-first"));
     }
 
-    private async Task<NavlynToolResult> RunTargetAsync(
-        string toolName,
-        NavlynSourceCommand sourceCommand,
-        NavlynMcpWorkspaceCache.CachedWorkspace cachedWorkspace,
-        bool cacheHit,
-        IReadOnlyList<string> arguments,
+    private async Task<NavlynToolResult> RunCachedCommandAsync(string toolName, NavlynSourceCommand sourceCommand,
+        NavlynMcpWorkspaceCache.CachedWorkspace cachedWorkspace, bool cacheHit, CommandBuildResult command,
         CancellationToken cancellationToken)
     {
-        string query = arguments[1].Trim();
-        ProjectFilterResolutionResult projectResolution = new ProjectFilterResolver().ResolveMany(
-            cachedWorkspace.Workspace.Solution, []);
-        if (projectResolution.Error is not null)
-        {
-            return Failed(toolName, sourceCommand, projectResolution.Error);
-        }
-
-        FuzzyQueryOptions selection = new(
-            Query: query,
-            AssumeKinds: [],
-            Match: "smart",
-            CaseSensitive: null,
-            ExcludeGenerated: false,
-            Limit: null,
-            Selection: new FuzzySelectionOptions("select", "medium", false));
-        ResolveTargetResult result = await new ResolveTargetResolver().ResolveFuzzyAsync(
-            cachedWorkspace.Workspace,
-            selection,
-            projectResolution.Projects,
-            projectFilters: null,
-            cancellationToken);
-
-        return Succeeded(toolName, sourceCommand, result with { Command = "target" },
-            CreateMetadata(cachedWorkspace, cacheHit, "semantic-target"));
-    }
-
-    private static bool IsSimpleTargetQuery(IReadOnlyList<string> arguments)
-    {
-        return arguments.Count == 2 && arguments[0] == "--query" &&
-            !string.IsNullOrWhiteSpace(arguments[1]);
-    }
-
-    private bool HasRepositoryDisplayRoot()
-    {
-        string workspace = options.Workspace;
-        string anchor = string.IsNullOrWhiteSpace(workspace) || workspace == "auto"
-            ? options.WorkingDirectory
-            : Path.IsPathRooted(workspace)
-                ? workspace
-                : Path.Combine(options.WorkingDirectory, workspace);
-        return PathDisplay.FindRepositoryRoot(anchor) is not null;
+        NavlynToolResult result = await new NavlynInProcessCommandAdapter(options).RunWithWorkspaceAsync(
+            toolName, command.Command!, command.Arguments, null, cancellationToken, cachedWorkspace.Workspace);
+        return result.Ok ? result with { Metadata = CreateMetadata(cachedWorkspace, cacheHit,
+            command.Command is "target" or "find" ? "semantic-target" : "semantic-navigation") } : result;
     }
 
     private async Task<(NavlynToolResult Result, ExternalMemberSnapshot? Snapshot)> RunSymbolSourceAsync(
@@ -483,7 +443,9 @@ internal sealed class NavlynMcpDirectToolRunner(
         }
 
         if (cachedWorkspace.TryGetCandidateTarget(normalizedCandidateId, out NavlynMcpCandidateTarget cachedTarget) &&
-            (project is null || string.Equals(cachedTarget.ProjectName, project.Name, StringComparison.Ordinal)))
+            (project is null || string.Equals(cachedTarget.ProjectName, project.Name, StringComparison.Ordinal)) &&
+            (WorkspaceSelectionScope.CurrentTargetFramework is null ||
+             cachedWorkspace.FindProject(cachedTarget.ProjectName) is Project selectedProject && WorkspaceSelectionScope.Includes(selectedProject)))
         {
             Project? targetProject = project ?? cachedWorkspace.FindProject(cachedTarget.ProjectName);
             return CandidateTargetResolutionResult.Succeeded(new CandidateTargetResolution(
@@ -495,7 +457,7 @@ internal sealed class NavlynMcpDirectToolRunner(
         }
 
         IReadOnlyList<Project> projects = project is null
-            ? cachedWorkspace.Workspace.Solution.Projects.ToArray()
+            ? cachedWorkspace.Workspace.Solution.Projects.Where(WorkspaceSelectionScope.Includes).ToArray()
             : [project];
         CandidateTargetResolutionResult result = await new CandidateTargetResolver().ResolveAsync(
             cachedWorkspace.Workspace.Solution,

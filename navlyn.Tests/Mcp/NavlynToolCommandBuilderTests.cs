@@ -224,7 +224,7 @@ public sealed class NavlynToolCommandBuilderTests
             candidatePolicy: "select",
             minConfidence: "medium",
             explainSelection: true,
-            project: "Navlyn.Core(net10.0)",
+            project: "Navlyn.Core",
             candidateLimit: 3,
             entityLimit: 7,
             querySiteLimit: 9,
@@ -233,7 +233,7 @@ public sealed class NavlynToolCommandBuilderTests
         Assert.True(result.IsValid, result.Error);
         Assert.Equal("entity-impact", result.Command);
         Assert.Equal(
-            ["--query", "Order", "--assume-kind", "NamedType", "--project", "Navlyn.Core(net10.0)", "--match", "exact", "--candidate-policy", "select", "--min-confidence", "medium", "--explain-selection", "--candidate-limit", "3", "--entity-limit", "7", "--query-site-limit", "9", "--evidence-limit", "4", "--profile", "compact"],
+            ["--query", "Order", "--assume-kind", "NamedType", "--project", "Navlyn.Core", "--match", "exact", "--candidate-policy", "select", "--min-confidence", "medium", "--explain-selection", "--candidate-limit", "3", "--entity-limit", "7", "--query-site-limit", "9", "--evidence-limit", "4", "--profile", "compact"],
             result.Arguments);
     }
 
@@ -263,13 +263,13 @@ public sealed class NavlynToolCommandBuilderTests
             file: "src/Order.cs",
             line: 11,
             column: 6,
-            projects: ["Navlyn.Core(net10.0)"],
+            projects: ["Navlyn.Core"],
             entityLimit: 1);
 
         Assert.True(result.IsValid, result.Error);
         Assert.Equal("entity-impact", result.Command);
         Assert.Equal(
-            ["--file", "src/Order.cs", "--line", "11", "--column", "6", "--project", "Navlyn.Core(net10.0)", "--entity-limit", "1", "--profile", "compact"],
+            ["--file", "src/Order.cs", "--line", "11", "--column", "6", "--project", "Navlyn.Core", "--entity-limit", "1", "--profile", "compact"],
             result.Arguments);
     }
 
@@ -368,8 +368,8 @@ public sealed class NavlynToolCommandBuilderTests
             "source-candidate-policy" => BuildEf("impact", file: "src/Order.cs", line: 11, column: 6, candidatePolicy: "select"),
             "source-confidence" => BuildEf("impact", file: "src/Order.cs", line: 11, column: 6, minConfidence: "high"),
             "source-explain" => BuildEf("impact", file: "src/Order.cs", line: 11, column: 6, explainSelection: true),
-            "source-projects" => BuildEf("impact", file: "src/Order.cs", line: 11, column: 6, projects: ["Navlyn.Core(net10.0)", "navlyn(net10.0)"]),
-            "project-collision" => BuildEf("impact", query: "Order", project: "Navlyn.Core(net10.0)", projects: ["navlyn(net10.0)"]),
+            "source-projects" => BuildEf("impact", file: "src/Order.cs", line: 11, column: 6, projects: ["Navlyn.Core", "navlyn"]),
+            "project-collision" => BuildEf("impact", query: "Order", project: "Navlyn.Core", projects: ["navlyn"]),
             "assume-kind-collision" => BuildEf("impact", query: "Order", assumeKind: "NamedType", assumeKinds: ["Class"]),
             "invalid-match" => BuildEf("impact", query: "Order", match: "fuzzy"),
             "padded-match" => BuildEf("impact", query: "Order", match: " exact "),
@@ -400,7 +400,7 @@ public sealed class NavlynToolCommandBuilderTests
             "usage",
             " Microsoft.EntityFrameworkCore ",
             namespaces: [" Microsoft.EntityFrameworkCore", "Microsoft.Extensions.DependencyInjection ", ""],
-            project: "Navlyn.Core(net10.0)",
+            project: "Navlyn.Core",
             includeTests: false,
             excludeGenerated: true,
             usageLimit: 12,
@@ -409,7 +409,7 @@ public sealed class NavlynToolCommandBuilderTests
         Assert.True(result.IsValid, result.Error);
         Assert.Equal("package-usage", result.Command);
         Assert.Equal(
-            ["--package", "Microsoft.EntityFrameworkCore", "--namespace", "Microsoft.EntityFrameworkCore", "--namespace", "Microsoft.Extensions.DependencyInjection", "--project", "Navlyn.Core(net10.0)", "--usage-limit", "12", "--reference-limit", "8", "--include-tests", "false", "--exclude-generated", "--profile", "compact"],
+            ["--package", "Microsoft.EntityFrameworkCore", "--namespace", "Microsoft.EntityFrameworkCore", "--namespace", "Microsoft.Extensions.DependencyInjection", "--project", "Navlyn.Core", "--usage-limit", "12", "--reference-limit", "8", "--include-tests", "false", "--exclude-generated", "--profile", "compact"],
             result.Arguments);
     }
 
@@ -420,7 +420,7 @@ public sealed class NavlynToolCommandBuilderTests
             "impact",
             "Microsoft.EntityFrameworkCore",
             namespaces: ["Microsoft.EntityFrameworkCore"],
-            projects: ["Navlyn.Core(net10.0)"],
+            projects: ["Navlyn.Core"],
             includeTests: true,
             usageLimit: 5,
             referenceLimit: 4,
@@ -429,7 +429,7 @@ public sealed class NavlynToolCommandBuilderTests
         Assert.True(result.IsValid, result.Error);
         Assert.Equal("package-impact", result.Command);
         Assert.Equal(
-            ["--package", "Microsoft.EntityFrameworkCore", "--namespace", "Microsoft.EntityFrameworkCore", "--project", "Navlyn.Core(net10.0)", "--usage-limit", "5", "--reference-limit", "4", "--include-tests", "true", "--profile", "evidence"],
+            ["--package", "Microsoft.EntityFrameworkCore", "--namespace", "Microsoft.EntityFrameworkCore", "--project", "Navlyn.Core", "--usage-limit", "5", "--reference-limit", "4", "--include-tests", "true", "--profile", "evidence"],
             result.Arguments);
     }
 
@@ -976,7 +976,7 @@ public sealed class NavlynToolCommandBuilderTests
 
         CommandBuildResult filtered = BuildDiagnostics(
             "workspace",
-            project: "navlyn(net10.0)",
+            project: "navlyn",
             excludeGenerated: true,
             severities: ["Hidden", "Info", "Warning", "Error"],
             limit: 8,
@@ -985,7 +985,7 @@ public sealed class NavlynToolCommandBuilderTests
         Assert.True(filtered.IsValid, filtered.Error);
         Assert.Equal("diagnostics", filtered.Command);
         Assert.Equal(
-            ["--project", "navlyn(net10.0)", "--exclude-generated", "--severity", "Hidden", "--severity", "Info", "--severity", "Warning", "--severity", "Error", "--limit", "8", "--id", "CS0168", "--id", "CS0219"],
+            ["--project", "navlyn", "--exclude-generated", "--severity", "Hidden", "--severity", "Info", "--severity", "Warning", "--severity", "Error", "--limit", "8", "--id", "CS0168", "--id", "CS0219"],
             filtered.Arguments);
     }
 
@@ -2057,7 +2057,7 @@ public sealed class NavlynToolCommandBuilderTests
             assumeKinds: null,
             match: null,
             caseSensitive: null,
-            project: "Navlyn.CommandLine(net10.0)",
+            project: "Navlyn.CommandLine",
             projects: null,
             excludeGenerated: true,
             goal: "modify",
@@ -2074,7 +2074,7 @@ public sealed class NavlynToolCommandBuilderTests
         Assert.True(result.IsValid);
         Assert.Equal("edit-preflight", result.Command);
         Assert.Equal(
-            ["--query", "DoctorCommand", "--assume-kind", "NamedType", "--project", "Navlyn.CommandLine(net10.0)", "--limit", "5", "--exclude-generated", "--goal", "modify", "--change-kind", "behavior", "--budget-tokens", "3000", "--item-limit", "8", "--reference-limit", "20", "--test-limit", "10"],
+            ["--query", "DoctorCommand", "--assume-kind", "NamedType", "--project", "Navlyn.CommandLine", "--limit", "5", "--exclude-generated", "--goal", "modify", "--change-kind", "behavior", "--budget-tokens", "3000", "--item-limit", "8", "--reference-limit", "20", "--test-limit", "10"],
             result.Arguments);
     }
 

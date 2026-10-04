@@ -68,7 +68,7 @@ Reports are structured JSON with:
 
 Timings are environment-dependent. Treat local reports as release and investigation evidence, not a universal service-level objective.
 
-## Current v0.8.6 MCP smoke
+## Historical v0.8.6 MCP smoke
 
 On 2026-10-04, the v0.8.6 release candidate was measured on Windows 10.0.26200 with SDK 10.0.401, workspace `navlyn.slnx`, scenario `mcp`, profile `compact`, one iteration, and no warmup or build. Local release CLI validation ran concurrently, so these are functional smoke observations rather than a comparison benchmark. All four calls returned valid JSON and success; no sample was truncated.
 
@@ -222,3 +222,7 @@ When repeated measurements show that workspace load dominates real agent workflo
 - on-disk symbol index;
 - benchmark corpus and variance tracking;
 - CI performance budgets after baseline variance is understood.
+
+## v0.9.0
+
+See [measured product evidence](evals/v0.9.0-product-evidence.md) for the same-workspace warm comparison, discovery size, fixed live tasks, and classified public-package corpus results. Measurements are product experiments, not additional CI gates.

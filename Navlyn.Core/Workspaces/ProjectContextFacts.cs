@@ -18,6 +18,8 @@ internal static partial class ProjectContextFacts
             return targetFramework;
         }
 
+        string? fromOutput = GetTargetFrameworkFromOutputPath(project);
+        if (fromOutput is not null) { return fromOutput; }
         string? fromSymbols = null;
         if (project.ParseOptions is CSharpParseOptions parseOptions)
         {
@@ -37,7 +39,7 @@ internal static partial class ProjectContextFacts
                 .FirstOrDefault();
         }
 
-        return fromSymbols ?? GetTargetFrameworkFromOutputPath(project);
+        return fromSymbols;
     }
 
     public static string? GetLanguageVersion(Project project)
@@ -110,8 +112,16 @@ internal static partial class ProjectContextFacts
                 .Select(target => target.Name.Split('/')[0])
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
-            return frameworks.Length == 1 && string.Equals(frameworks[0], finalDirectory, StringComparison.OrdinalIgnoreCase)
-                ? frameworks[0] : null;
+            if (assets.RootElement.TryGetProperty("project", out JsonElement projectFacts) &&
+                projectFacts.TryGetProperty("restore", out JsonElement restore) &&
+                restore.TryGetProperty("originalTargetFrameworks", out JsonElement originalFrameworks) &&
+                originalFrameworks.ValueKind == JsonValueKind.Array &&
+                originalFrameworks.EnumerateArray().Any(value => value.ValueKind == JsonValueKind.String &&
+                    string.Equals(value.GetString(), finalDirectory, StringComparison.OrdinalIgnoreCase)))
+            {
+                return finalDirectory;
+            }
+            return frameworks.Contains(finalDirectory, StringComparer.OrdinalIgnoreCase) ? finalDirectory : null;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
         {

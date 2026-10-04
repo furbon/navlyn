@@ -12,6 +12,11 @@ internal sealed class ProjectFilterResolver
         IReadOnlyList<string> filters)
     {
         IReadOnlyList<Project> orderedProjects = GetProjects(solution);
+        if (orderedProjects.Count == 0 && WorkspaceSelectionScope.CurrentTargetFramework is string framework)
+        {
+            return ProjectFilterResolutionResult.Failed(DiagnosticIds.InvalidProjectFilter,
+                $"No workspace project targets {framework}.", ExitCodes.UsageError);
+        }
         if (filters.Count == 0)
         {
             return ProjectFilterResolutionResult.Succeeded(orderedProjects, appliedFilters: []);
@@ -43,6 +48,11 @@ internal sealed class ProjectFilterResolver
     public ProjectFilterResolutionResult ResolveSingle(Solution solution, string? filter)
     {
         IReadOnlyList<Project> orderedProjects = GetProjects(solution);
+        if (orderedProjects.Count == 0 && WorkspaceSelectionScope.CurrentTargetFramework is string framework)
+        {
+            return ProjectFilterResolutionResult.Failed(DiagnosticIds.InvalidProjectFilter,
+                $"No workspace project targets {framework}.", ExitCodes.UsageError);
+        }
         return string.IsNullOrWhiteSpace(filter)
             ? ProjectFilterResolutionResult.Succeeded(orderedProjects, appliedFilters: [])
             : ResolveOne(orderedProjects, filter);
@@ -117,6 +127,7 @@ internal sealed class ProjectFilterResolver
     private static IReadOnlyList<Project> GetProjects(Solution solution)
     {
         return [.. solution.Projects
+            .Where(WorkspaceSelectionScope.Includes)
             .OrderBy(project => project.FilePath, StringComparer.Ordinal)
             .ThenBy(project => project.Name, StringComparer.Ordinal)];
     }

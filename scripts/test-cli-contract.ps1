@@ -137,7 +137,7 @@ function Invoke-NavigationContractGate {
     $navigationBatchInput = @'
 {
   "defaults": {
-    "project": "Navlyn.CommandLine(net10.0)"
+    "project": "Navlyn.CommandLine"
   },
   "requests": [
     { "id": "symbols", "command": "symbols", "query": "Check", "limit": 1 },
@@ -292,7 +292,7 @@ try {
     Assert-Equal -Name 'overview workspace' -Actual $overviewJson.workspace -Expected 'navlyn.slnx'
     Assert-Equal -Name 'overview kind' -Actual $overviewJson.kind -Expected 'solution'
     Assert-Equal -Name 'overview project count' -Actual @($overviewJson.projects).Count -Expected 10
-    Assert-Equal -Name 'overview project name' -Actual $overviewProject.name -Expected 'navlyn(net10.0)'
+    Assert-Equal -Name 'overview project name' -Actual $overviewProject.name -Expected 'navlyn'
     Assert-Equal -Name 'overview project path' -Actual $overviewProject.path -Expected 'navlyn/navlyn.csproj'
     Assert-Equal -Name 'overview project language' -Actual $overviewProject.language -Expected 'C#'
     Assert-Equal -Name 'overview project assembly name' -Actual $overviewProject.assemblyName -Expected 'navlyn'
@@ -327,7 +327,7 @@ try {
 
     $subdirectoryProjectFilter = Invoke-Navlyn `
         -Name 'diagnostics from subdirectory with repo-relative project filter' `
-        -Arguments @('diagnostics', '--workspace', 'navlyn.slnx', '--project', 'navlyn.Tests(net10.0)', '--limit', '1') `
+        -Arguments @('diagnostics', '--workspace', 'navlyn.slnx', '--project', 'navlyn.Tests', '--limit', '1') `
         -ExpectedExitCode 0 `
         -WorkingDirectory $ProjectDir
 
@@ -407,7 +407,7 @@ try {
 
     $publicApiDiff = Invoke-Navlyn `
         -Name 'public-api-diff valid workspace' `
-        -Arguments @('public-api-diff', '--workspace', 'navlyn.slnx', '--base', 'HEAD', '--head', 'HEAD', '--project', 'navlyn(net10.0)', '--change-limit', '5') `
+        -Arguments @('public-api-diff', '--workspace', 'navlyn.slnx', '--base', 'HEAD', '--head', 'HEAD', '--project', 'navlyn', '--change-limit', '5') `
         -ExpectedExitCode 0
 
     Assert-Empty -Name 'public-api-diff stderr' -Text $publicApiDiff.Stderr
@@ -427,7 +427,7 @@ try {
 
     $testsForSymbol = Invoke-Navlyn `
         -Name 'tests-for-symbol query mode' `
-        -Arguments @('tests-for-symbol', '--workspace', 'navlyn.slnx', '--query', 'RepoGraphResolver', '--assume-kind', 'NamedType', '--project', 'Navlyn.Core(net10.0)', '--test-project', 'navlyn.Tests(net10.0)', '--test-limit', '5') `
+        -Arguments @('tests-for-symbol', '--workspace', 'navlyn.slnx', '--query', 'RepoGraphResolver', '--assume-kind', 'NamedType', '--project', 'Navlyn.Core', '--test-project', 'navlyn.Tests', '--test-limit', '5') `
         -ExpectedExitCode 0
 
     Assert-Empty -Name 'tests-for-symbol stderr' -Text $testsForSymbol.Stderr
@@ -439,7 +439,7 @@ try {
 
     $testsForDiff = Invoke-Navlyn `
         -Name 'tests-for-diff valid workspace' `
-        -Arguments @('tests-for-diff', '--workspace', 'navlyn.slnx', '--base', 'HEAD', '--head', 'HEAD', '--project', 'navlyn(net10.0)', '--test-project', 'navlyn.Tests(net10.0)', '--symbol-limit', '1', '--test-limit', '1') `
+        -Arguments @('tests-for-diff', '--workspace', 'navlyn.slnx', '--base', 'HEAD', '--head', 'HEAD', '--project', 'navlyn', '--test-project', 'navlyn.Tests', '--symbol-limit', '1', '--test-limit', '1') `
         -ExpectedExitCode 0
 
     Assert-Empty -Name 'tests-for-diff stderr' -Text $testsForDiff.Stderr
@@ -568,7 +568,7 @@ try {
 
     $contextPackQuery = Invoke-Navlyn `
         -Name 'context-pack query mode' `
-        -Arguments @('context-pack', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine(net10.0)', '--budget-tokens', '2000', '--item-limit', '5') `
+        -Arguments @('context-pack', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine', '--budget-tokens', '2000', '--item-limit', '5') `
         -ExpectedExitCode 0
 
     Assert-Empty -Name 'context-pack query stderr' -Text $contextPackQuery.Stderr
@@ -583,7 +583,7 @@ try {
 
     $contextPackChangeKind = Invoke-Navlyn `
         -Name 'context-pack change kind compact' `
-        -Arguments @('context-pack', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine(net10.0)', '--goal', 'modify', '--change-kind', 'signature', '--profile', 'compact', '--budget-tokens', '2000', '--item-limit', '5') `
+        -Arguments @('context-pack', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine', '--goal', 'modify', '--change-kind', 'signature', '--profile', 'compact', '--budget-tokens', '2000', '--item-limit', '5') `
         -ExpectedExitCode 0
 
     Assert-Empty -Name 'context-pack change kind stderr' -Text $contextPackChangeKind.Stderr
@@ -594,7 +594,7 @@ try {
 
     $editPreflight = Invoke-Navlyn `
         -Name 'edit-preflight unique target' `
-        -Arguments @('edit-preflight', '--workspace', 'navlyn.slnx', '--query', 'DoctorCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine(net10.0)', '--goal', 'modify', '--change-kind', 'behavior', '--budget-tokens', '3000', '--item-limit', '5', '--reference-limit', '10', '--test-limit', '5') `
+        -Arguments @('edit-preflight', '--workspace', 'navlyn.slnx', '--query', 'DoctorCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine', '--goal', 'modify', '--change-kind', 'behavior', '--budget-tokens', '3000', '--item-limit', '5', '--reference-limit', '10', '--test-limit', '5') `
         -ExpectedExitCode 0
 
     Assert-Empty -Name 'edit-preflight stderr' -Text $editPreflight.Stderr
@@ -608,7 +608,7 @@ try {
 
     $changeIntent = Invoke-Navlyn `
         -Name 'change-intent-pack unique target' `
-        -Arguments @('change-intent-pack', '--workspace', 'navlyn.slnx', '--query', 'DoctorCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine(net10.0)', '--goal', 'modify', '--change-kind', 'behavior') `
+        -Arguments @('change-intent-pack', '--workspace', 'navlyn.slnx', '--query', 'DoctorCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine', '--goal', 'modify', '--change-kind', 'behavior') `
         -ExpectedExitCode 0
 
     Assert-Empty -Name 'change-intent-pack stderr' -Text $changeIntent.Stderr
@@ -629,7 +629,7 @@ try {
 
     $wrongSymbolGuard = Invoke-Navlyn `
         -Name 'wrong-symbol-guard empty diff policy fail' `
-        -Arguments @('wrong-symbol-guard', '--workspace', 'navlyn.slnx', '--query', 'DoctorCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine(net10.0)', '--base', 'HEAD', '--head', 'HEAD', '--fail-on-risk', 'high') `
+        -Arguments @('wrong-symbol-guard', '--workspace', 'navlyn.slnx', '--query', 'DoctorCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine', '--base', 'HEAD', '--head', 'HEAD', '--fail-on-risk', 'high') `
         -ExpectedExitCode 1
 
     Assert-Empty -Name 'wrong-symbol-guard stderr' -Text $wrongSymbolGuard.Stderr
@@ -704,7 +704,7 @@ try {
     else {
     $symbols = Invoke-Navlyn `
         -Name 'symbols partial query' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', 'Check') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--project', 'Navlyn.CommandLine', '--query', 'Check') `
         -ExpectedExitCode 0
 
     $symbolsJson = $symbols.Stdout | ConvertFrom-Json
@@ -725,7 +725,7 @@ try {
 
     $symbolsLimit = Invoke-Navlyn `
         -Name 'symbols limited query' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', 'Check', '--limit', '1') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--project', 'Navlyn.CommandLine', '--query', 'Check', '--limit', '1') `
         -ExpectedExitCode 0
 
     $symbolsLimitJson = $symbolsLimit.Stdout | ConvertFrom-Json
@@ -736,7 +736,7 @@ try {
 
     $symbolsKind = Invoke-Navlyn `
         -Name 'symbols kind filter query' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', 'Check', '--kind', 'cLaSs') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--project', 'Navlyn.CommandLine', '--query', 'Check', '--kind', 'cLaSs') `
         -ExpectedExitCode 0
 
     $symbolsKindJson = $symbolsKind.Stdout | ConvertFrom-Json
@@ -747,7 +747,7 @@ try {
 
     $symbolsNamespace = Invoke-Navlyn `
         -Name 'symbols namespace container accessibility filters' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', 'Create', '--namespace', 'Navlyn.Cli.Commands', '--namespace-match', 'exact', '--container', 'CheckCommand', '--container-match', 'contains', '--accessibility', 'Public', '--limit', '1') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--project', 'Navlyn.CommandLine', '--query', 'Create', '--namespace', 'Navlyn.Cli.Commands', '--namespace-match', 'exact', '--container', 'CheckCommand', '--container-match', 'contains', '--accessibility', 'Public', '--limit', '1') `
         -ExpectedExitCode 0
 
     $symbolsNamespaceJson = $symbolsNamespace.Stdout | ConvertFrom-Json
@@ -758,7 +758,7 @@ try {
 
     $symbolsExact = Invoke-Navlyn `
         -Name 'symbols exact query' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', 'CheckCommand', '--match', 'exact') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--project', 'Navlyn.CommandLine', '--query', 'CheckCommand', '--match', 'exact') `
         -ExpectedExitCode 0
 
     $symbolsExactJson = $symbolsExact.Stdout | ConvertFrom-Json
@@ -768,7 +768,7 @@ try {
 
     $symbolsRegex = Invoke-Navlyn `
         -Name 'symbols regex query' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', '^Check.*Command$', '--match', 'regex') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--project', 'Navlyn.CommandLine', '--query', '^Check.*Command$', '--match', 'regex') `
         -ExpectedExitCode 0
 
     $symbolsRegexJson = $symbolsRegex.Stdout | ConvertFrom-Json
@@ -778,7 +778,7 @@ try {
 
     $symbolsCaseSensitive = Invoke-Navlyn `
         -Name 'symbols case-sensitive query' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', 'check', '--case-sensitive') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--project', 'Navlyn.CommandLine', '--query', 'check', '--case-sensitive') `
         -ExpectedExitCode 0
 
     $symbolsCaseSensitiveJson = $symbolsCaseSensitive.Stdout | ConvertFrom-Json
@@ -787,28 +787,28 @@ try {
 
     $symbolsInvalidRegex = Invoke-Navlyn `
         -Name 'symbols invalid regex' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', '[', '--match', 'regex') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--project', 'Navlyn.CommandLine', '--query', '[', '--match', 'regex') `
         -ExpectedExitCode 2
     Assert-Empty -Name 'symbols invalid regex stdout' -Text $symbolsInvalidRegex.Stdout
     Assert-Contains -Name 'symbols invalid regex stderr' -Text $symbolsInvalidRegex.Stderr -Expected 'NAVLYN1002:'
 
     $symbolsInvalidMatch = Invoke-Navlyn `
         -Name 'symbols invalid match mode' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', 'Check', '--match', 'starts-with') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--project', 'Navlyn.CommandLine', '--query', 'Check', '--match', 'starts-with') `
         -ExpectedExitCode 2
     Assert-Empty -Name 'symbols invalid match stdout' -Text $symbolsInvalidMatch.Stdout
     Assert-Contains -Name 'symbols invalid match stderr' -Text $symbolsInvalidMatch.Stderr -Expected 'NAVLYN1001:'
 
     $symbolsInvalidLimit = Invoke-Navlyn `
         -Name 'symbols invalid limit' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', 'Check', '--limit', '0') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--project', 'Navlyn.CommandLine', '--query', 'Check', '--limit', '0') `
         -ExpectedExitCode 2
     Assert-Empty -Name 'symbols invalid limit stdout' -Text $symbolsInvalidLimit.Stdout
     Assert-Contains -Name 'symbols invalid limit stderr' -Text $symbolsInvalidLimit.Stderr -Expected 'NAVLYN1003:'
 
     $symbolsInvalidKind = Invoke-Navlyn `
         -Name 'symbols invalid kind' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', 'Check', '--kind', '1') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--project', 'Navlyn.CommandLine', '--query', 'Check', '--kind', '1') `
         -ExpectedExitCode 2
     Assert-Empty -Name 'symbols invalid kind stdout' -Text $symbolsInvalidKind.Stdout
     Assert-Contains -Name 'symbols invalid kind stderr' -Text $symbolsInvalidKind.Stderr -Expected 'NAVLYN1004:'
@@ -885,7 +885,7 @@ try {
     Assert-Equal -Name 'symbol-at declaration column' -Actual $symbolAtJson.symbol.column -Expected 23
     Assert-Equal -Name 'symbol-at declaration end line' -Actual $symbolAtJson.symbol.endLine -Expected 6
     Assert-Equal -Name 'symbol-at declaration end column' -Actual $symbolAtJson.symbol.endColumn -Expected 35
-    Assert-Equal -Name 'symbol-at facts project' -Actual $symbolAtJson.symbol.facts.project -Expected 'Navlyn.CommandLine(net10.0)'
+    Assert-Equal -Name 'symbol-at facts project' -Actual $symbolAtJson.symbol.facts.project -Expected 'Navlyn.CommandLine'
 
     $symbolInfo = Invoke-Navlyn `
         -Name 'symbol-info invocation' `
@@ -903,7 +903,7 @@ try {
 
     $scopeAtJson = $scopeAt.Stdout | ConvertFrom-Json
     Assert-Equal -Name 'scope-at containing symbol' -Actual $scopeAtJson.containingSymbol.name -Expected 'CreateRootCommand'
-    Assert-Equal -Name 'scope-at project context' -Actual $scopeAtJson.projectContext.name -Expected 'Navlyn.CommandLine(net10.0)'
+    Assert-Equal -Name 'scope-at project context' -Actual $scopeAtJson.projectContext.name -Expected 'Navlyn.CommandLine'
     Assert-Equal -Name 'scope-at innermost scope' -Actual @($scopeAtJson.scopes)[-1].kind -Expected 'Member'
 
     $symbolSource = Invoke-Navlyn `
@@ -1007,7 +1007,7 @@ try {
 
     $find = Invoke-Navlyn `
         -Name 'find fuzzy unique type' `
-        -Arguments @('find', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine(net10.0)') `
+        -Arguments @('find', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine') `
         -ExpectedExitCode 0
 
     $findJson = $find.Stdout | ConvertFrom-Json
@@ -1020,7 +1020,7 @@ try {
 
     $findExplain = Invoke-Navlyn `
         -Name 'find fuzzy explain selection' `
-        -Arguments @('find', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine(net10.0)', '--explain-selection') `
+        -Arguments @('find', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine', '--explain-selection') `
         -ExpectedExitCode 0
 
     $findExplainJson = $findExplain.Stdout | ConvertFrom-Json
@@ -1046,7 +1046,7 @@ try {
 
     $whereUsed = Invoke-Navlyn `
         -Name 'where-used fuzzy references' `
-        -Arguments @('where-used', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine(net10.0)', '--limit', '1', '--include-snippets', '--snippet-lines', '0') `
+        -Arguments @('where-used', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine', '--limit', '1', '--include-snippets', '--snippet-lines', '0') `
         -ExpectedExitCode 0
 
     $whereUsedJson = $whereUsed.Stdout | ConvertFrom-Json
@@ -1057,7 +1057,7 @@ try {
 
     $about = Invoke-Navlyn `
         -Name 'about fuzzy summary' `
-        -Arguments @('about', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine(net10.0)', '--member-limit', '2', '--reference-limit', '1') `
+        -Arguments @('about', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine', '--member-limit', '2', '--reference-limit', '1') `
         -ExpectedExitCode 0
 
     $aboutJson = $about.Stdout | ConvertFrom-Json
@@ -1066,7 +1066,7 @@ try {
 
     $related = Invoke-Navlyn `
         -Name 'related fuzzy files' `
-        -Arguments @('related', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine(net10.0)', '--limit', '2') `
+        -Arguments @('related', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine', '--limit', '2') `
         -ExpectedExitCode 0
 
     $relatedJson = $related.Stdout | ConvertFrom-Json
@@ -1075,7 +1075,7 @@ try {
 
     $impact = Invoke-Navlyn `
         -Name 'impact fuzzy files' `
-        -Arguments @('impact', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine(net10.0)', '--limit', '2') `
+        -Arguments @('impact', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine', '--limit', '2') `
         -ExpectedExitCode 0
 
     $impactJson = $impact.Stdout | ConvertFrom-Json
@@ -1084,7 +1084,7 @@ try {
 
     $entrypoints = Invoke-Navlyn `
         -Name 'entrypoints fuzzy no chains for type' `
-        -Arguments @('entrypoints', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine(net10.0)', '--limit', '2') `
+        -Arguments @('entrypoints', '--workspace', 'navlyn.slnx', '--query', 'CheckCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine', '--limit', '2') `
         -ExpectedExitCode 0
 
     $entrypointsJson = $entrypoints.Stdout | ConvertFrom-Json

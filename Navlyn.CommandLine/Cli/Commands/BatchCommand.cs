@@ -1839,7 +1839,12 @@ internal static partial class BatchCommand
             return false;
         }
 
-        defaults = new BatchDefaults(Project: project, ExcludeGenerated: excludeGenerated);
+        if (!TryGetOptionalString(defaultsElement, "targetFramework", out string? targetFramework, out batchError))
+        {
+            error = $"defaults.{batchError!.Message}";
+            return false;
+        }
+        defaults = new BatchDefaults(Project: project, ExcludeGenerated: excludeGenerated, TargetFramework: targetFramework);
         error = null;
         return true;
     }
@@ -1874,7 +1879,7 @@ internal static partial class BatchCommand
         if (hasCandidateId)
         {
             IReadOnlyList<Project> projects = project is null
-                ? loadedWorkspace.Solution.Projects.ToArray()
+                ? loadedWorkspace.Solution.Projects.Where(WorkspaceSelectionScope.Includes).ToArray()
                 : [project];
             CandidateTargetResolutionResult targetResult = await new CandidateTargetResolver().ResolveAsync(
                 loadedWorkspace.Solution,

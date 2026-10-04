@@ -104,7 +104,7 @@ internal static class DoctorCommand
             Dotnet: dotnet,
             Runtime: new DoctorRuntime(
                 CurrentFramework: System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,
-                SupportedTargetFrameworks: ["net8.0", "net10.0"]),
+                SupportedTargetFrameworks: ["net10.0"]),
             Workspace: new DoctorWorkspace(
                 Loaded: workspaceOk,
                 Path: loadedWorkspace?.DisplayPath,

@@ -44,6 +44,12 @@ These commands are first-class canonical aliases over the advanced implementatio
 
 Existing advanced commands remain supported for scripts and specialized workflows. New agent integrations should prefer the canonical names unless they need a narrower advanced primitive such as `references`, `di-impact`, or `public-api-diff`.
 
+## Explicit target framework
+
+All commands accept `--target-framework <tfm>` to restrict project/symbol selection to one exact loaded target framework. For example, `navlyn target --workspace App.csproj --query Widget --target-framework net10.0` resolves against that framework, including source-position and candidate-ID selection. An unknown framework fails selection; omission retains existing all-framework behavior. Combine it with `--project` when several projects share the same framework. This selects semantic binding; workspace-wide lifecycle/status inventories still describe the loaded workspace.
+
+Batch accepts `defaults.targetFramework` and a per-request `targetFramework` override. Names are trimmed and compared without case sensitivity; blank/non-string values fail validation. Supported batch command names remain unchanged (`resolve-target`, rather than `target`, selects a target in batch).
+
 ## General Contract
 
 - stdout is reserved for command result JSON.
@@ -1331,7 +1337,7 @@ Result shape:
         "language": "C#",
         "assemblyName": "navlyn",
         "targetFramework": "net10.0",
-        "targetFrameworks": ["net10.0", "net8.0"],
+        "targetFrameworks": ["net10.0", "net10.0-windows7.0"],
         "outputType": "Exe",
         "sdk": "Microsoft.NET.Sdk",
         "nullable": "enable",

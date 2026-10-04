@@ -5,6 +5,7 @@ namespace Navlyn.RepoGraph;
 
 internal sealed class ProjectFileReader
 {
+    private readonly Dictionary<string, string[]> repositoryFiles = new(StringComparer.Ordinal);
     public ProjectFileFacts Read(string? projectPath, string repositoryRoot)
     {
         if (string.IsNullOrWhiteSpace(projectPath))
@@ -252,18 +253,30 @@ internal sealed class ProjectFileReader
             .OrderBy(value => value, StringComparer.Ordinal)];
     }
 
-    private static IEnumerable<string> EnumerateRepositoryFiles(string repositoryRoot, string name)
+    private IEnumerable<string> EnumerateRepositoryFiles(string repositoryRoot, string name)
     {
-        return Directory.EnumerateFiles(repositoryRoot, name, SearchOption.AllDirectories)
-            .Where(path => !IsIgnoredDirectory(path, repositoryRoot))
-            .OrderBy(path => path, StringComparer.Ordinal);
-    }
-
-    private static bool IsIgnoredDirectory(string path, string repositoryRoot)
-    {
-        string relative = Path.GetRelativePath(repositoryRoot, path);
-        string[] parts = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        return parts.Any(part => part is ".git" or "bin" or "obj");
+        if (!repositoryFiles.TryGetValue(repositoryRoot, out string[]? files))
+        {
+            List<string> discovered = [];
+            Stack<string> directories = new();
+            directories.Push(repositoryRoot);
+            EnumerationOptions options = new() { IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint };
+            while (directories.TryPop(out string? directory))
+            {
+                discovered.AddRange(Directory.EnumerateFiles(directory, "Directory.*", options)
+                    .Where(path => Path.GetFileName(path) is "Directory.Build.props" or "Directory.Build.targets" or "Directory.Packages.props"));
+                foreach (string child in Directory.EnumerateDirectories(directory, "*", options))
+                {
+                    if (Path.GetFileName(child).ToLowerInvariant() is not (".git" or "bin" or "obj" or "artifacts" or "node_modules" or ".navlyn-cache"))
+                    {
+                        directories.Push(child);
+                    }
+                }
+            }
+            files = [.. discovered.OrderBy(path => path, StringComparer.Ordinal)];
+            repositoryFiles.Add(repositoryRoot, files);
+        }
+        return files.Where(path => Path.GetFileName(path) == name);
     }
 
     private static bool ProjectIsUnderDirectory(ProjectWithFacts project, string? directory)
@@ -275,7 +288,11 @@ internal sealed class ProjectFileReader
 
         string projectDirectory = Path.GetDirectoryName(project.FullPath) ?? project.FullPath;
         string fullDirectory = Path.GetFullPath(directory);
-        return Path.GetFullPath(projectDirectory).StartsWith(fullDirectory, StringComparison.OrdinalIgnoreCase);
+        string fullProjectDirectory = Path.GetFullPath(projectDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        fullDirectory = fullDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        StringComparison comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return fullProjectDirectory.Equals(fullDirectory, comparison) ||
+            fullProjectDirectory.StartsWith(fullDirectory + Path.DirectorySeparatorChar, comparison);
     }
 
     private static string GetFullPath(string path, string repositoryRoot)

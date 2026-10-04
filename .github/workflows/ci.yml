@@ -32,9 +32,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
+          dotnet-version: 10.0.x
       - name: Build once
         shell: pwsh
         run: ./scripts/invoke-ci-step.ps1 -Name build -FilePath dotnet -Arguments @('build','navlyn.slnx','-c','Release')
@@ -48,7 +46,7 @@ jobs:
           $filter = if ('${{ matrix.os }}' -eq 'windows-latest') { '' } else { 'FullyQualifiedName~NavlynCliRunnerTests|FullyQualifiedName~NavlynMcpServerOptionsTests|FullyQualifiedName~PathDisplayTests|FullyQualifiedName~StdioServer_ListsToolsAndMapsSuccessAndCliErrors' }
           if ($env:EVENT_ACTION -eq 'synchronize' -and $env:BEFORE_SHA -match '^[a-f0-9]{40}$') {
             $changed = @(git diff --name-only $env:BEFORE_SHA $env:GITHUB_SHA)
-            $product = @($changed | Where-Object { $_ -match '^(Navlyn.Core|Navlyn.CommandLine|navlyn|navlyn.Mcp)/|^Directory\.|^global.json|^tests/fixtures/|^navlyn.slnx|^navlyn.Tests/(TestSupport|.*\.csproj)' })
+            $product = @($changed | Where-Object { $_ -match '^(Navlyn.Core|Navlyn.CommandLine|navlyn|navlyn.Mcp)/|^Directory\.|^global.json|^tests/fixtures/|^navlyn.slnx|^navlyn.Tests/(TestSupport|Contracts/GoldenSnapshots|.*\.csproj)|^docs/schemas/' })
             if ($product.Count -eq 0) {
               $classes = @($changed | Where-Object { $_ -match '^navlyn.Tests/.+Tests\.cs$' } | ForEach-Object { 'FullyQualifiedName~' + [IO.Path]::GetFileNameWithoutExtension($_) })
               $filter = if ($classes.Count) { $classes -join '|' } else { 'FullyQualifiedName~NavlynMcpServerOptionsTests' }

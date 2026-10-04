@@ -11,6 +11,16 @@ internal static partial class BatchCommand
         BatchRequest request,
         CancellationToken cancellationToken)
     {
+        if (!TryGetOptionalString(request.Payload, "targetFramework", out string? framework, out BatchError? frameworkError))
+        {
+            return request.Failed(frameworkError!);
+        }
+        framework ??= defaults.TargetFramework;
+        if (framework is not null && string.IsNullOrWhiteSpace(framework))
+        {
+            return request.Failed(DiagnosticIds.InvalidBatchInput, "targetFramework must not be empty.");
+        }
+        using WorkspaceSelectionScope selection = WorkspaceSelectionScope.Begin(framework);
         return request.Command switch
         {
             "overview" => BatchRequestResult.Success(

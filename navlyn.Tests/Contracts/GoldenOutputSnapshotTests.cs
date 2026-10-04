@@ -108,7 +108,7 @@ public sealed class GoldenOutputSnapshotTests
                 Projects:
                 [
                     new WorkspaceStatusProject(
-                        Name: "Navlyn.Core(net10.0)",
+                        Name: "Navlyn.Core",
                         Path: "Navlyn.Core/Navlyn.Core.csproj",
                         Language: "C#",
                         AssemblyName: "Navlyn.Core",
@@ -420,7 +420,7 @@ public sealed class GoldenOutputSnapshotTests
                         ["line"] = 6,
                         ["facts"] = new JsonObject
                         {
-                            ["project"] = "Navlyn.CommandLine(net10.0)"
+                            ["project"] = "Navlyn.CommandLine"
                         }
                     }
                 }
@@ -494,7 +494,7 @@ public sealed class GoldenOutputSnapshotTests
             ["name"] = "CheckCommand",
             ["kind"] = "NamedType",
             ["container"] = "Navlyn.Cli.Commands",
-            ["project"] = "Navlyn.CommandLine(net10.0)",
+            ["project"] = "Navlyn.CommandLine",
             ["path"] = "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs",
             ["line"] = 6,
             ["column"] = 23,

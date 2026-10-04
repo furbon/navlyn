@@ -32,8 +32,8 @@ public sealed class Probe
         }
     }
     public string ConstructorMarker { get; } = string.Empty;
-#if NET8_0
-    private const string RuntimeMarker = "FIXTURE_NET8_INT_OVERLOAD_BODY";
+#if WINDOWS
+    private const string RuntimeMarker = "FIXTURE_WINDOWS_INT_OVERLOAD_BODY";
 #else
     private const string RuntimeMarker = "FIXTURE_NET10_INT_OVERLOAD_BODY";
 #endif

@@ -12,9 +12,12 @@ internal static class NavlynCli
         return RunAsync(args, CancellationToken.None);
     }
 
-    public static async Task<int> RunAsync(string[] args, CancellationToken cancellationToken)
+    public static Task<int> RunAsync(string[] args, CancellationToken cancellationToken)
+        => RunAsync(args, cancellationToken, null);
+
+    public static async Task<int> RunAsync(string[] args, CancellationToken cancellationToken, Navlyn.Workspaces.LoadedWorkspace? preloadedWorkspace)
     {
-        using CliInvocationContext invocation = CliInvocationContext.Begin(args);
+        using CliInvocationContext invocation = CliInvocationContext.Begin(args, preloadedWorkspace: preloadedWorkspace);
         RootCommand rootCommand = CreateRootCommand();
         ParseResult parseResult = rootCommand.Parse(args);
 
@@ -34,6 +37,13 @@ internal static class NavlynCli
             return ExitCodes.UsageError;
         }
 
+        string? framework = parseResult.GetValue(rootCommand.Options.OfType<Option<string?>>().Single(option => option.Name == "--target-framework"));
+        if (framework is not null && string.IsNullOrWhiteSpace(framework))
+        {
+            DiagnosticReporter.WriteError(DiagnosticIds.ParseError, "--target-framework must not be empty.");
+            return ExitCodes.UsageError;
+        }
+        using Navlyn.Workspaces.WorkspaceSelectionScope selection = Navlyn.Workspaces.WorkspaceSelectionScope.Begin(framework);
         return await parseResult.InvokeAsync(new InvocationConfiguration(), cancellationToken);
     }
 
@@ -51,6 +61,11 @@ internal static class NavlynCli
     private static RootCommand CreateRootCommand()
     {
         RootCommand rootCommand = new("Semantic code navigation and investigation for agents and automation.");
+        rootCommand.Options.Add(new Option<string?>("--target-framework")
+        {
+            Description = "Select projects and source bindings for one target framework, for example net10.0.",
+            Recursive = true
+        });
         rootCommand.Subcommands.Add(DoctorCommand.Create());
         rootCommand.Subcommands.Add(ResolveTargetCommand.Create("target", "Canonical agent entrypoint: choose one intended C# or Visual Basic target and return a reusable target envelope."));
         rootCommand.Subcommands.Add(SymbolSourceCommand.Create("read", "Canonical agent source reader: return bounded source for one selected target by candidate id or source position."));

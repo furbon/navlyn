@@ -7,8 +7,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$OutputReport,
     [switch]$KeepArtifacts,
-    [ValidateSet('net8.0', 'net10.0')]
-    [string[]]$Frameworks = @('net8.0', 'net10.0')
+    [ValidateSet('net10.0')]
+    [string[]]$Frameworks = @('net10.0')
 )
 
 Set-StrictMode -Version Latest
@@ -365,7 +365,7 @@ try {
     @'
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

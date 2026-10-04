@@ -2,6 +2,7 @@
 param(
     [switch]$NoBuild,
     [switch]$Acquire,
+    [string[]]$CaseIds = @(),
     [string]$Output = 'artifacts/external-member-corpus/report.json',
     [int]$TimeoutSeconds = 60
 )
@@ -19,6 +20,11 @@ $NavlynDll = Join-Path $RepoRoot 'navlyn/bin/Debug/net10.0/navlyn.dll'
 $McpDll = Join-Path $RepoRoot 'navlyn.Mcp/bin/Debug/net10.0/navlyn.Mcp.dll'
 $Packages = @(Get-Content -LiteralPath (Join-Path $CorpusRoot 'packages.json') -Raw | ConvertFrom-Json).packages
 $Cases = @(Get-Content -LiteralPath (Join-Path $CorpusRoot 'scenarios.json') -Raw | ConvertFrom-Json).cases
+if ($CaseIds.Count) {
+    $unknown = @($CaseIds | Where-Object { $_ -notin $Cases.id })
+    if ($unknown.Count) { throw "Unknown corpus cases: $($unknown -join ', ')" }
+    $Cases = @($Cases | Where-Object { $_.id -in $CaseIds })
+}
 $Utf8Bom = [System.Text.UTF8Encoding]::new($true)
 
 if ($TimeoutSeconds -lt 15 -or $TimeoutSeconds -gt 300) {

@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <TargetFrameworks>net10.0-windows7.0;net10.0</TargetFrameworks>
     <AssemblyName>ExternalFixture</AssemblyName>
     <PackageId>Navlyn.ExternalLibrarySourceFixture</PackageId>
     <PackageVersion>1.0.0</PackageVersion>

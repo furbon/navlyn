@@ -21,7 +21,7 @@ Codex に Navlyn を使う場面も覚えさせる場合は、[Codex 用スキ�
 調べたいリポジトリを読み込める .NET SDK が必要です。NuGet からツールをインストールします。
 
 ```powershell
-dotnet tool install --global navlyn --version 0.8.7
+dotnet tool install --global navlyn --version 0.9.0
 ```
 
 新しいターミナルを開き、調べたいリポジトリのルートで `navlyn` が対象を見つけられるか確認します。
@@ -36,6 +36,6 @@ navlyn doctor --workspace auto
 
 Navlyn のコマンドはローカルで動き、コードを外部へ送信しません。コードの編集やテストの実行は行わず、実行時の動作も証明できません。プロジェクトの読み込みには MSBuild を使うため、信頼できるリポジトリで実行してください。詳しくは[制約と注意点](https://github.com/furbon/navlyn/blob/main/docs/navlyn-limitations.md)を参照してください。
 
-.NET 8 と .NET 10 のツールを含みます。近づいている .NET 8 のサポート終了については、[ランタイムの対応方針](https://github.com/furbon/navlyn/blob/main/docs/navlyn-runtime-support.md)を参照してください。
+Navlyn v0.9.0 は .NET 10 SDK が必要で、`net10.0` 向けツールのみを配布します。[ランタイムの対応方針](https://github.com/furbon/navlyn/blob/main/docs/navlyn-runtime-support.md)を参照してください。
 
 MIT ライセンスで公開しています。詳しくは [LICENSE](https://github.com/furbon/navlyn/blob/main/LICENSE) を参照してください。

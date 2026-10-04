@@ -178,11 +178,11 @@ internal sealed class ExternalLibrarySourceFixture
         await RestoreAndBuildAsync(DirectProject, packageFeed);
         await RestoreAndBuildAsync(VisualBasicProject, packageFeed);
         await RestoreAndBuildAsync(ReferenceOnlyProject, packageFeed);
-        (string ref8, string lib8) = ValidateConsumerAssets(ConsumerProject, "net8.0", "Navlyn.ExternalLibrarySourceFixture");
+        (string refWindows, string libWindows) = ValidateConsumerAssets(ConsumerProject, "net10.0-windows7.0", "Navlyn.ExternalLibrarySourceFixture");
         (string ref10, string lib10) = ValidateConsumerAssets(ConsumerProject, "net10.0", "Navlyn.ExternalLibrarySourceFixture");
-        if (ref8 == ref10 || lib8 == lib10)
+        if (refWindows == ref10 || libWindows == lib10)
         {
-            throw new InvalidOperationException("Expected different reference and implementation PE hashes across net8.0 and net10.0.");
+            throw new InvalidOperationException("Expected different reference and implementation PE hashes across net10.0-windows7.0 and net10.0.");
         }
 
         ValidateConsumerAssets(ReferenceOnlyProject, "net10.0", "Navlyn.ExternalLibrarySourceFixture.ReferenceOnly", referenceOnly: true);
@@ -231,12 +231,12 @@ internal sealed class ExternalLibrarySourceFixture
         string referencePackage = Path.Combine(packageFeed, "Navlyn.ExternalLibrarySourceFixture.ReferenceOnly.1.0.0.nupkg");
         ValidatePackageEntries(regularPackage,
         [
-            "ref/net8.0/ExternalFixture.dll", "lib/net8.0/ExternalFixture.dll",
+            "ref/net10.0-windows7.0/ExternalFixture.dll", "lib/net10.0-windows7.0/ExternalFixture.dll",
             "ref/net10.0/ExternalFixture.dll", "lib/net10.0/ExternalFixture.dll"
         ], requireNoLibraryAssets: false);
         ValidatePackageEntries(referencePackage,
         [
-            "ref/net8.0/ExternalFixture.dll",
+            "ref/net10.0-windows7.0/ExternalFixture.dll",
             "ref/net10.0/ExternalFixture.dll"
         ], requireNoLibraryAssets: true);
     }

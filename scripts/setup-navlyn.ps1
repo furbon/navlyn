@@ -475,7 +475,7 @@ $clientCommand=Get-Command code -ErrorAction SilentlyContinue
 $sdkRoots=[Collections.Generic.List[string]]::new()
 if($env:DOTNET_ROOT){$sdkRoots.Add((Join-Path $env:DOTNET_ROOT 'sdk'))}
 if($dotnet){$dotnetRoot=Split-Path -Parent $dotnet.Source;if((Split-Path -Leaf $dotnetRoot) -ieq 'host'){$dotnetRoot=Split-Path -Parent $dotnetRoot};$sdkRoots.Add((Join-Path $dotnetRoot 'sdk'))}
-$sdkAvailable=$false;foreach($sdkRoot in $sdkRoots){if((Test-Path -LiteralPath $sdkRoot -PathType Container) -and @((Get-ChildItem -LiteralPath $sdkRoot -Directory -ErrorAction SilentlyContinue|Where-Object Name -Match '^\d+\.\d+\.\d+')).Count){$sdkAvailable=$true;break}}
+$sdkAvailable=$false;foreach($sdkRoot in $sdkRoots){if((Test-Path -LiteralPath $sdkRoot -PathType Container) -and @((Get-ChildItem -LiteralPath $sdkRoot -Directory -ErrorAction SilentlyContinue|Where-Object Name -Match '^10\.0\.\d+')).Count){$sdkAvailable=$true;break}}
 $feedPackage=$null
 if ($Feed -and $Version) { $feedPackage=Get-ChildItem -LiteralPath $feedPath -Filter "navlyn-mcp.$Version.nupkg" -File -ErrorAction SilentlyContinue | Select-Object -First 1 }
 $oldBytes=if(Test-Path -LiteralPath $configPath -PathType Leaf){[IO.File]::ReadAllBytes($configPath)}else{$null}
@@ -584,7 +584,7 @@ if($Target -eq 'Global'){
                 $source=[Security.SecurityElement]::Escape($feedPath)
                 Write-SetupAtomicText $nugetConfig ('<configuration><packageSources><clear/><add key="selected" value="'+$source+'"/></packageSources></configuration>') $false
                 $pending.expectedState=$null;$pending.phase='mutating';Write-SetupJournal $pendingPath $pending
-                $arguments=@('tool',$(if($globalInventory){'update'}else{'install'}),'navlyn-mcp','--global','--version',$Version,'--framework','net8.0','--configfile',$nugetConfig,'--verbosity','quiet')
+                $arguments=@('tool',$(if($globalInventory){'update'}else{'install'}),'navlyn-mcp','--global','--version',$Version,'--framework','net10.0','--configfile',$nugetConfig,'--verbosity','quiet')
                 if($comparison -gt 0){$arguments+='--allow-downgrade'}
                 $install=Invoke-SetupGlobalDotnet -Arguments $arguments -LogRoot $logRoot
                 $pending.expectedState=Get-GlobalRawState $globalToolsRoot $commands;$pending.phase='verifying';Write-SetupJournal $pendingPath $pending
@@ -662,7 +662,7 @@ if ($Action -in @('Undo','Remove') -and (Test-Path -LiteralPath $configPath) -an
             $sourceXml=if($Feed){'<add key="candidate" value="'+[Security.SecurityElement]::Escape($feedPath)+'" />'}else{'<add key="nuget" value="https://api.nuget.org/v3/index.json" />'}
             $cachePathXml=[Security.SecurityElement]::Escape((Join-Path $stagePath '.nuget'))
             Write-SetupAtomicText $configFile "<?xml version=`"1.0`" encoding=`"utf-8`"?><configuration><packageSources><clear/>$sourceXml</packageSources><config><add key=`"globalPackagesFolder`" value=`"$cachePathXml`"/></config></configuration>" $false
-            $arguments=@('tool','install','navlyn-mcp','--tool-path',$stagePath,'--version',$Version,'--framework','net8.0','--configfile',$configFile,'--verbosity','quiet')
+            $arguments=@('tool','install','navlyn-mcp','--tool-path',$stagePath,'--version',$Version,'--framework','net10.0','--configfile',$configFile,'--verbosity','quiet')
             $oldCliHome=$env:DOTNET_CLI_HOME;$oldPackages=$env:NUGET_PACKAGES;$oldFirst=$env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE;$oldTelemetry=$env:DOTNET_CLI_TELEMETRY_OPTOUT;$oldLocal=$env:LOCALAPPDATA;$oldRoam=$env:APPDATA;$oldNoLogo=$env:DOTNET_NOLOGO;$oldAddToolsPath=$env:DOTNET_ADD_GLOBAL_TOOLS_TO_PATH
             $env:DOTNET_CLI_HOME=Join-Path $stagePath '.dotnet-home';$env:NUGET_PACKAGES=Join-Path $stagePath '.nuget';$env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE='1';$env:DOTNET_CLI_TELEMETRY_OPTOUT='1';$env:LOCALAPPDATA=Join-Path $stagePath '.localappdata';$env:APPDATA=Join-Path $stagePath '.appdata';$env:DOTNET_NOLOGO='1'
             $env:DOTNET_ADD_GLOBAL_TOOLS_TO_PATH='false'

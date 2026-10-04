@@ -69,7 +69,7 @@ $expectedPackageMetadata = [ordered]@{
     Copyright = 'Copyright (c) 2026 furbon.tech'
     PackageReadmeFile = 'README.md'
     PackageIcon = 'navlyn-icon.png'
-    TargetFrameworks = 'net8.0;net10.0'
+    TargetFramework = 'net10.0'
 }
 
 $packages = @(

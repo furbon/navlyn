@@ -473,6 +473,62 @@ public sealed class NavlynMcpStdioTests
     }
 
     [Fact]
+    public async Task StdioServer_TargetFrameworkSelectsBindingAndRejectsInvalidInputs()
+    {
+        string workspace = Path.Combine(FindRepositoryRoot(), "tests", "fixtures", "WorkspaceSemanticsFixture", "MultiTarget", "MultiTarget.csproj");
+        await using McpClient client = await CreateClientAsync(profile: null, workspace);
+        McpClientTool tool = Assert.Single(await client.ListToolsAsync(), item => item.Name == NavlynMcpTools.TargetTool);
+        Assert.True(tool.JsonSchema.GetProperty("properties").TryGetProperty("targetFramework", out _));
+        Assert.Equal(new[] { "ok", "tool", "sourceCommand", "workspace" },
+            tool.ReturnJsonSchema!.Value.GetProperty("required").EnumerateArray().Select(item => item.GetString()));
+        string? net10Candidate = null;
+        foreach (string framework in new[] { "net10.0", "netstandard2.0" })
+        {
+            CallToolResult response = await client.CallToolAsync(NavlynMcpTools.TargetTool,
+                new Dictionary<string, object?> { ["query"] = "TargetSpecificWidget", ["targetFramework"] = framework });
+            Assert.False(response.IsError, response.StructuredContent?.ToString());
+            JsonElement result = response.StructuredContent!.Value;
+            if (framework == "net10.0") net10Candidate = result.GetProperty("result").GetProperty("candidateId").GetString();
+            Assert.Contains(framework, result.GetProperty("sourceCommand").ToString());
+            Assert.Equal(framework, result.GetProperty("result").GetProperty("selector").GetProperty("targetFramework").GetString());
+        }
+        CallToolResult correctContext = await client.CallToolAsync(NavlynMcpTools.ReadTool,
+            new Dictionary<string, object?> { ["candidateId"] = net10Candidate, ["targetFramework"] = "net10.0" });
+        Assert.False(correctContext.IsError, correctContext.StructuredContent?.ToString());
+        CallToolResult outline = await client.CallToolAsync(NavlynMcpTools.FileOutlineTool,
+            new Dictionary<string, object?> { ["file"] = "TargetSpecificCode.cs", ["targetFramework"] = "netstandard2.0" });
+        Assert.False(outline.IsError, outline.StructuredContent?.ToString());
+        string outlineJson = outline.StructuredContent!.Value.GetProperty("result").GetRawText();
+        Assert.Contains("NetStandardOnlyValue", outlineJson);
+        Assert.DoesNotContain("Net10OnlyValue", outlineJson);
+        CallToolResult wrongContext = await client.CallToolAsync(NavlynMcpTools.ReadTool,
+            new Dictionary<string, object?> { ["candidateId"] = net10Candidate, ["targetFramework"] = "netstandard2.0" });
+        Assert.True(wrongContext.IsError, wrongContext.StructuredContent?.ToString());
+        foreach (JsonElement required in tool.ReturnJsonSchema!.Value.GetProperty("required").EnumerateArray())
+            Assert.True(wrongContext.StructuredContent!.Value.TryGetProperty(required.GetString()!, out _));
+        foreach (object invalid in new object[] { " ", 42, "missing-framework" })
+        {
+            CallToolResult response = await client.CallToolAsync(NavlynMcpTools.TargetTool,
+                new Dictionary<string, object?> { ["query"] = "TargetSpecificWidget", ["targetFramework"] = invalid });
+            Assert.True(response.IsError, response.StructuredContent?.ToString());
+        }
+        CallToolResult batch = await client.CallToolAsync(NavlynMcpTools.BatchTool,
+            new Dictionary<string, object?>
+            {
+                ["defaults"] = new { targetFramework = "netstandard2.0" },
+                ["requests"] = new object[]
+                {
+                    new { id = "first", command = "resolve-target", query = "TargetSpecificWidget" },
+                    new { id = "second", command = "resolve-target", query = "TargetSpecificWidget", targetFramework = "net10.0" }
+                }
+            });
+        Assert.False(batch.IsError, batch.StructuredContent?.ToString());
+        JsonElement results = batch.StructuredContent!.Value.GetProperty("result").GetProperty("results");
+        Assert.Equal("netstandard2.0", results[0].GetProperty("result").GetProperty("selector").GetProperty("targetFramework").GetString());
+        Assert.Equal("net10.0", results[1].GetProperty("result").GetProperty("selector").GetProperty("targetFramework").GetString());
+    }
+
+    [Fact]
     public async Task StdioServer_BatchRequiresTwoRequestsAndPreservesCandidateIdFromChain()
     {
         using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(180));
@@ -518,7 +574,7 @@ public sealed class NavlynMcpStdioTests
                         ["command"] = "resolve-target",
                         ["query"] = "CheckCommand",
                         ["assumeKind"] = "NamedType",
-                        ["project"] = "Navlyn.CommandLine(net10.0)"
+                        ["project"] = "Navlyn.CommandLine"
                     },
                     new Dictionary<string, object?>
                     {
@@ -1041,7 +1097,6 @@ public sealed class NavlynMcpStdioTests
 
         return frameworkName switch
         {
-            ".NETCoreApp,Version=v8.0" => "net8.0",
             ".NETCoreApp,Version=v10.0" => "net10.0",
             _ => throw new InvalidOperationException($"Unsupported test target framework: {frameworkName ?? "unknown"}.")
         };

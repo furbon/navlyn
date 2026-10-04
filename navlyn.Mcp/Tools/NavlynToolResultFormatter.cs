@@ -8,7 +8,7 @@ internal static class NavlynToolResultFormatter
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true
+        WriteIndented = false
     };
 
     public static CallToolResult ToCallToolResult(NavlynToolResult result)
