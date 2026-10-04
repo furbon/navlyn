@@ -130,7 +130,7 @@ try {
             licenseExpression = 'PackageLicenseExpression'; copyright = 'Copyright'; readme = 'PackageReadmeFile'; icon = 'PackageIcon'
         }
         foreach ($key in $mapping.Keys) { $metadata[$key] = Get-XmlValue -Document $project -XPath "/Project/PropertyGroup/$($mapping[$key])" }
-        $frameworks = (Get-XmlValue -Document $project -XPath '/Project/PropertyGroup/TargetFrameworks') -split ';' | Where-Object { $_ }
+        $frameworks = @(Get-XmlValue -Document $project -XPath '/Project/PropertyGroup/TargetFramework')
         $command = Get-XmlValue -Document $project -XPath '/Project/PropertyGroup/ToolCommandName'
         $packageId = Get-XmlValue -Document $project -XPath '/Project/PropertyGroup/PackageId'
         if ($packageId -ne $definition.Id -or $command -ne $definition.Command) { Add-Failure "Project contract mismatch for package '$($definition.Id)'." }
