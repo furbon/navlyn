@@ -54,6 +54,8 @@ public static class ProbeExtensions
 
 public sealed class GenericProbe<T>
 {
+    public GenericProbe() { ConstructorMarker = "FIXTURE_GENERIC_CONSTRUCTOR_BODY"; }
+    public string ConstructorMarker { get; }
     public T Echo(T value) => value;
     public string Select<TValue>(int value) => "FIXTURE_GENERIC_INT_OVERLOAD_BODY";
     public string Select<TValue>(string value) => "FIXTURE_GENERIC_STRING_OVERLOAD_BODY";

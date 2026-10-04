@@ -141,6 +141,41 @@ public sealed class ExternalLibrarySourceContractTests
         Assert.Null(result.Resolution);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConstructedTypeArgument_DoesNotSelectTheEnclosingConstructor(bool visualBasic)
+    {
+        ExternalLibrarySourceFixture fixture = await ExternalLibrarySourceFixture.PrepareAsync();
+        string file = visualBasic ? fixture.VisualBasicSource : fixture.ConsumerSource;
+        byte[] original = File.ReadAllBytes(file);
+        string source = File.ReadAllText(file);
+        string prefix = visualBasic ? "GenericProbe(Of " : "GenericProbe<";
+        source = visualBasic
+            ? source.Replace("Dim explicitConstructed = New Probe(7)", "Dim genericConstructed = New GenericProbe(Of Probe)()", StringComparison.Ordinal)
+            : source.Replace("GenericProbe<int>", "GenericProbe<Probe>", StringComparison.Ordinal);
+        try
+        {
+            // The worker requires the CLI/MCP entrypoint, so exercise the actual transport.
+            File.WriteAllText(file, source, new System.Text.UTF8Encoding(true));
+            (int line, int column) = fixture.Position(file, visualBasic ? "genericConstructed" : "genericSelected", prefix);
+            string project = visualBasic ? fixture.VisualBasicProject : fixture.ConsumerProject;
+            string? projectName = visualBasic ? null : "Consumer(net10.0)";
+            ExternalLibrarySourceFixture.CliResult argument = await fixture.RunReadAsync(project, file,
+                line, column + prefix.Length, "decompiled", projectName: projectName);
+            Assert.NotEqual(0, argument.ExitCode);
+            Assert.Equal("", argument.Stdout);
+
+            ExternalLibrarySourceFixture.CliResult constructor = await fixture.RunReadAsync(project, file,
+                line, column, "decompiled", projectName: projectName);
+            Assert.True(constructor.ExitCode == 0, constructor.Stderr);
+            Assert.Contains("FIXTURE_GENERIC_CONSTRUCTOR_BODY", SliceText(constructor.Stdout), StringComparison.Ordinal);
+            using JsonDocument result = JsonDocument.Parse(constructor.Stdout);
+            Assert.True(result.RootElement.GetProperty("symbol").GetProperty("facts").GetProperty("isConstructor").GetBoolean());
+        }
+        finally { File.WriteAllBytes(file, original); }
+    }
+
     [Fact]
     public async Task ExternalEnumConstant_MetadataIncludesValueAndBodyErrorIdentifiesTheSelection()
     {

@@ -261,13 +261,16 @@ internal sealed class SymbolSourceResolver
         SyntaxToken token = source.SyntaxTree.GetRoot(cancellationToken).FindToken(source.Position);
         foreach (SyntaxNode node in token.Parent?.AncestorsAndSelf() ?? [])
         {
-            bool typePosition = node switch
+            SyntaxNode? constructedType = node switch
             {
-                ObjectCreationExpressionSyntax creation => creation.Type.Span.Contains(source.Position),
-                Microsoft.CodeAnalysis.VisualBasic.Syntax.ObjectCreationExpressionSyntax creation => creation.Type.Span.Contains(source.Position),
-                _ => false
+                ObjectCreationExpressionSyntax creation when creation.Type.Span.Contains(source.Position) => creation.Type,
+                Microsoft.CodeAnalysis.VisualBasic.Syntax.ObjectCreationExpressionSyntax creation when creation.Type.Span.Contains(source.Position) => creation.Type,
+                _ => null
             };
-            if (!typePosition) continue;
+            if (constructedType is null) continue;
+            // A generic argument or qualified containing type is a separate selected symbol.
+            if (!SymbolEqualityComparer.Default.Equals(model.GetTypeInfo(constructedType, cancellationToken).Type, source.Symbol))
+                return SourceSymbolResolutionResult.Succeeded(source);
             SymbolInfo info = model.GetSymbolInfo(node, cancellationToken);
             if (info.Symbol is IMethodSymbol { MethodKind: MethodKind.Constructor } constructor)
                 return SourceSymbolResolutionResult.Succeeded(source with { Symbol = constructor, HasExactBinding = true });
