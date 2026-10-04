@@ -21,7 +21,7 @@ To help Codex choose when to use Navlyn, see [install the Codex routing skill](h
 You need a .NET 10 SDK that can load the repository you want to inspect. Install the tools from NuGet:
 
 ```powershell
-dotnet tool install --global navlyn --version 0.9.0
+dotnet tool install --global navlyn --version 0.9.1
 ```
 
 Open a new terminal at the root of the repository you want to inspect and check that Navlyn can select a workspace:
@@ -36,6 +36,6 @@ For repository selection, see [workspace configuration](https://github.com/furbo
 
 The Navlyn commands run locally and do not upload code. They do not edit code, run tests, or prove runtime behavior. Navlyn uses MSBuild to load projects, so run it only on repositories you trust. See [limitations and safety notes](https://github.com/furbon/navlyn/blob/main/docs/navlyn-limitations.md) for details.
 
-Navlyn v0.9.0 requires a .NET 10 SDK and ships only `net10.0` tool assets. See the [runtime support policy](https://github.com/furbon/navlyn/blob/main/docs/navlyn-runtime-support.md).
+Navlyn v0.9.1 requires a .NET 10 SDK and ships only `net10.0` tool assets. See the [runtime support policy](https://github.com/furbon/navlyn/blob/main/docs/navlyn-runtime-support.md).
 
 Navlyn is released under the MIT License. See [LICENSE](https://github.com/furbon/navlyn/blob/main/LICENSE).

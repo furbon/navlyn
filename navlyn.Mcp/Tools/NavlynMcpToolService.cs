@@ -28,6 +28,8 @@ internal sealed class NavlynMcpToolService(
         {
             command = CommandBuildResult.Valid(command.Command!, [.. command.Arguments, "--target-framework", framework], command.StandardInput);
         }
+        if (Navlyn.Workspaces.WorkspaceSelectionScope.CurrentTypeKind is string typeKind && command.Arguments.Contains("--query"))
+            command = CommandBuildResult.Valid(command.Command!, [.. command.Arguments, "--type-kind", typeKind], command.StandardInput);
         using CancellationTokenSource deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(options.TimeoutMilliseconds);
         long started = Stopwatch.GetTimestamp();

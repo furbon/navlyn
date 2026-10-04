@@ -79,19 +79,21 @@ function Exercise([string]$Name, [string[]]$Prior, [hashtable]$Behavior, [switch
         }.GetNewClosure()
         $wait = { param($Seconds) $state.seconds += $Seconds }.GetNewClosure()
         $now = { [DateTime]::new(2026, 10, 3).AddSeconds($state.seconds) }.GetNewClosure()
-        $pollSeconds = if ('delayed' -cin $Behavior.Values) { 600 } else { 0 }
+        $pollSeconds = if ('delayed' -cin $Behavior.Values) { 60 } else { 0 }
         $progress = { param($Id, $Stage, $Remaining) $state.progress.Add(@{ id = $Id; stage = $Stage; remaining = $Remaining }) }.GetNewClosure()
         try { Invoke-NavlynExactPublication $manifest $inputRoot $journal $path $Prior $observe $push -PollSeconds $pollSeconds -Wait $wait -Now $now -Progress $progress }
         finally {
             $saved = Read-NavlynPublicationJson $path
             foreach ($id in $state.pushes) { $s = @($saved.packages | Where-Object { $_.id -ceq $id })[0]; if (!$s.intentUtc -or $s.state -ceq 'notAttempted') { throw 'Push intent was lost on failure.' } }
             foreach ($id in $Prior) { if ($Behavior[$id] -ceq 'absent' -and $state.pushes.Contains($id)) { throw 'Prior intent was repushed after absent indexing.' } }
-            $expectedPushes = if ($Behavior.navlyn -ceq 'throw' -or $Behavior.navlyn -ceq 'absent' -and 'navlyn' -cnotin $Prior) { 1 }
+            $expectedPushes = if ($Behavior.navlyn -ceq 'throw') { 1 }
+                elseif ($Behavior.navlyn -ceq 'absent' -and 'navlyn' -cnotin $Prior) { 2 }
                 elseif ($Behavior.'navlyn-mcp' -ceq 'throw') { 2 }
                 elseif ($Reject) { 0 }
                 else { @($Behavior.Values | Where-Object { $_ -cin @('push', 'acceptedFailure', 'delayed') }).Count }
             if ($state.pushes.Count -ne $expectedPushes) { throw "Expected $expectedPushes exact pushes; observed $($state.pushes.Count)." }
             if (@($state.pushes | Select-Object -Unique).Count -ne $state.pushes.Count) { throw 'An ID was repushed within the attempt.' }
+            if ($Behavior.navlyn -ceq 'delayed' -and $Behavior.'navlyn-mcp' -ceq 'delayed' -and $state.seconds -gt 60) { throw 'Indexing waits exceeded the shared polling budget.' }
             if (!$Reject -and $saved.phase -cne 'complete') { throw 'Successful publication did not complete the retained journal.' }
             foreach ($id in $state.pushes) {
                 if (@($state.progress | Where-Object { $_.id -ceq $id -and $_.stage -ceq 'intentRetained' }).Count -ne 1) { throw 'Progress lost retained push intent.' }

@@ -20,6 +20,8 @@ function Invoke-NavlynExactPublication {
     # Initialize durably even if observation, credentials or the first push fails.
     Write-NavlynPublicationJournal $JournalPath $Journal
     try {
+        $pending = [Collections.Generic.List[object]]::new()
+        $started = & $Now
         foreach ($id in @('navlyn', 'navlyn-mcp')) {
             $package = @($Manifest.packages | Where-Object { $_.id -ceq $id })
             if ($package.Count -ne 1) { throw 'Both retained package identities are required.' }
@@ -52,27 +54,36 @@ function Invoke-NavlynExactPublication {
                 & $Progress $id 'indeterminate' 0
                 throw
             }
-            # A failed/timed-out push may have been accepted. Observe it, never repeat it.
-            $started = & $Now
-            do {
-                $observed = & $Observe $entry $file
-                $after = Get-NavlynPublicationDecision $id $true $observed
-                if ($after -ceq 'skipExactPublic') { break }
-                $remaining = $PollSeconds - ((& $Now) - $started).TotalSeconds
-                if ($remaining -le 0) { break }
-                [Console]::Error.WriteLine("Waiting for NuGet indexing of $id $($entry.version) ($([int]$remaining)s remaining).")
-                & $Progress $id 'waitingForIndexing' ([int]$remaining)
-                & $Wait ([Math]::Min(15, $remaining))
-            } while ($true)
-            if ($after -cne 'skipExactPublic') {
-                $state.state = 'indeterminate'
-                Write-NavlynPublicationJournal $JournalPath $Journal
-                & $Progress $id 'indeterminate' 0
-                throw "Acceptance/public verification of $id is indeterminate; reconcile this retained intent before resuming."
+            $pending.Add(@{ id = $id; entry = $entry; file = $file; state = $state; push = $result })
+        }
+        # Both submitted packages can index during the same bounded polling window.
+        # A failed/timed-out push may have been accepted. Observe it, never repeat it.
+        while ($pending.Count -gt 0) {
+            foreach ($item in @($pending.ToArray())) {
+                $observed = & $Observe $item.entry $item.file
+                $after = Get-NavlynPublicationDecision $item.id $true $observed
+                if ($after -ceq 'skipExactPublic') {
+                    $item.state.state = 'verified'; $item.state.result = @{ push = $item.push; public = $observed }
+                    Write-NavlynPublicationJournal $JournalPath $Journal
+                    & $Progress $item.id 'verified' 0
+                    [void]$pending.Remove($item)
+                }
             }
-            $state.state = 'verified'; $state.result = @{ push = $result; public = $observed }
-            Write-NavlynPublicationJournal $JournalPath $Journal
-            & $Progress $id 'verified' 0
+            if ($pending.Count -eq 0) { break }
+            $remaining = $PollSeconds - ((& $Now) - $started).TotalSeconds
+            if ($remaining -le 0) {
+                foreach ($item in $pending) {
+                    $item.state.state = 'indeterminate'
+                    & $Progress $item.id 'indeterminate' 0
+                }
+                Write-NavlynPublicationJournal $JournalPath $Journal
+                throw 'Acceptance/public verification is indeterminate; reconcile retained intents before resuming.'
+            }
+            foreach ($item in $pending) {
+                [Console]::Error.WriteLine("Waiting for NuGet indexing of $($item.id) $($item.entry.version) ($([int]$remaining)s remaining).")
+                & $Progress $item.id 'waitingForIndexing' ([int]$remaining)
+            }
+            & $Wait ([Math]::Min(15, $remaining))
         }
         $Journal.phase = 'complete'
     } catch {

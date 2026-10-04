@@ -321,7 +321,11 @@ internal sealed record ResolveTargetInput(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     int? Line,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    int? Column);
+    int? Column)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? TypeKind { get; init; } = Mode == "query" ? Navlyn.Workspaces.WorkspaceSelectionScope.CurrentTypeKind : null;
+}
 
 internal sealed record ResolveTargetAmbiguitySummary(
     bool IsAmbiguous,

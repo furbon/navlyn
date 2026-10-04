@@ -1,48 +1,28 @@
-﻿using Navlyn.Mcp.Prompts;
+﻿using System.Text.RegularExpressions;
+using Navlyn.Mcp.Prompts;
+using Navlyn.Mcp.Tools;
 
 namespace Navlyn.Tests.Mcp;
 
 public sealed class NavlynMcpPromptContractTests
 {
     [Fact]
-    public void Prompts_DescribeUnifiedSurfaceAndNeedTriggeredEscalation()
+    public void Prompts_ReferenceRegisteredToolsAndExplicitAdvancedSurface()
     {
-        string understand = NavlynMcpPrompts.UnderstandSymbol(query: "CheckCommand");
-        Assert.Contains("call navlyn_target", understand, StringComparison.Ordinal);
-        Assert.Contains("Call navlyn_read", understand, StringComparison.Ordinal);
-        Assert.Contains("navlyn_navigate", understand, StringComparison.Ordinal);
-        Assert.DoesNotContain("navlyn_about_symbol", understand, StringComparison.Ordinal);
-        Assert.DoesNotContain("navlyn_symbol_edges", understand, StringComparison.Ordinal);
-        Assert.Contains("navlyn_context_pack with goal understand only when", understand, StringComparison.Ordinal);
-        Assert.Contains("only when normal file reads or smaller symbol facts are not enough", understand, StringComparison.Ordinal);
-        Assert.DoesNotContain("navlyn_resolve_target", understand, StringComparison.Ordinal);
-        Assert.DoesNotContain("navlyn_symbol_source", understand, StringComparison.Ordinal);
-        Assert.DoesNotContain("--tool-profile", understand, StringComparison.Ordinal);
-
-        string edit = NavlynMcpPrompts.PrepareEdit(query: "CheckCommand", changeKind: "behavior");
-        Assert.Contains("unified read-only MCP surface", edit, StringComparison.Ordinal);
-        Assert.Contains("Call navlyn_prepare_edit", edit, StringComparison.Ordinal);
-        Assert.Contains("navlyn_navigate", edit, StringComparison.Ordinal);
-        Assert.DoesNotContain("navlyn_symbol_edges", edit, StringComparison.Ordinal);
-        Assert.Contains("only when a bounded reading queue is still needed", edit, StringComparison.Ordinal);
-        Assert.DoesNotContain("navlyn_resolve_target", edit, StringComparison.Ordinal);
-        Assert.DoesNotContain("navlyn_edit_preflight", edit, StringComparison.Ordinal);
-        Assert.DoesNotContain("--tool-profile", edit, StringComparison.Ordinal);
-
-        string review = NavlynMcpPrompts.ReviewDiff(@base: "main", head: "HEAD", staged: null);
-        Assert.Contains("unified read-only MCP surface", review, StringComparison.Ordinal);
-        Assert.Contains("Call navlyn_review", review, StringComparison.Ordinal);
-        Assert.Contains("Call navlyn_tests_for_diff only if test impact needs a smaller focused result", review, StringComparison.Ordinal);
-        Assert.DoesNotContain("navlyn_review_diff with profile", review, StringComparison.Ordinal);
-        Assert.DoesNotContain("--tool-profile", review, StringComparison.Ordinal);
-
-        string diagnostic = NavlynMcpPrompts.FixDiagnostic(file: "Sample.cs", line: 1, column: 1, diagnosticId: "CS8602");
-        Assert.Contains("navlyn_diagnostics", diagnostic, StringComparison.Ordinal);
-        Assert.Contains("mode symbol", diagnostic, StringComparison.Ordinal);
-        Assert.Contains("mode pack", diagnostic, StringComparison.Ordinal);
-        Assert.Contains("Do not use navlyn_batch for one diagnostic fact", diagnostic, StringComparison.Ordinal);
-        Assert.DoesNotContain("symbol-diagnostics", diagnostic, StringComparison.Ordinal);
-        Assert.DoesNotContain("diagnostic-pack", diagnostic, StringComparison.Ordinal);
-        Assert.DoesNotContain("--tool-profile", diagnostic, StringComparison.Ordinal);
+        string[] prompts =
+        [
+            NavlynMcpPrompts.UnderstandSymbol(query: "CheckCommand"),
+            NavlynMcpPrompts.PrepareEdit(query: "CheckCommand", changeKind: "behavior"),
+            NavlynMcpPrompts.ReviewDiff(@base: "main", head: "HEAD", staged: null),
+            NavlynMcpPrompts.FixDiagnostic(file: "Sample.cs", line: 1, column: 1, diagnosticId: "CS8602")
+        ];
+        HashSet<string> registered = new(NavlynMcpToolProfilePolicy.GetToolNames(Navlyn.Mcp.Configuration.NavlynMcpToolProfile.Full, "full"), StringComparer.Ordinal);
+        foreach (string prompt in prompts)
+        {
+            Assert.Contains("--surface full", prompt, StringComparison.Ordinal);
+            Assert.DoesNotContain("--tool-profile", prompt, StringComparison.Ordinal);
+            foreach (Match reference in Regex.Matches(prompt, @"navlyn_[a-z_]+"))
+                Assert.Contains(reference.Value, registered);
+        }
     }
 }

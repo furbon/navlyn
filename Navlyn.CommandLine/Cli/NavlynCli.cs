@@ -43,9 +43,24 @@ internal static class NavlynCli
             DiagnosticReporter.WriteError(DiagnosticIds.ParseError, "--target-framework must not be empty.");
             return ExitCodes.UsageError;
         }
-        using Navlyn.Workspaces.WorkspaceSelectionScope selection = Navlyn.Workspaces.WorkspaceSelectionScope.Begin(framework);
+        string? typeKind = parseResult.GetValue(rootCommand.Options.OfType<Option<string?>>().Single(option => option.Name == "--type-kind"));
+        if (!Navlyn.Workspaces.WorkspaceSelectionScope.IsValidTypeKind(typeKind) ||
+            (typeKind is not null && (!SupportsTypeKind(parseResult.CommandResult.Command.Name) ||
+                !args.Any(arg => arg == "--query" || arg.StartsWith("--query=", StringComparison.Ordinal)))))
+        {
+            DiagnosticReporter.WriteError(DiagnosticIds.ParseError, "--type-kind requires fuzzy query selection and one of: class, interface, struct, enum, delegate, record, record-class, record-struct.");
+            return ExitCodes.UsageError;
+        }
+        using Navlyn.Workspaces.WorkspaceSelectionScope selection = Navlyn.Workspaces.WorkspaceSelectionScope.Begin(framework, typeKind);
         return await parseResult.InvokeAsync(new InvocationConfiguration(), cancellationToken);
     }
+
+    private static bool SupportsTypeKind(string command) => command is
+        "target" or "resolve-target" or "find" or "where-used" or "about" or "related" or "impact" or
+        "entrypoints" or "context-pack" or "tests-for-symbol" or "prepare-edit" or "verify-edit" or
+        "edit-preflight" or "post-edit-guard" or "wrong-symbol-guard" or "change-intent-pack" or
+        "agent-handoff-pack" or "confidence-ledger" or "where-registered" or "di-impact" or
+        "options-graph" or "config-impact" or "where-handled" or "message-flow" or "entity-impact";
 
     private static void WriteRootHelp(RootCommand rootCommand)
     {
@@ -67,6 +82,11 @@ internal static class NavlynCli
             Recursive = true
         });
         rootCommand.Subcommands.Add(DoctorCommand.Create());
+        rootCommand.Options.Add(new Option<string?>("--type-kind")
+        {
+            Description = "Filter fuzzy query candidates by class, interface, struct, enum, delegate, record, record-class, or record-struct. Requires --query.",
+            Recursive = true
+        });
         rootCommand.Subcommands.Add(ResolveTargetCommand.Create("target", "Canonical agent entrypoint: choose one intended C# or Visual Basic target and return a reusable target envelope."));
         rootCommand.Subcommands.Add(SymbolSourceCommand.Create("read", "Canonical agent source reader: return bounded source for one selected target by candidate id or source position."));
         rootCommand.Subcommands.Add(AgentEvidenceCommand.CreateEditPreflight("prepare-edit", "Canonical agent edit-prep entrypoint: gather target, source, context, tests, confidence, and guard instructions before editing."));

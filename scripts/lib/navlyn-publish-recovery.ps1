@@ -125,13 +125,14 @@ function Read-NavlynPublicationInputs {
         Assert-NavlynPublicationPackageIdentity $file $package.id $manifest.version $ExpectedSha
     }
     $assets = @($manifest.assets)
-    if ($RequireAssets -and ($assets.Count -ne 1 -or $assets[0].kind -cne 'setup')) { throw 'Exact setup asset is required.' }
+    if (($RequireAssets -or $assets.Count -gt 0) -and ($assets.Count -notin @(1, 2) -or @($assets | Where-Object { $_.path -ceq 'navlyn-setup.zip' }).Count -ne 1)) { throw 'Exact setup asset is required.' }
     foreach ($asset in $assets) {
         Assert-NavlynPublicationKeys $asset @('kind', 'path', 'sha256', 'sourceSha')
-        if ($asset.kind -cne 'setup' -or $asset.path -cne 'navlyn-setup.zip' -or $asset.sourceSha -cne $ExpectedSha -or !$names.Add($asset.path)) { throw 'Publication asset identity is invalid.' }
+        if ($asset.kind -cne 'setup' -or $asset.path -cnotin @('navlyn-setup.zip', "navlyn-setup-$($manifest.version).zip") -or $asset.sourceSha -cne $ExpectedSha -or !$names.Add($asset.path)) { throw 'Publication asset identity is invalid.' }
         Assert-NavlynPublicationDigest $asset.sha256 $asset.kind
         if ((Get-NavlynPublicationHash (Get-NavlynPublicationInputFile $Root $asset.path)) -cne $asset.sha256) { throw 'Publication asset bytes differ.' }
     }
+    if ($assets.Count -eq 2 -and $assets[0].sha256 -cne $assets[1].sha256) { throw 'Setup aliases must contain identical bytes.' }
     $manifest
 }
 

@@ -583,7 +583,7 @@ function Invoke-McpToolScenario {
     $startInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8
     $startInfo.StandardInputEncoding = [System.Text.Encoding]::UTF8
     $startInfo.UseShellExecute = $false
-    foreach ($argument in @($McpDll, '--workspace', $WorkspaceArgument, '--working-directory', $repoRoot, '--timeout-ms', ($TimeoutSeconds * 1000).ToString([System.Globalization.CultureInfo]::InvariantCulture), '--max-json-chars', '4000000')) {
+    foreach ($argument in @($McpDll, '--surface', 'full', '--workspace', $WorkspaceArgument, '--working-directory', $repoRoot, '--timeout-ms', ($TimeoutSeconds * 1000).ToString([System.Globalization.CultureInfo]::InvariantCulture), '--max-json-chars', '4000000')) {
         [void]$startInfo.ArgumentList.Add($argument)
     }
 
@@ -702,7 +702,7 @@ function Invoke-McpToolScenario {
                 warmup = $IsWarmup
                 command = [pscustomobject]@{
                     executable = 'dotnet'
-                    arguments = @($McpDll, '--workspace', $WorkspaceArgument, '--working-directory', $repoRoot)
+                    arguments = @($McpDll, '--surface', 'full', '--workspace', $WorkspaceArgument, '--working-directory', $repoRoot)
                     tool = $toolCall.name
                     toolArguments = $toolCall.arguments
                 }

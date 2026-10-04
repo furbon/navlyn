@@ -20,7 +20,12 @@ internal static partial class BatchCommand
         {
             return request.Failed(DiagnosticIds.InvalidBatchInput, "targetFramework must not be empty.");
         }
-        using WorkspaceSelectionScope selection = WorkspaceSelectionScope.Begin(framework);
+        if (!TryGetOptionalString(request.Payload, "typeKind", out string? typeKind, out BatchError? typeKindError))
+            return request.Failed(typeKindError!);
+        typeKind ??= defaults.TypeKind;
+        if (!WorkspaceSelectionScope.IsValidTypeKind(typeKind))
+            return request.Failed(DiagnosticIds.InvalidBatchInput, "Unsupported typeKind.");
+        using WorkspaceSelectionScope selection = WorkspaceSelectionScope.Begin(framework, typeKind);
         return request.Command switch
         {
             "overview" => BatchRequestResult.Success(

@@ -417,7 +417,7 @@ internal sealed class FuzzyDiscoveryResolver
             IReadOnlyList<DeclarationIndexEntry> syntaxMatches = declarationIndex.SearchSyntax(
                 projects,
                 options,
-                name => IsPotentialNameMatch(name, options));
+                name => IsPotentialNameMatch(name, options with { Query = GetQueryName(options.Query) }));
             declarations = await declarationIndex.EnrichAsync(syntaxMatches, cancellationToken);
         }
 
@@ -512,9 +512,10 @@ internal sealed class FuzzyDiscoveryResolver
         IReadOnlyList<string> assumedKinds,
         IReadOnlyList<Project> projects)
     {
+        if (options.CandidateId is null && !Navlyn.Workspaces.WorkspaceSelectionScope.IncludesType(declaration.Facts)) return null;
         List<string> reasons = [];
         int matchRank = options.CandidateId is null
-            ? GetMatchRank(declaration.Name, options, reasons)
+            ? GetDeclarationMatchRank(declaration, options, reasons)
             : 0;
         if (matchRank < 0)
         {
@@ -557,6 +558,46 @@ internal sealed class FuzzyDiscoveryResolver
             : 1;
 
         return new RankedCandidate(candidate, new CandidateRank(matchRank, assumedKindRank, typeLikeRank));
+    }
+
+    private static string GetQueryName(string query)
+    {
+        int separator = GetQualifierSeparator(query);
+        string name = separator < 0 ? query : query[(separator + 1)..];
+        int generic = name.IndexOf('<');
+        return generic < 0 ? name : name[..generic];
+    }
+
+    private static int GetQualifierSeparator(string query)
+    {
+        int depth = 0;
+        for (int i = query.Length - 1; i >= 0; i--)
+        {
+            if (query[i] == '>') depth++;
+            else if (query[i] == '<') depth--;
+            else if (query[i] == '.' && depth == 0) return i;
+        }
+        return -1;
+    }
+
+    private static int GetDeclarationMatchRank(SymbolDeclaration declaration, FuzzyQueryOptions options, List<string> reasons)
+    {
+        // Regex remains a simple-name query. Qualified intent never falls back to an unrelated container.
+        int separator = options.Match == "regex" ? -1 : GetQualifierSeparator(options.Query);
+        if (separator < 0) return GetMatchRank(declaration.Name, options, reasons);
+        string qualifier = options.Query[..separator];
+        if (qualifier.StartsWith("global::", StringComparison.Ordinal)) qualifier = qualifier[8..];
+        string container = declaration.Container ?? "";
+        if (!qualifier.Contains('<')) container = System.Text.RegularExpressions.Regex.Replace(container, "<[^<>]*>", "");
+        StringComparison comparison = options.CaseSensitive == true ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+        if (!string.Equals(container, qualifier, comparison) && !container.EndsWith("." + qualifier, comparison)) return -1;
+        string queryName = options.Query[(separator + 1)..];
+        string symbolName = declaration.Name;
+        if (queryName.Contains('<') && declaration.Facts.TypeParameters is { Count: > 0 } parameters)
+            symbolName += "<" + string.Join(", ", parameters) + ">";
+        int rank = GetMatchRank(symbolName, options with { Query = queryName }, reasons);
+        if (rank >= 0) reasons.Add("qualified-container-match");
+        return rank;
     }
 
     private static int GetMatchRank(string name, FuzzyQueryOptions options, List<string> reasons)
@@ -1670,7 +1711,11 @@ internal sealed record FuzzyFindResult(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     FuzzySelectionInput? SelectionInput = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    FuzzySelectionExplanation? SelectionExplanation = null);
+    FuzzySelectionExplanation? SelectionExplanation = null)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? TypeKind { get; init; } = Navlyn.Workspaces.WorkspaceSelectionScope.CurrentTypeKind;
+}
 
 internal sealed record FuzzyWhereUsedResult(
     string Query,

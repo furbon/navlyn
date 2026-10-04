@@ -17,10 +17,10 @@ internal static class NavlynMcpPrompts
 Use Navlyn as a facts-only C#-first .NET semantic investigation server for {target}; Visual Basic source is supported through Roslyn/MSBuild.
 
 Recommended flow:
-1. If candidateId is missing, call navlyn_target with the query and inspect confidence, selectedTarget, candidates, and warnings.
-2. Call navlyn_read with candidateId for bounded declaration or source facts.
-3. Call navlyn_navigate with the specific operation and candidateId for definitions, references, callers, calls, implementations, hierarchy, or symbol information.
-4. Call navlyn_context_pack with goal understand only when normal file reads or smaller symbol facts are not enough.
+1. Resolve missing identity with navlyn_target only when a source position or candidate is not already known; inspect confidence, selectedTarget, candidates, and warnings.
+2. Use navlyn_read only when the missing fact is declaration or source text.
+3. Use navlyn_navigate with the requested operation when a relationship is needed. Stop when the question is answered.
+4. Advanced context packs require --surface full or the CLI; use them only when ordinary reads and focused facts are insufficient.
 
 Do not infer runtime behavior from static facts alone. Check confidence, warnings, truncation, and CLI diagnostics before relying on a result.
 """;
@@ -38,7 +38,7 @@ Do not infer runtime behavior from static facts alone. Check confidence, warning
         return $"""
 Prepare {change} for {target} with Navlyn facts before editing.
 
-Use the unified read-only MCP surface; Navlyn provides facts and guard evidence, not file edits.
+Advanced preparation/impact/test/context tools below require --surface full. In a focused session, use target/read/navigate for the specific uncertainty and ordinary reads/diff checks for the rest, or use the corresponding CLI commands when available. Preparation is conditional on needed identity or consequence evidence.
 
 Recommended flow:
 1. Call navlyn_prepare_edit with candidateId when available, or with query when the target still needs to be resolved.
@@ -65,7 +65,7 @@ Keep Navlyn in facts-provider mode. Use the returned facts to decide what files 
         return $"""
 Use Navlyn to collect deterministic review facts for {diffMode}.
 
-Use the unified read-only MCP surface for this flow.
+The review/test/context tools below require --surface full or their CLI commands. In a focused session, read the actual Git diff with ordinary tools and request only needed symbol facts from target/read/navigate.
 
 Recommended flow:
 1. Call navlyn_review with profile evidence, plus base/head/staged arguments when applicable.
@@ -87,7 +87,7 @@ Navlyn does not generate review comments or approve changes. Treat it as source-
     {
         string target = FormatDiagnosticTarget(file, line, column, diagnosticId);
         return $"""
-Investigate {target} with Navlyn facts before editing.
+Investigate {target} using the diagnostic location and compiler facts when needed. Advanced diagnostic/context tools below require --surface full or their CLI commands; a focused session can use ordinary source reads and normal build/test diagnostics.
 
 Recommended flow:
 1. For one diagnostic at an exact file/line/column or selected symbol, call navlyn_diagnostics with mode symbol and the location or candidateId; include diagnosticId when known.

@@ -6,6 +6,28 @@ namespace Navlyn.Tests.Mcp;
 
 public sealed class NavlynMcpServerOptionsTests
 {
+    [Theory]
+    [InlineData("focused", null, "compact")]
+    [InlineData("focused", "full", "full")]
+    [InlineData("full", null, "full")]
+    [InlineData("full", "compact", "compact")]
+    public void SurfaceSelectsDefaultDetailWithExplicitOverride(string surface, string? profile, string expected)
+    {
+        List<string> args = ["--workspace", Path.Combine(FindRepositoryRoot(), "navlyn.slnx"), "--surface", surface];
+        if (profile is not null) args.AddRange(["--result-profile", profile]);
+        Assert.True(NavlynMcpServerOptions.TryParse(args, out var options, out var error, out _), error);
+        Assert.Equal(surface, options.Surface);
+        Assert.Equal(expected, options.EffectiveResultProfile);
+    }
+
+    [Theory]
+    [InlineData("--surface", "reader")]
+    [InlineData("--result-profile", "light")]
+    public void InvalidSurfaceAndDetailAreRejected(string option, string value)
+    {
+        Assert.False(NavlynMcpServerOptions.TryParse([option, value], out _, out _, out _));
+    }
+
     [Fact]
     public void TryParse_ExplicitWorkspace_UsesRepositoryRootAsWorkingDirectoryAndInProcessByDefault()
     {

@@ -87,7 +87,7 @@ public sealed class ExternalLibrarySourceProtocolTests
             timeout.Token);
 
         IList<McpClientTool> tools = await client.ListToolsAsync(cancellationToken: timeout.Token);
-        Assert.Equal(25, tools.Count);
+        Assert.Equal(4, tools.Count);
         McpClientTool readTool = Assert.Single(tools, tool => tool.Name == NavlynMcpTools.ReadTool);
         Assert.True(readTool.JsonSchema.GetProperty("properties").TryGetProperty("externalSource", out _));
 

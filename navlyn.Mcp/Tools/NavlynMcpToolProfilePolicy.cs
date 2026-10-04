@@ -4,6 +4,9 @@ namespace Navlyn.Mcp.Tools;
 
 internal static class NavlynMcpToolProfilePolicy
 {
+    private static readonly string[] FocusedTools =
+    [NavlynMcpTools.TargetTool, NavlynMcpTools.ReadTool, NavlynMcpTools.FileOutlineTool, NavlynMcpTools.NavigateTool];
+
     private static readonly string[] UnifiedTools =
     [
         NavlynMcpTools.TargetTool,
@@ -33,14 +36,14 @@ internal static class NavlynMcpToolProfilePolicy
         NavlynMcpTools.BatchTool
     ];
 
-    public static IReadOnlyList<string> GetToolNames(NavlynMcpToolProfile profile)
+    public static IReadOnlyList<string> GetToolNames(NavlynMcpToolProfile profile, string surface = "full")
     {
         _ = profile;
-        return UnifiedTools;
+        return surface == "focused" ? FocusedTools : UnifiedTools;
     }
 
-    public static bool Allows(NavlynMcpToolProfile profile, string toolName)
+    public static bool Allows(NavlynMcpToolProfile profile, string toolName, string surface = "full")
     {
-        return GetToolNames(profile).Contains(toolName, StringComparer.Ordinal);
+        return GetToolNames(profile, surface).Contains(toolName, StringComparer.Ordinal);
     }
 }

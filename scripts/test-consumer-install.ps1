@@ -17,14 +17,7 @@ $ErrorActionPreference = 'Stop'
 $ReleaseVersion = Get-NavlynReleaseVersion
 $RepoRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
 $PathComparison = if ($IsWindows) { [System.StringComparison]::OrdinalIgnoreCase } else { [System.StringComparison]::Ordinal }
-$RequiredTools = @(
-    'navlyn_target', 'navlyn_read', 'navlyn_file_outline', 'navlyn_navigate', 'navlyn_prepare_edit',
-    'navlyn_verify_edit', 'navlyn_review', 'navlyn_workspace_summary', 'navlyn_workspace_status',
-    'navlyn_workspace_refresh', 'navlyn_doctor', 'navlyn_impact', 'navlyn_context_pack',
-    'navlyn_entrypoints', 'navlyn_tests_for_symbol', 'navlyn_tests_for_diff', 'navlyn_diagnostics',
-    'navlyn_di', 'navlyn_public_api_diff', 'navlyn_routes', 'navlyn_options', 'navlyn_messages',
-    'navlyn_ef', 'navlyn_packages', 'navlyn_batch'
-)
+$RequiredTools = @('navlyn_target', 'navlyn_read', 'navlyn_file_outline', 'navlyn_navigate')
 
 function Resolve-InputPath {
     param([string]$Path)
@@ -221,12 +214,12 @@ function Invoke-McpExchange {
     $listing = Read-McpMessage -Process $Process
     if ($listing.id -ne 2 -or $null -eq $listing.result.tools) { throw 'MCP tools/list response was malformed.' }
     $actualNames = @($listing.result.tools | ForEach-Object { [string]$_.name })
-    if (($actualNames -join "`n") -cne ($script:RequiredTools -join "`n")) { throw 'MCP tools/list did not match the locked 25-tool order.' }
+    if (($actualNames -join "`n") -cne ($script:RequiredTools -join "`n")) { throw 'MCP tools/list did not match the default four-tool order.' }
     Write-McpMessage -Process $Process -Payload @{ jsonrpc = '2.0'; id = 3; method = 'tools/call'; params = @{ name = 'navlyn_target'; arguments = @{ query = 'ConsumerProbe'; assumeKind = 'CLASS'; limit = 3 } } }
     $call = Read-McpMessage -Process $Process
     if ($call.jsonrpc -ne '2.0' -or $call.id -ne 3 -or $null -eq $call.result -or $call.result.isError -eq $true -or $null -eq $call.result.structuredContent) { throw 'MCP semantic tool call did not return successful structured content.' }
     if ($call.result.structuredContent.ok -ne $true -or $call.result.structuredContent.result.selectedTarget.name -ne 'ConsumerProbe') { throw 'MCP semantic tool call did not select the consumer fixture symbol.' }
-    if ($actualNames.Count -ne 25) { throw 'MCP tool count differed from 25.' }
+    if ($actualNames.Count -ne 4) { throw 'MCP tool count differed from 4.' }
     $trailingOutputTask = $Process.StandardOutput.ReadLineAsync()
     $Process.StandardInput.Close()
     if (!$Process.WaitForExit(5000)) { $Process.Kill($true); throw 'MCP server did not stop after stdin closed.' }

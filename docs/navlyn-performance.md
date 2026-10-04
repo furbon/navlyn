@@ -2,7 +2,7 @@
 
 Navlyn loads C# workspaces through MSBuild/Roslyn, so performance depends on repository size, restore/build health, SDKs, and the workflow you choose. This document explains the cost model, the faster paths, and the local measurement commands that make performance visible instead of mysterious.
 
-Practical rule: use one precise fact first, reuse returned `candidateId` values, and escalate only when the returned evidence shows the next fact is needed.
+Use ordinary tools when a local read or search answers the question. Having Navlyn available can still add discovery/skill context and startup cost even with zero calls. Use one precise semantic fact when needed, reuse returned `candidateId` values, and escalate only when the returned evidence shows the next fact is needed.
 
 | Workflow | Best For | Cost Shape |
 | --- | --- | --- |
@@ -12,18 +12,20 @@ Practical rule: use one precise fact first, reuse returned `candidateId` values,
 | `compact` profile | First scans and LLM context. | Smaller JSON and less downstream token pressure. |
 | `evidence` profile | Review/CI facts. | Enough detail for inspection without full output size. |
 
+The 0.9.1 default exposes four tools and compact results; `--surface full` restores the full inventory. See [measured task evidence and limits](evals/v0.9.1-product-evidence.md). Smaller discovery bytes do not establish task-time or monetary savings.
+
 ## Execution Model
 
 - CLI commands load the configured workspace for each process invocation.
 - `navlyn-mcp` is a read-only stdio server that runs Navlyn commands in-process by default through the shared engine.
-- MCP reader-path tools (`navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, and `navlyn_read`) use a direct Core resolver path with a lazy per-server workspace cache and workspace-scoped `DocumentIndex`. A simple `navlyn_target` query also uses that path when the workspace has a repository display root; target calls with other selection options use the command adapter.
+- MCP reader-path tools (`navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, and `navlyn_read`) use a direct Core resolver path with a lazy per-server workspace cache and workspace-scoped `DocumentIndex`. Target variants and focused navigation also reuse the workspace through the shared command runtime. The external CLI compatibility path still starts independent processes.
 - `navlyn_read` and CLI `read`/`symbol-source` default to `externalSource=none`; external metadata and reconstructed-member reads are explicit opt-ins.
 - `navlyn_batch` can reduce repeated workspace loads when several batch-supported facts should be collected together.
 - `navlyn serve` is an opt-in local read-only daemon for workspace status/refresh requests over stdio JSON lines or a local named pipe.
 - `.navlyn/cache/workspace-index.json` is an opt-in lightweight manifest for freshness and index facts, not a serialized Roslyn workspace.
 - `compact` and `evidence` profiles can reduce output size and downstream token pressure.
 
-Navlyn does not include a file watcher, telemetry pipeline, hosted service, network listener, or write surface. The MCP direct workspace cache, `DocumentIndex`, and declaration/candidate indexes are session-local. Each direct call hashes checked workspace inputs before reuse and before returning success, so warm calls cost more than a cache lookup but detect content edits without relying on timestamps. A stable source or project edit reloads the snapshot automatically; `navlyn_workspace_refresh` remains available to force a reload. Adapter-backed tools still preserve the CLI execution path and may load the workspace independently. Use `navlyn_batch` when several batch-supported adapter-backed facts should share one workspace load.
+Navlyn does not include a file watcher, telemetry pipeline, hosted service, network listener, or write surface. The MCP direct workspace cache, `DocumentIndex`, and declaration/candidate indexes are session-local. Each direct call hashes checked workspace inputs before reuse and before returning success, so warm calls cost more than a cache lookup but detect content edits without relying on timestamps. A stable source or project edit reloads the snapshot automatically; `navlyn_workspace_refresh` remains available to force a reload. Advanced adapter-backed tools may still load independently; the shared command-runtime path retains CLI validation. Use `navlyn_batch` when several batch-supported adapter-backed facts should share one workspace load.
 
 The on-disk cache is privacy-conscious and freshness-oriented. It stores workspace/version fingerprints, project graph facts, document-index facts, declaration syntax facts when written by `workspace-refresh --write-cache`, tracked file hashes/mtimes, and `candidateRecordsStored: false`. It does not store source text or semantic models. `workspace-status --cache on` reports `fresh`, `missing`, `stale`, `invalid`, or `disabled`; stale manifests are rejected rather than reused.
 
@@ -47,7 +49,7 @@ Use the performance script from the repository root:
 ./scripts/measure-navlyn-performance.ps1 -Workspace navlyn.slnx -Scenario quick -Iterations 1 -Warmup 0 -NoBuild -IncludeStageTimings
 ```
 
-For `-Scenario mcp`, all warmup and measured rounds use one persistent server. Reports include commit, dirty state, tool version, OS, SDK, processor count, iteration/warmup counts, and each tool's cold/warm cache phase. Use `-Baseline <report>` for per-command comparisons on the same environment; mismatched workspace, scenario, profile, OS, SDK, or processor count is rejected. Adapter calls report `adapter` as their phase because they do not reuse the direct workspace cache.
+For `-Scenario mcp`, all warmup and measured rounds use one persistent server. Reports include commit, dirty state, tool version, OS, SDK, processor count, iteration/warmup counts, and each tool's cold/warm cache phase. Use `-Baseline <report>` for per-command comparisons on the same environment; mismatched workspace, scenario, profile, OS, SDK, or processor count is rejected. Inspect the actual execution/cache metadata when comparing adapters and direct calls; command-runtime calls can reuse the loaded workspace.
 
 Reports are structured JSON with:
 

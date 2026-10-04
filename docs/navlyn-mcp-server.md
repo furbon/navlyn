@@ -1,6 +1,6 @@
 # Navlyn MCP Server
 
-`navlyn-mcp` gives MCP clients a read-only C#-first .NET semantic evidence surface with Roslyn-backed Visual Basic support. It is designed for agents that should inspect code with Roslyn/MSBuild facts before they edit, review, or explain it. For installation and client-specific steps, start with [client setup](navlyn-client-setup.md).
+`navlyn-mcp` gives MCP clients a read-only C#-first .NET semantic evidence surface with Roslyn-backed Visual Basic support. Use it when an investigation or edit needs compiler evidence that ordinary file reads and search cannot establish. For installation and client-specific steps, start with [client setup](navlyn-client-setup.md).
 
 The server is intentionally facts-only:
 
@@ -11,13 +11,21 @@ The server is intentionally facts-only:
 - no workspace mutation;
 - no hidden review-comment publishing.
 
-Successful tool calls return a Navlyn MCP result envelope with the Navlyn command JSON under `result`; the inner result shapes remain documented in [`navlyn-cli-commands.md`](navlyn-cli-commands.md).
+Successful tool calls return a Navlyn MCP result envelope with the Navlyn command JSON under `result`; the full inner result shapes remain documented in [`navlyn-cli-commands.md`](navlyn-cli-commands.md).
 
 For an explicit workspace path, initial cache discovery checks the selected workspace and ancestor configuration before inventorying the loaded project roots. Unrelated artifact-directory links do not block startup. Loaded source, project, configuration, and dependency changes still trigger freshness checks; links inside an inventoried project remain an inspection error.
 
 For normal use, install only `navlyn-mcp` for MCP clients. A separate `navlyn` CLI installation is not required. The `navlyn` CLI and `navlyn-mcp` server share the same Navlyn core engine and command runtime.
 
-## v0.9.0 selection and transport
+## v0.9.1 defaults and migration
+
+Startup now defaults to `--surface focused`: `navlyn_target`, `navlyn_read`, `navlyn_file_outline`, and `navlyn_navigate`, with compact responses. **This changes the MCP default from 0.9.0.** Existing clients needing the previous inventory and full response fields must add `--surface full`. CLI JSON stays complete. Deprecated `--tool-profile full` does not select the full surface; use the new `--surface` flag.
+
+`--result-profile compact|full` independently selects the server response default; each tool accepts `resultProfile` to override it. Compact preserves identity/signature, location, project/TFM, source and relationship evidence, warnings, scope, and freshness. It omits redundant next-action objects, sourceCommand, repeated display names, false convenience flags (except source/metadata identity flags), and parameter/return-type trees when a signature is present. Missing convenience fields are omitted, not positive assertions. Request `resultProfile: "full"` for complete automation facts. Error envelopes retain their error facts. Text fallback and structured content contain the same JSON.
+
+Compact file outlines default to 100 entries. `entryLimit` (1–1000) and `entryOffset` (nonnegative) control a page. Read `entriesTotal`, `entriesTruncated`, and `nextEntryOffset`; continue only when the source snapshot has not changed. Full responses are unpaged unless paging is explicitly requested. Existing relationship tools retain their own documented limits and scope. Hidden tool calls return `NAVLYN_MCP_TOOL_UNAVAILABLE`; advanced work remains available through the CLI or `--surface full`.
+
+Non-regex symbol queries accept containing-type/member and namespace-qualified names such as `Client.Number` or `Sample.Formatter.Format`. Qualifiers constrain semantic containers and preserve overload ambiguity; an absent container does not fall back to an unrelated symbol. This is declaration discovery, not arbitrary C# expression binding. Use a source position for constructed-generic or explicit-interface syntax requiring exact binding. `typeKind` filters query candidates by class/interface/struct/enum/delegate/record/record-class/record-struct; `assumeKind` remains a ranking hint. A returned type's `facts.typeKind` and `facts.isRecord` describe its actual Roslyn category.
 
 Requires a .NET 10 SDK and uses MCP C# SDK 2.0.0 over stdio. Tool names and JSON result envelopes are preserved. Discovery schemas remove redundant nullable/default syntax while retaining constraints; text fallback JSON is compact, with structured content retained for clients.
 
@@ -26,6 +34,8 @@ Tools accept optional `targetFramework` to select the binding context (for examp
 ## When To Use It
 
 Use `navlyn-mcp` when an agent needs a semantic C# or Visual Basic fact that text search cannot safely provide:
+
+Advanced tools in this table require `--surface full`; do not run preparation or verification merely because they exist.
 
 | Need | Start With |
 | --- | --- |
@@ -42,7 +52,7 @@ Use `navlyn-mcp` when an agent needs a semantic C# or Visual Basic fact that tex
 
 Use `rg`, normal file reads, or editor tools for comments, prose docs, strings, generated artifacts, and non-Roslyn-source content. Navlyn's MCP server is a semantic C#-first .NET facts provider, not a general repository search server.
 
-Navlyn MCP exposes one stable read-only semantic tool surface. The server selects one workspace at startup, either by default auto discovery or an explicit `--workspace`; agents should choose the smallest relevant tool from tool descriptions, schemas, and returned evidence instead of asking humans to select a startup mode.
+Navlyn MCP exposes a focused default and an explicit full read-only surface. The server selects one workspace at startup, either by default auto discovery or an explicit `--workspace`; agents should choose the smallest relevant tool from tool descriptions, schemas, and returned evidence instead of asking humans to select a startup mode.
 
 ## Starting The Server
 
@@ -114,10 +124,12 @@ Equivalent MCP client configuration for local development:
 }
 ```
 
-For the 0.9.0 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
+For the 0.9.1 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
 
 ## Server Options
 
+- `--surface <focused|full>`: four focused tools by default; `full` restores the 25-tool inventory.
+- `--result-profile <compact|full>`: response default; focused implies compact and full implies full unless overridden.
 - `--workspace <path|auto>`: optional `navlyn.workspace.json`, `.code-workspace`, `.slnx`, `.sln`, `.csproj`, or `.vbproj` path, or `auto` to discover one top-level candidate from the working directory/repository root. Defaults to `auto`. Tool calls are locked to the resolved workspace.
 - `--workspace-root-policy <repo-relative|allow-listed|all>`: workspace folder policy for `navlyn.workspace.json` and `.code-workspace` expansion. Defaults to `repo-relative` for MCP.
 - `--navlyn-executable <command>`: legacy external Navlyn CLI command or executable. Omit for standalone in-process execution. Use only for compatibility, debugging, or development investigations.
@@ -127,7 +139,7 @@ For the 0.9.0 candidate, use the unique-output pack, package-contract, and isola
 - `--max-json-chars <number>`: maximum command JSON size accepted by the MCP wrapper. Defaults to `4000000`.
 - `--daemon-pipe <name>`: optional local `navlyn serve --pipe <name>` daemon used for `navlyn_workspace_status` and `navlyn_workspace_refresh`. If the pipe is unavailable, the in-process server falls back to its normal direct workspace path.
 - `--version`: print the installed MCP server version and exit without starting a session.
-- `--tool-profile <reader|review|edit|full>`: deprecated compatibility alias. Valid old values are accepted and ignored; Navlyn MCP now exposes one read-only tool surface. Invalid values still fail so config typos are caught. `NAVLYN_MCP_TOOL_PROFILE` is accepted with the same compatibility behavior.
+- `--tool-profile <reader|review|edit|full>`: deprecated compatibility alias. Valid old values are accepted and ignored; Use `--surface` to choose the tool inventory. Invalid values still fail so config typos are caught. `NAVLYN_MCP_TOOL_PROFILE` is accepted with the same compatibility behavior.
 
 The server writes MCP protocol messages to stdout. Logs and diagnostics go to stderr.
 
@@ -139,7 +151,7 @@ When `navlyn.workspace.json` is passed explicitly or selected by `auto`, Navlyn 
 
 ## Stable Tool Surface
 
-Normal MCP startup exposes exactly 25 read-only tools:
+Normal startup exposes the first four tools below. `--surface full` exposes all 25 read-only tools:
 
 ```text
 navlyn_target
@@ -192,10 +204,10 @@ The 0.7.0 MCP surface predates the 0.8.0 consolidation. The 0.8.0 `tools/list` s
 | `navlyn_confidence_ledger` | `navlyn_context_pack`; report evidence and uncertainty in the consuming workflow |
 | `navlyn_di_impact` | `navlyn_di` |
 
-These are migration starting points, not guaranteed one-to-one schema aliases; review the current tool descriptions and supply their current arguments. This is an MCP-only breaking change: advanced CLI commands remain available. `--tool-profile reader|review|edit|full` and `NAVLYN_MCP_TOOL_PROFILE` remain accepted deprecated no-op aliases for older configurations; each accepted profile exposes the same unified 25-tool list. New configurations should omit them.
+These are migration starting points, not guaranteed one-to-one schema aliases; review the current tool descriptions and supply their current arguments. This is an MCP-only breaking change: advanced CLI commands remain available. `--tool-profile reader|review|edit|full` and `NAVLYN_MCP_TOOL_PROFILE` remain accepted deprecated no-op aliases for older configurations; these aliases do not change the surface selected by `--surface`. New configurations should omit them.
 For a retained tool name, `navlyn_verify_edit` adds optional symbol query and source-position selection fields (`query`, `file`, `line`, `column`, and related selection options). Pass the `candidateId` or saved anchor from `navlyn_prepare_edit` when checking an existing selection. The `navlyn_target.mode` and `navlyn_read.externalSource` inputs are also new in 0.8.0. Compare current `tools/list` schemas when migrating saved MCP calls.
 
-When a legacy profile alias is supplied, the server starts with the same unified tool list and writes a deterministic stderr warning before serving MCP protocol messages on stdout.
+When a legacy profile alias is supplied, the server starts with the selected surface and writes a deterministic stderr warning before serving MCP protocol messages on stdout.
 
 ## Tool Selection
 
@@ -231,7 +243,7 @@ The MCP surface is deliberately need-triggered. Prefer the specific high-level t
 
 ### Reading an external library member
 
-`navlyn_read` accepts `externalSource: "none" | "metadata" | "decompiled"`. It defaults to `none`, which keeps the existing source-only behavior. For a metadata-only symbol selected at an exact C# or Visual Basic call site, `metadata` returns a Roslyn declaration and `decompiled` can return reconstructed C# for one exact member from a matching local implementation PE. Existing workspace source always takes priority, and the 25-tool MCP surface is unchanged.
+`navlyn_read` accepts `externalSource: "none" | "metadata" | "decompiled"`. It defaults to `none`, which keeps the existing source-only behavior. For a metadata-only symbol selected at an exact C# or Visual Basic call site, `metadata` returns a Roslyn declaration and `decompiled` can return reconstructed C# for one exact member from a matching local implementation PE. Existing workspace source always takes priority; this option is available on the focused read tool as well as the full surface.
 
 Use `view: "signature"`, `"declaration"`, or `"body"`. The result keeps the call-site `file`, `line`, and `column`. External slices carry `origin` and `editable: false`, plus a `navlyn-metadata://<reference-sha256>/<member-id-sha256>` or `navlyn-decompiled://<implementation-sha256>/<member-id-sha256>` virtual path. Slice coordinates start at line 1 in the returned text; the URI is not a file path and cannot be reused as a source position or candidate ID. `externalAssembly` reports the assembly identity, selected target framework, reference-versus-implementation provenance, and PE content hashes. Reconstructed C# is not original library source and does not establish runtime dispatch.
 

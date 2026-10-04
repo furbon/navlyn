@@ -8,13 +8,17 @@ These steps use Windows. Prepare [PowerShell 7](https://learn.microsoft.com/powe
 
 For VS Code, the standalone setup bundle provides a plan, installation, connection checks, and undo. Other clients can use the manual installation below.
 
+Since 0.9.1, startup exposes four tools: target, read, file outline, and navigate. Ordinary reads and `rg` remain appropriate for local text or configuration work. For the previous 25 tools and complete responses, add `--surface full` to the server arguments. See [MCP migration and response controls](navlyn-mcp-server.md#v091-defaults-and-migration).
+
+If an exact newly published version is verified on NuGet but installation says it cannot be found, retry the same command with `--no-http-cache`; clearing global caches is unnecessary.
+
 ## VS Code setup bundle
 
-Extract the `navlyn-setup-0.9.0.zip` release asset into a separate directory. Its `integrity.json` records the source commit and file hashes. Run these commands from the extracted directory, replacing both workspace paths:
+Extract the `navlyn-setup-0.9.1.zip` release asset into a separate directory. Its `integrity.json` records the source commit and file hashes. Run these commands from the extracted directory, replacing both workspace paths:
 
 ```powershell
-./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.9.0
-./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.9.0 -Apply
+./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.9.1
+./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.9.1 -Apply
 ```
 
 The first command displays a plan without writing files, downloading packages, or launching a client. Review the paths, version, feed, and effects before applying. Choose an explicit `.slnx`, `.sln`, `.csproj`, or `.vbproj` with `-WorkspaceFile` when automatic selection is ambiguous or cannot find it.
@@ -29,17 +33,17 @@ Installation and update check SDK and VS Code CLI availability before starting p
 
 ## Manual MCP installation
 
-Run `dotnet tool list --global` to check for `navlyn-mcp`. If it is absent, install it below. If version 0.9.0 is listed, skip installation. For an older version, run `dotnet tool update --global navlyn-mcp --version 0.9.0`.
+Run `dotnet tool list --global` to check for `navlyn-mcp`. If it is absent, install it below. If version 0.9.1 is listed, skip installation. For an older version, run `dotnet tool update --global navlyn-mcp --version 0.9.1`.
 
 ```powershell
-dotnet tool install --global navlyn-mcp --version 0.9.0
+dotnet tool install --global navlyn-mcp --version 0.9.1
 $toolHome = if ($env:DOTNET_CLI_HOME) { $env:DOTNET_CLI_HOME } else { $HOME }
 $mcpExe = Join-Path $toolHome '.dotnet/tools/navlyn-mcp.exe'
 Test-Path $mcpExe
 $mcpExe --version
 ```
 
-If the tool was already installed, still run the `$mcpExe` lines above. Confirm that the version is 0.9.0, then use the `$mcpExe` path to replace `C:\path\to\navlyn-mcp.exe` below. Open the repository you want to inspect before configuring a client.
+If the tool was already installed, still run the `$mcpExe` lines above. Confirm that the version is 0.9.1, then use the `$mcpExe` path to replace `C:\path\to\navlyn-mcp.exe` below. Open the repository you want to inspect before configuring a client.
 
 ## VS Code with GitHub Copilot
 

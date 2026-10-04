@@ -41,7 +41,7 @@ if (showHelp)
 if (options.DeprecatedToolProfileSpecified)
 {
     Console.Error.WriteLine(
-        $"Warning NAVLYN_MCP_TOOL_PROFILE_DEPRECATED: --tool-profile/NAVLYN_MCP_TOOL_PROFILE is deprecated and ignored. Navlyn MCP now exposes one read-only tool surface; supplied profile '{options.DeprecatedToolProfileValue}' is treated as a compatibility alias and may be removed after the next major version.");
+        $"Warning NAVLYN_MCP_TOOL_PROFILE_DEPRECATED: --tool-profile/NAVLYN_MCP_TOOL_PROFILE is deprecated and ignored. use --surface to choose the read-only tool inventory; supplied profile '{options.DeprecatedToolProfileValue}' is treated as a compatibility alias and may be removed after the next major version.");
 }
 
 Directory.SetCurrentDirectory(options.WorkingDirectory);
@@ -73,27 +73,45 @@ builder.Services
     {
         filters.AddCallToolFilter(next => async (request, cancellationToken) =>
         {
+            NavlynMcpServerOptions settings = request.Services!.GetRequiredService<NavlynMcpServerOptions>();
+            if (!NavlynMcpToolProfilePolicy.Allows(settings.ToolProfile, request.Params!.Name, settings.Surface))
+                return NavlynToolResultFormatter.ToCallToolResult(NavlynToolResult.Failed(request.Params.Name, null, settings.WorkspaceArgument,
+                    new NavlynToolError("NAVLYN_MCP_TOOL_UNAVAILABLE", "Tool is not exposed by this surface. Use --surface full or the CLI for advanced investigation.")));
+            if (!NavlynMcpResponsePolicy.TryReadControls(request.Params.Name, request.Params.Arguments, settings.EffectiveResultProfile,
+                out string resultProfile, out int? entryLimit, out int entryOffset, out string? controlError))
+                return NavlynToolResultFormatter.ToCallToolResult(NavlynToolResult.Failed(request.Params.Name, null, settings.WorkspaceArgument,
+                    new NavlynToolError("NAVLYN_MCP_INVALID_ARGUMENT", controlError!)));
             string? framework = null;
             if (request.Params?.Arguments?.TryGetValue("targetFramework", out JsonElement value) == true)
             {
                 if (value.ValueKind != JsonValueKind.Null &&
                     (value.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(value.GetString())))
                 {
-                    NavlynMcpServerOptions settings = request.Services!.GetRequiredService<NavlynMcpServerOptions>();
                     return NavlynToolResultFormatter.ToCallToolResult(NavlynToolResult.Failed(
                         request.Params.Name, null, settings.Workspace,
                         new NavlynToolError("NAVLYN_MCP_INVALID_ARGUMENT", "targetFramework must be a non-empty string or null.")));
                 }
                 framework = value.ValueKind == JsonValueKind.String ? value.GetString() : null;
             }
-            using WorkspaceSelectionScope selection = WorkspaceSelectionScope.Begin(framework);
-            return await next(request, cancellationToken);
+            string? typeKind = null;
+            if (request.Params!.Arguments?.TryGetValue("typeKind", out JsonElement kindValue) == true && kindValue.ValueKind != JsonValueKind.Null)
+            {
+                bool queryMode = request.Params.Arguments!.TryGetValue("query", out JsonElement queryValue) &&
+                    queryValue.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(queryValue.GetString());
+                if (!NavlynMcpResponsePolicy.SupportsTypeKind(request.Params.Name) || kindValue.ValueKind != JsonValueKind.String || !WorkspaceSelectionScope.IsValidTypeKind(kindValue.GetString()) || !queryMode)
+                    return NavlynToolResultFormatter.ToCallToolResult(NavlynToolResult.Failed(request.Params.Name, null, settings.WorkspaceArgument,
+                        new NavlynToolError("NAVLYN_MCP_INVALID_ARGUMENT", "typeKind requires a query and a supported type kind.")));
+                typeKind = kindValue.GetString();
+            }
+            using WorkspaceSelectionScope selection = WorkspaceSelectionScope.Begin(framework, typeKind);
+            CallToolResult result = await next(request, cancellationToken);
+            return NavlynMcpResponsePolicy.Project(result, resultProfile, entryLimit, entryOffset);
         });
         filters.AddListToolsFilter(next => async (request, cancellationToken) =>
         {
             ListToolsResult result = await next(request, cancellationToken);
             NavlynMcpServerOptions serverOptions = request.Services!.GetRequiredService<NavlynMcpServerOptions>();
-            IReadOnlyList<string> allowedNames = NavlynMcpToolProfilePolicy.GetToolNames(serverOptions.ToolProfile);
+            IReadOnlyList<string> allowedNames = NavlynMcpToolProfilePolicy.GetToolNames(serverOptions.ToolProfile, serverOptions.Surface);
             Dictionary<string, Tool> toolsByName = result.Tools.ToDictionary(tool => tool.Name, StringComparer.Ordinal);
 
             result.Tools = allowedNames
@@ -104,9 +122,10 @@ builder.Services
             foreach (Tool tool in result.Tools)
             {
                 tool.InputSchema = NavlynToolSchemaFormatter.Compact(tool.InputSchema, includeFramework: true);
+                tool.InputSchema = NavlynMcpResponsePolicy.InputSchema(tool.Name, tool.InputSchema);
                 if (tool.OutputSchema is JsonElement outputSchema)
                 {
-                    tool.OutputSchema = NavlynToolSchemaFormatter.Compact(outputSchema, output: true);
+                    tool.OutputSchema = NavlynMcpResponsePolicy.OutputSchema(NavlynToolSchemaFormatter.Compact(outputSchema, output: true));
                 }
             }
             return result;

@@ -8,6 +8,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'lib/navlyn-release-version.ps1')
 $ReleaseVersion = Get-NavlynReleaseVersion
+$upgradeVersions = @('0.8.0', '0.8.1', '0.8.5', '0.8.6', '0.8.7', '0.9.0') | Where-Object { $_ -cne $ReleaseVersion }
 
 $repo = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $installer = Join-Path $PSScriptRoot 'install-routing-skill.ps1'
@@ -101,7 +102,7 @@ function Invoke-Lifecycle([string] $Label, [string] $Root) {
     $markerAfter = (Get-FileHash -LiteralPath (Join-Path $Root $markerName) -Algorithm SHA256).Hash
     if ($same.exitCode -ne 0 -or $before -cne $after -or $markerBefore -cne $markerAfter) { throw "$Label identical reinstall was not idempotent." }
 
-    foreach ($olderVersion in @('0.8.0', '0.8.1')) {
+    foreach ($olderVersion in $upgradeVersions) {
         Set-OlderFixture $Root $olderVersion
         $upgrade = Invoke-Installer 'Install' $Root
         if ($upgrade.exitCode -ne 0) { throw "$Label controlled upgrade from $olderVersion failed." }
@@ -182,7 +183,7 @@ function Invoke-Lifecycle([string] $Label, [string] $Root) {
         exactInventoryAndHashes = 'passed'
         idempotentReinstall = 'passed'
         controlledOlderUpgrade = 'passed'
-        controlledOlderVersions = @('0.8.0', '0.8.1')
+        controlledOlderVersions = @($upgradeVersions)
         malformedWrongOrMissingMarkerPreserved = 'passed'
         missingManagedFileConflictPreserved = 'passed'
         divergentCollisionPreserved = 'passed'

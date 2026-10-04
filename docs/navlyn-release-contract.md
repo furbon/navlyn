@@ -1,14 +1,14 @@
 # Navlyn Release and Delivery Contract
 
-This document defines the 0.9.0 delivery contract and retains the 0.8.0 compatibility evidence. Passing a local check establishes only that check; public availability and client support require separate observed evidence.
+This document defines the 0.9.1 delivery contract and retains the 0.8.0 compatibility evidence. Passing a local check establishes only that check; public availability and client support require separate observed evidence.
 
 ## Release identity and package metadata
 
-The release identity is `0.9.0` across `Version`, `PackageVersion`, release notes, documentation, installed outputs, release manifests, and resolved `InformationalVersion`. `AssemblyVersion` and `FileVersion` are numeric `0.9.0.0`. Both packages target only `net10.0`, and keep their IDs and command names as `navlyn` / `navlyn` and `navlyn-mcp` / `navlyn-mcp`.
+The release identity is `0.9.1` across `Version`, `PackageVersion`, release notes, documentation, installed outputs, release manifests, and resolved `InformationalVersion`. `AssemblyVersion` and `FileVersion` are numeric `0.9.1.0`. Both packages target only `net10.0`, and keep their IDs and command names as `navlyn` / `navlyn` and `navlyn-mcp` / `navlyn-mcp`.
 
 Both packages must agree on authorship (`furbon.tech`), MIT license expression, repository URL and type (`https://github.com/furbon/navlyn`, `git`), project URL, copyright, README, icon, and target frameworks. Package inspection must establish that the README and icon are included, required metadata is present, and no build intermediates, credentials, machine paths, source archives, or unrelated files are present. A release contract check must fail on identity or metadata drift before package generation is accepted.
 
-The 0.9.0 release keeps the 25-tool MCP surface. Source selection fixes are documented in the CLI reference. The earlier 0.7.0-to-0.8.0 migration changed `tools/list` from 33 tools to 25: 16 names retired and eight new names appeared. See the [MCP migration table](navlyn-mcp-server.md#v070-to-v080-tool-migration) and current schemas before reusing saved calls. Among retained names, `navlyn_verify_edit` gained optional symbol-selection inputs; `navlyn_target.mode` and `navlyn_read.externalSource` were also added in 0.8.0.
+The 0.9.1 release defaults to four focused MCP tools and compact responses. Existing consumers requiring the previous 25-tool inventory and full responses must specify `--surface full`; CLI output remains complete. Source selection fixes are documented in the CLI reference. The earlier 0.7.0-to-0.8.0 migration changed `tools/list` from 33 tools to 25: 16 names retired and eight new names appeared. See the [MCP migration table](navlyn-mcp-server.md#v070-to-v080-tool-migration) and current schemas before reusing saved calls. Among retained names, `navlyn_verify_edit` gained optional symbol-selection inputs; `navlyn_target.mode` and `navlyn_read.externalSource` were also added in 0.8.0.
 
 ## Codex routing skill source and lifecycle
 
@@ -23,7 +23,7 @@ The supported Codex destinations are a repository's `.agents/skills/navlyn-seman
 The skill install/update contract is:
 
 1. First install copies exactly the three source files into the selected supported destination. It stores a deterministic JSON ownership marker as a sidecar in the destination's parent, never inside the exact three-file skill directory. The stable sidecar name is `.navlyn-semantic-routing.install.json`; repository and user installs therefore keep their marker adjacent to the skill directory.
-2. The marker schema contains a schema identifier/version, Navlyn version (`0.9.0` for this release), normalized absolute destination, the three canonical relative file paths and their SHA-256 hashes, plus an explicit ownership statement that the installer manages only those three files and that destination directory. The marker itself must be created or updated atomically by the installer and must not overwrite an unrelated existing file.
+2. The marker schema contains a schema identifier/version, Navlyn version (`0.9.1` for this release), normalized absolute destination, the three canonical relative file paths and their SHA-256 hashes, plus an explicit ownership statement that the installer manages only those three files and that destination directory. The marker itself must be created or updated atomically by the installer and must not overwrite an unrelated existing file.
 3. Reinstalling the identical version and bytes is idempotent and makes no content changes. If the marker is missing, malformed, has an unsupported schema/version, names another normalized destination, or its recorded ownership/content does not match the current install, installation/update and uninstall fail closed with a diagnostic; they do not infer ownership from file names or silently recreate the marker.
 4. Updating files owned by the prior managed version is allowed only when the valid marker identifies that destination and all three installed-file hashes match its recorded hashes. A controlled older fixture must prove this upgrade path. A missing or tampered managed file is a conflict and blocks update.
 5. Divergent destination files are user-owned conflicts. Update fails closed, preserves every divergent byte, and explains how to resolve the conflict. No implicit force behavior is allowed.
@@ -55,7 +55,7 @@ The release-contract harness rejects project-local `Version`, `PackageVersion`, 
 
 ## Client support claims
 
-Use only these support states. The observed client runs below are historical 0.8.0 evidence; any 0.9.0 client claim needs its own installed-package call.
+Use only these support states. The observed client runs below are historical 0.8.0 evidence; any 0.9.1 client claim needs its own installed-package call.
 
 | Client or surface | Contract state | Claim boundary |
 | --- | --- | --- |

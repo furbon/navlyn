@@ -11,11 +11,11 @@ Run this in PowerShell. The unique temporary directory keeps this installation s
 ```powershell
 $tools = Join-Path $env:TEMP "navlyn-tools-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory $tools | Out-Null
-dotnet tool install navlyn --tool-path $tools --version 0.9.0
+dotnet tool install navlyn --tool-path $tools --version 0.9.1
 dotnet tool list --tool-path $tools
 ```
 
-Check that the list shows `navlyn` at `0.9.0`.
+Check that the list shows `navlyn` at `0.9.1`.
 
 ## 2. Run it in a repository
 
