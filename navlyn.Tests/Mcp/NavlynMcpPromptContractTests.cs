@@ -16,7 +16,7 @@ public sealed class NavlynMcpPromptContractTests
             NavlynMcpPrompts.ReviewDiff(@base: "main", head: "HEAD", staged: null),
             NavlynMcpPrompts.FixDiagnostic(file: "Sample.cs", line: 1, column: 1, diagnosticId: "CS8602")
         ];
-        HashSet<string> registered = new(NavlynMcpToolProfilePolicy.GetToolNames("full", "full"), StringComparer.Ordinal);
+        HashSet<string> registered = new(NavlynMcpToolProfilePolicy.GetToolNames(Navlyn.Mcp.Configuration.NavlynMcpToolProfile.Full, "full"), StringComparer.Ordinal);
         foreach (string prompt in prompts)
         {
             Assert.Contains("--surface full", prompt, StringComparison.Ordinal);
