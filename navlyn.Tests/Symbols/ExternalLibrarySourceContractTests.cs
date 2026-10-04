@@ -1,6 +1,8 @@
 ﻿using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Navlyn.Symbols;
 using Navlyn.Tests.TestSupport;
 using Navlyn.Workspaces;
 
@@ -9,6 +11,70 @@ namespace Navlyn.Tests.Symbols;
 [Collection(ExternalReadCollection.Name)]
 public sealed class ExternalLibrarySourceContractTests
 {
+    [Fact]
+    public async Task ArtifactsOutput_UsesActiveAssetsDespiteStaleConventionalAssets()
+    {
+        ExternalLibrarySourceFixture fixture = await ExternalLibrarySourceFixture.PrepareAsync();
+        string stale = Path.Combine(Path.GetDirectoryName(fixture.ArtifactsProject)!, "obj", "project.assets.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(stale)!);
+        File.WriteAllText(stale, "{\"targets\":{}}");
+        try
+        {
+            (int line, int column) = fixture.Position(fixture.ArtifactsSource, "WriteLine", "Pick");
+            ExternalLibrarySourceFixture.CliResult response = await fixture.RunReadAsync(fixture.ArtifactsProject,
+                fixture.ArtifactsSource, line, column, "decompiled");
+            Assert.True(response.ExitCode == 0, response.Stderr);
+            Assert.Contains("FIXTURE_NET10_INT_OVERLOAD_BODY", SliceText(response.Stdout), StringComparison.Ordinal);
+            WorkspaceLoadResult loaded = await new WorkspaceLoader().LoadAsync(new FileInfo(fixture.ArtifactsProject), CancellationToken.None);
+            using LoadedWorkspace workspace = Assert.IsType<LoadedWorkspace>(loaded.Workspace);
+            Project project = Assert.Single(workspace.Solution.Projects);
+            string assets = Assert.IsType<string>(ProjectAssetsLocator.Find(project));
+            Assert.NotEqual(stale, assets);
+            Assert.Contains(Path.Combine("out", "obj", "RedirectedOutput"), assets, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("net10.0", ProjectContextFacts.GetTargetFramework(project));
+        }
+        finally { File.Delete(stale); }
+    }
+
+    [Theory]
+    [InlineData("normalizedShort", "Normalize", "short", 37)]
+    [InlineData("normalizedWide", "NormalizeWide", "short", 100000)]
+    [InlineData("normalizedNegative", "NormalizeNegative", "short", -37)]
+    public async Task DecompiledArithmetic_PreservesBranchSignsAndCheckedOverflow(
+        string marker, string member, string parameterType, int multiplier)
+    {
+        ExternalLibrarySourceFixture fixture = await ExternalLibrarySourceFixture.PrepareAsync();
+        (int line, int column) = fixture.Position(fixture.ConsumerSource, marker, member);
+        ExternalLibrarySourceFixture.CliResult response = await fixture.RunReadAsync(
+            fixture.ConsumerProject, fixture.ConsumerSource, line, column, "decompiled",
+            projectName: "Consumer(net10.0)");
+        Assert.True(response.ExitCode == 0, response.Stderr);
+        using JsonDocument result = JsonDocument.Parse(response.Stdout);
+        Assert.Contains("System.Int16", result.RootElement.GetProperty("symbol").GetProperty("facts")
+            .GetProperty("documentationCommentId").GetString());
+        string body = SliceText(response.Stdout);
+        Assert.Contains("checked", body, StringComparison.Ordinal);
+        // Recompile only this trusted fixture's returned body: checking strings alone misses branch errors.
+        CSharpCompilation compilation = CSharpCompilation.Create("Arithmetic_" + Guid.NewGuid().ToString("N"),
+            [CSharpSyntaxTree.ParseText($"public static class Arithmetic {{ public static int Evaluate({parameterType} value) {body} }}")],
+            [MetadataReference.CreateFromFile(typeof(object).Assembly.Location)],
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        using MemoryStream output = new();
+        var emitted = compilation.Emit(output);
+        Assert.True(emitted.Success, string.Join("\n", emitted.Diagnostics));
+        System.Reflection.MethodInfo method = System.Reflection.Assembly.Load(output.ToArray())
+            .GetType("Arithmetic")!.GetMethod("Evaluate")!;
+        foreach (short value in new short[] { -1, 0, 1, -17, 17, short.MinValue, short.MaxValue })
+        {
+            long expected = Math.Abs((long)value) * multiplier + 211;
+            if (expected > int.MaxValue || expected < int.MinValue)
+                Assert.IsType<OverflowException>(Assert.Throws<System.Reflection.TargetInvocationException>(
+                    () => method.Invoke(null, [value])).InnerException);
+            else
+                Assert.Equal((int)expected, method.Invoke(null, [value]));
+        }
+    }
+
     [Theory]
     [InlineData("net10.0-windows7.0", "FIXTURE_WINDOWS_INT_OVERLOAD_BODY")]
     [InlineData("net10.0", "FIXTURE_NET10_INT_OVERLOAD_BODY")]
@@ -37,6 +103,59 @@ public sealed class ExternalLibrarySourceContractTests
         Assert.Matches("^navlyn-decompiled://[0-9A-Fa-f]{64}/[0-9A-Fa-f]{64}$", slice.GetProperty("path").GetString()!);
         Assert.Equal("decompiled", slice.GetProperty("origin").GetString());
         Assert.False(slice.GetProperty("editable").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConstructedTypeToken_ReadsExactConstructorBodyInCSharpAndVisualBasic(bool visualBasic)
+    {
+        ExternalLibrarySourceFixture fixture = await ExternalLibrarySourceFixture.PrepareAsync();
+        string file = visualBasic ? fixture.VisualBasicSource : fixture.ConsumerSource;
+        string project = visualBasic ? fixture.VisualBasicProject : fixture.ConsumerProject;
+        (int line, int column) = fixture.Position(file, "explicitConstructed", "Probe(7)");
+        ExternalLibrarySourceFixture.CliResult response = await fixture.RunReadAsync(project, file, line, column, "decompiled",
+            projectName: visualBasic ? null : "Consumer(net10.0)");
+        Assert.True(response.ExitCode == 0, response.Stderr);
+        using JsonDocument result = JsonDocument.Parse(response.Stdout);
+        Assert.True(result.RootElement.GetProperty("symbol").GetProperty("facts").GetProperty("isConstructor").GetBoolean());
+        Assert.Equal("M:Navlyn.ExternalFixture.Probe.#ctor(System.Int32)", result.RootElement.GetProperty("externalAssembly")
+            .GetProperty("memberDocumentationCommentId").GetString());
+        Assert.Contains("FIXTURE_CONSTRUCTOR_BODY", SliceText(response.Stdout), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AmbiguousConstructedTypeToken_DoesNotGuessAnOverload()
+    {
+        ExternalLibrarySourceFixture fixture = await ExternalLibrarySourceFixture.PrepareAsync();
+        (int line, int column) = fixture.Position(fixture.ConsumerSource, "ambiguousConstructed", "Probe((string)");
+        WorkspaceLoadResult loaded = await new WorkspaceLoader().LoadAsync(new FileInfo(fixture.ConsumerProject), CancellationToken.None);
+        using LoadedWorkspace workspace = Assert.IsType<LoadedWorkspace>(loaded.Workspace);
+        Project project = workspace.Solution.Projects.Single(p => ProjectContextFacts.GetTargetFramework(p) == "net10.0");
+        Document document = project.Documents.Single(d => string.Equals(d.FilePath, fixture.ConsumerSource, StringComparison.OrdinalIgnoreCase));
+        string source = (await document.GetTextAsync()).ToString().Replace("new Probe((string)null!)", "new Probe(null)", StringComparison.Ordinal);
+        Solution solution = project.Solution.WithDocumentText(document.Id, Microsoft.CodeAnalysis.Text.SourceText.From(source));
+        SymbolSourceResolutionResult result = await new SymbolSourceResolver().ResolveAsync(solution, new FileInfo(fixture.ConsumerSource),
+            line, column, solution.GetProject(project.Id), false, new SymbolSourceOptions("body", 50, 4000, "decompiled"), CancellationToken.None);
+        Assert.Equal(Navlyn.Diagnostics.DiagnosticIds.ExternalMemberAmbiguous, result.Error?.DiagnosticId);
+        Assert.Null(result.Resolution);
+    }
+
+    [Fact]
+    public async Task ExternalEnumConstant_MetadataIncludesValueAndBodyErrorIdentifiesTheSelection()
+    {
+        ExternalLibrarySourceFixture fixture = await ExternalLibrarySourceFixture.PrepareAsync();
+        (int line, int column) = fixture.Position(fixture.ConsumerSource, "brokerPlatforms", "None");
+        ExternalLibrarySourceFixture.CliResult body = await fixture.RunReadAsync(fixture.ConsumerProject, fixture.ConsumerSource,
+            line, column, "decompiled", projectName: "Consumer(net10.0)");
+        Assert.NotEqual(0, body.ExitCode);
+        Assert.Contains("NAVLYN1403", body.Stderr, StringComparison.Ordinal);
+        Assert.Contains("Field", body.Stderr, StringComparison.Ordinal);
+        Assert.Contains("BrokerPlatforms.None", body.Stderr, StringComparison.Ordinal);
+        ExternalLibrarySourceFixture.CliResult metadata = await fixture.RunReadAsync(fixture.ConsumerProject, fixture.ConsumerSource,
+            line, column, "metadata", view: "declaration", projectName: "Consumer(net10.0)");
+        Assert.True(metadata.ExitCode == 0, metadata.Stderr);
+        Assert.Contains("= 0", SliceText(metadata.Stdout), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -213,6 +332,11 @@ public sealed class ExternalLibrarySourceContractTests
         Assert.True(response.ExitCode == 0, response.Stderr);
         Assert.Contains("FIXTURE_EXTENSION_INT_BODY", SliceText(response.Stdout), StringComparison.Ordinal);
         Assert.DoesNotContain("FIXTURE_EXTENSION_STRING_BODY", SliceText(response.Stdout), StringComparison.Ordinal);
+        using JsonDocument document = JsonDocument.Parse(response.Stdout);
+        string memberId = document.RootElement.GetProperty("externalAssembly").GetProperty("memberDocumentationCommentId").GetString()!;
+        Assert.Equal("M:Navlyn.ExternalFixture.ProbeExtensions.Extend(Navlyn.ExternalFixture.Probe,System.Int32)", memberId);
+        string expectedHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(memberId))).ToLowerInvariant();
+        Assert.EndsWith("/" + expectedHash, Assert.Single(document.RootElement.GetProperty("slices").EnumerateArray()).GetProperty("path").GetString());
     }
 
     [Fact]

@@ -128,10 +128,10 @@ public sealed class NavlynMcpToolDescriptionTests
     [Fact]
     public void ToolDescriptionsStateRoutingInputsAndEvidenceBoundaries()
     {
-        AssertDescriptionContains("navlyn_target", "canonical first", "mode select", "mode list", "text search", "ambiguity");
-        AssertDescriptionContains("navlyn_read", "bounded C#", "candidateId", "exact file/line/column", "broad file reading");
+        AssertDescriptionContains("navlyn_target", "workspace source declaration", "select normally", "list only", "DLL internals", "ambiguity");
+        AssertDescriptionContains("navlyn_read", "bounded C#", "candidateId", "exact file/line/column", "broad reading");
         AssertDescriptionContains("navlyn_file_outline", "one known", "semantic", "ordinary reading");
-        AssertDescriptionContains("navlyn_navigate", "one precise", "candidateId", "references", "callers", "partial");
+        AssertDescriptionContains("navlyn_navigate", "one definition", "candidateId", "references", "callers", "partial", "DLL internals");
         AssertDescriptionContains("navlyn_prepare_edit", "immediately before editing", "source", "context", "test evidence");
         AssertDescriptionContains("navlyn_verify_edit", "post-edit", "diff-to-intent", "mismatch", "not proof");
         AssertDescriptionContains("navlyn_review", "actual Git diff", "not", "static");

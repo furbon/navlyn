@@ -85,8 +85,7 @@ internal sealed class ExternalMemberSourceResolver
             return ExternalMemberResolutionResult.Failed(DiagnosticIds.ExternalMemberMalformedImage);
         }
 
-        string? projectPath = project.FilePath;
-        string? assetsPath = projectPath is null ? null : Path.Combine(Path.GetDirectoryName(projectPath)!, "obj", "project.assets.json");
+        string? assetsPath = ProjectAssetsLocator.Find(project);
         string? assetsHash = null;
         if (assetsPath is not null && File.Exists(assetsPath))
         {
@@ -138,7 +137,7 @@ internal sealed class ExternalMemberSourceResolver
         SymbolSourceSlice slice = new(view, virtualPath, 1, 1, Math.Max(1, lines.Count), 1, lines, truncated,
             Origin: "decompiled", Editable: false);
         return ExternalMemberResolutionResult.Succeeded(new ExternalMemberResolution(
-            "decompiled", new ExternalAssemblyProvenance(identity, framework, "implementation", referenceHash, worker.ImplementationSha256),
+            "decompiled", new ExternalAssemblyProvenance(identity, framework, "implementation", referenceHash, worker.ImplementationSha256, documentationId),
             [slice], snapshot));
     }
 
@@ -199,7 +198,7 @@ internal sealed class ExternalMemberSourceResolver
         ISymbol member, string documentationId, string identity, string framework,
         string referenceHash, string view, int maxLines, int budgetTokens, ExternalMemberSnapshot snapshot)
     {
-        string declaration = SymbolFactsBuilder.Create(member).Signature ?? member.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
+        string declaration = SymbolFactsBuilder.CreateMetadataSignature(member);
         if (view == "body")
         {
             return ExternalMemberResolutionResult.Failed(DiagnosticIds.ExternalMemberBodyUnavailable);
@@ -210,7 +209,7 @@ internal sealed class ExternalMemberSourceResolver
         string uri = $"navlyn-metadata://{referenceHash.ToLowerInvariant()}/{memberHash.ToLowerInvariant()}";
         IReadOnlyList<string> lines = BoundLines(text, maxLines, budgetTokens, out bool truncated);
         return ExternalMemberResolutionResult.Succeeded(new ExternalMemberResolution(
-            "metadata", new ExternalAssemblyProvenance(identity, framework, "reference", referenceHash, null),
+            "metadata", new ExternalAssemblyProvenance(identity, framework, "reference", referenceHash, null, documentationId),
             [new SymbolSourceSlice(view, uri, 1, 1, Math.Max(1, lines.Count), 1, lines, truncated, "metadata", false)], snapshot));
     }
 
@@ -303,7 +302,7 @@ internal sealed class ExternalMemberSourceResolver
 }
 
 internal sealed record ExternalMemberSnapshot(string ReferencePath, string ReferenceSha256, Guid ReferenceMvid, string? AssetsPath, string? AssetsSha256, string? ImplementationPath, string? ImplementationSha256, Guid? ImplementationMvid, string TargetFramework, string Identity);
-internal sealed record ExternalAssemblyProvenance(string Identity, string TargetFramework, string SelectedAssembly, string ReferenceSha256, string? ImplementationSha256);
+internal sealed record ExternalAssemblyProvenance(string Identity, string TargetFramework, string SelectedAssembly, string ReferenceSha256, string? ImplementationSha256, string MemberDocumentationCommentId);
 internal sealed record ExternalMemberResolution(string SourceOrigin, ExternalAssemblyProvenance ExternalAssembly, IReadOnlyList<SymbolSourceSlice> Slices, ExternalMemberSnapshot? Snapshot);
 internal sealed record ExternalMemberResolutionResult(ExternalMemberResolution? Resolution, int? DiagnosticId)
 {

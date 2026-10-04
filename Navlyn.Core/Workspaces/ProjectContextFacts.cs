@@ -91,7 +91,8 @@ internal static partial class ProjectContextFacts
             return null;
         }
 
-        string assetsPath = Path.Combine(Path.GetDirectoryName(project.FilePath)!, "obj", "project.assets.json");
+        string? assetsPath = ProjectAssetsLocator.Find(project);
+        if (assetsPath is null) return null;
         try
         {
             using FileStream stream = new(assetsPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);

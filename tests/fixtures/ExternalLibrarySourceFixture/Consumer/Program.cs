@@ -26,6 +26,13 @@ Probe? maybeProbe = probe;
 maybeProbe?.Mutable = "conditional";
 maybeProbe?.Mutable += "conditional";
 string nestedAccessorRead = probe.NestedAccessor;
+int normalizedShort = probe.Normalize((short)-1);
+long normalizedLong = probe.Normalize((long)-1);
+int normalizedWide = probe.NormalizeWide((short)-1);
+int normalizedNegative = probe.NormalizeNegative((short)-1);
+var explicitConstructed = new Probe(7);
+var ambiguousConstructed = new Probe((string)null!);
+var brokerPlatforms = Probe.BrokerPlatforms.None;
 
 public sealed class LocalProbe
 {

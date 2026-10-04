@@ -29,6 +29,8 @@ internal sealed class ExternalLibrarySourceFixture
 
     public string ConsumerProject => Path.Combine(fixtureRoot, "Consumer", "Consumer.csproj");
     public string ConsumerSource => Path.Combine(fixtureRoot, "Consumer", "Program.cs");
+    public string ArtifactsProject => Path.Combine(fixtureRoot, "RedirectedOutput", "RedirectedOutput.csproj");
+    public string ArtifactsSource => Path.Combine(fixtureRoot, "RedirectedOutput", "Program.cs");
     public string DirectProject => Path.Combine(fixtureRoot, "Direct", "Direct.csproj");
     public string DirectSource => Path.Combine(fixtureRoot, "Direct", "Program.cs");
     public string VisualBasicProject => Path.Combine(fixtureRoot, "VisualBasic", "VisualBasic.vbproj");
@@ -147,7 +149,7 @@ internal sealed class ExternalLibrarySourceFixture
         {
             "Library/bin", "Library/obj", "Consumer/bin", "Consumer/obj", "Direct/bin", "Direct/obj",
             "VisualBasic/bin", "VisualBasic/obj", "ReferenceOnly/bin", "ReferenceOnly/obj",
-            "ReferenceOnlyPackage/bin", "ReferenceOnlyPackage/obj", "packages", ".nuget-home/packages"
+            "ReferenceOnlyPackage/bin", "ReferenceOnlyPackage/obj", "RedirectedOutput/obj", "out", "packages", ".nuget-home/packages"
         })
         {
             string path = Path.GetFullPath(Path.Combine(fixtureRoot, relative));
@@ -175,6 +177,7 @@ internal sealed class ExternalLibrarySourceFixture
         ValidatePackages(packageFeed);
 
         await RestoreAndBuildAsync(ConsumerProject, packageFeed);
+        await RestoreAndBuildAsync(ArtifactsProject, packageFeed);
         await RestoreAndBuildAsync(DirectProject, packageFeed);
         await RestoreAndBuildAsync(VisualBasicProject, packageFeed);
         await RestoreAndBuildAsync(ReferenceOnlyProject, packageFeed);

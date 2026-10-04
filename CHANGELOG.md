@@ -4,8 +4,13 @@ All notable public release changes for Navlyn are tracked here.
 
 ## 0.9.2 - Unreleased
 
+- Repair external constructor reads at C#/VB constructed type tokens, include metadata enum/constant values and canonical external member IDs, and locate redirected NuGet assets from the loaded project's compiler paths. Explain source-only target scope in CLI help and empty-query warnings; preserve ambiguity and dependency identity boundaries.
+
 - Apply outline page bounds before detailed facts, candidate registration and JSON generation. Keep exact semantic order/totals and unpaged CLI/full contracts; add optional CLI `--entry-limit`/`--entry-offset` and forward MCP bounds to a matching external CLI.
 - Describe bound referenced-DLL bodies as one call from a known source position; document occasional CLI integration without an always-running MCP server. Keep ordinary reading/search and clear local edits on ordinary tools.
+- Supply a short MCP initialization hint for missing compiler evidence, tighten skill activation boundaries, and test decompiled conditional arithmetic, negative coefficients and checked overflow by recompiling trusted fixture bodies.
+- Select exact external constructor bodies at C#/VB constructed type tokens, include enum/constant values in metadata declarations, identify body-less selections in errors, and return the canonical external member documentation ID. Clarify source-only target/call-graph limits.
+- Find restored assets from loaded compiler paths for redirected .NET artifacts output, retaining reference/implementation identity and freshness checks instead of assuming project-local `obj`.
 - Reduce the focused compact discovery envelope while retaining detailed schemas on the full surface. Advertise the effective result-profile default and complete bounded bodies in compact results.
 - Serialize external CLI invocations within one MCP server to prevent observed MSBuild generated-file races; include queue waits in cancellation and deadlines.
 - Add opt-in MCP stage timing on stderr with request-local collectors, including discovery, workspace, inventory/hash, resolution and response stages. Keep profiling independent of in-process console capture.

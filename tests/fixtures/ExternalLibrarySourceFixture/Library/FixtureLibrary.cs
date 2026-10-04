@@ -6,8 +6,15 @@ public sealed class Probe
     private int counterValue;
     public Probe() { }
     public Probe(int value) { ConstructorMarker = "FIXTURE_CONSTRUCTOR_BODY"; }
+    public Probe(string value) { ConstructorMarker = "FIXTURE_STRING_CONSTRUCTOR_BODY"; }
+    public Probe(System.Uri value) { ConstructorMarker = "FIXTURE_URI_CONSTRUCTOR_BODY"; }
+    public enum BrokerPlatforms { None = 0, Windows = 1, Linux = 2 }
     public string Pick(int value) => RuntimeMarker;
     public string Pick(string value) => "FIXTURE_STRING_OVERLOAD_BODY";
+    public int Normalize(short value) => checked((value < 0 ? -value : value) * 37 + 211);
+    public long Normalize(long value) => value % 17 + 911;
+    public int NormalizeWide(short value) => checked((value < 0 ? -value : value) * 100000 + 211);
+    public int NormalizeNegative(short value) => checked((value < 0 ? -value : value) * -37 + 211);
     public string Adjust(ref int value, out int copy) { copy = value; return "FIXTURE_BYREF_BODY"; }
     public string Adjust(string value) => "FIXTURE_BYREF_STRING_OVERLOAD_BODY";
     public string Optional(int value = 7) => "FIXTURE_OPTIONAL_INT_BODY";

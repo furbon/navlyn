@@ -12,7 +12,7 @@ internal static class ResolveTargetCommand
     {
         Option<string?> queryOption = new("--query")
         {
-            Description = "Approximate symbol query."
+            Description = "Approximate workspace source declaration query; external DLL declarations are not searched."
         };
         Option<string?> candidateIdOption = FuzzyCommandSupport.CreateCandidateIdOption();
         Option<FileInfo?> fileOption = new("--file")

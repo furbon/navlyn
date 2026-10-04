@@ -69,7 +69,10 @@ builder.Services.AddSingleton<NavlynMcpWorkspaceCache>();
 builder.Services.AddSingleton<NavlynMcpDirectToolRunner>();
 builder.Services.AddSingleton<NavlynMcpToolService>();
 builder.Services
-    .AddMcpServer()
+    .AddMcpServer(server => server.ServerInstructions =
+        NavlynMcpToolProfilePolicy.Allows(options.ToolProfile, NavlynMcpTools.ReadTool, options.Surface)
+            ? "Use ordinary reads/search for directly readable facts. For a referenced DLL body at a known call position, navlyn_read(file,line,column,view:body,externalSource:decompiled) returns the bound implementation. No file listing, SDK discovery, outline, target or skill preamble is needed."
+            : "Use ordinary reads/search for directly readable facts. Use the advertised Navlyn tools for missing compiler evidence; avoid unrelated preparation.")
     .WithStdioServerTransport()
     .WithRequestFilters(filters =>
     {

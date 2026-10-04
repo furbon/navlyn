@@ -729,8 +729,9 @@ public sealed class NavlynMcpStdioTests
         McpClientTool fileOutline = Assert.Single(tools, tool => tool.Name == NavlynMcpTools.FileOutlineTool);
         Assert.Contains("ordinary reading", fileOutline.Description, StringComparison.Ordinal);
         McpClientTool target = Assert.Single(tools, tool => tool.Name == NavlynMcpTools.TargetTool);
-        Assert.Contains("Use mode select normally", target.Description, StringComparison.Ordinal);
-        Assert.Contains("mode list only for explicit broader candidate discovery", target.Description, StringComparison.Ordinal);
+        Assert.Contains("Use select normally", target.Description, StringComparison.Ordinal);
+        Assert.Contains("list only for requested candidate discovery", target.Description, StringComparison.Ordinal);
+        Assert.Contains("Does not search DLL internals", target.Description, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -983,6 +984,7 @@ public sealed class NavlynMcpStdioTests
         string workspace = Path.Combine(FindRepositoryRoot(), "tests", "fixtures", "FuzzyDiscoveryFixture", "FuzzyDiscoveryFixture.csproj");
         using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(60));
         await using McpClient client = await CreateClientAsync(null, workspace, surface: null);
+        Assert.Contains("externalSource:decompiled", client.ServerInstructions);
         IList<McpClientTool> tools = await client.ListToolsAsync(cancellationToken: timeout.Token);
         Assert.Equal(new[] { NavlynMcpTools.TargetTool, NavlynMcpTools.ReadTool, NavlynMcpTools.FileOutlineTool, NavlynMcpTools.NavigateTool }, tools.Select(tool => tool.Name));
         Assert.True(tools[0].JsonSchema.TryGetProperty("allOf", out _));

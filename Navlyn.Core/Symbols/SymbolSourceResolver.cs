@@ -37,6 +37,15 @@ internal sealed class SymbolSourceResolver
         }
 
         SourceSymbolResolution source = result.Resolution!;
+        if (options.ExternalSource == "decompiled" && options.View == "body" &&
+            source.Symbol is INamedTypeSymbol && source.Symbol.Locations.Any(location => location.IsInMetadata))
+        {
+            // At `new LibraryType(...)`, a type token normally selects the type. A body
+            // request needs the uniquely bound constructor, not a guess from its arguments.
+            SourceSymbolResolutionResult constructor = await ResolveExternalConstructorAsync(solution, source, cancellationToken);
+            if (constructor.Error is not null) return SymbolSourceResolutionResult.Failed(constructor.Error);
+            source = constructor.Resolution!;
+        }
         SymbolSourceSymbol symbol = CreateSymbol(source.Symbol, source.ProjectName);
         IReadOnlyList<Location> locations = [.. source.Symbol.Locations
             .Where(location => location.IsInSource && location.GetLineSpan().IsValid)
@@ -105,7 +114,7 @@ internal sealed class SymbolSourceResolver
                 {
                     return SymbolSourceResolutionResult.Failed(new SymbolNavigationError(
                         diagnosticId,
-                        ExternalMemberDiagnosticMessage(diagnosticId),
+                        ExternalMemberDiagnosticMessage(diagnosticId, externalSymbol),
                         ExitCodes.UsageError));
                 }
 
@@ -243,11 +252,40 @@ internal sealed class SymbolSourceResolver
 
     private enum PropertyAccessKind { Read, Write, Ambiguous }
 
-    private static string ExternalMemberDiagnosticMessage(int diagnosticId) => diagnosticId switch
+    private static async Task<SourceSymbolResolutionResult> ResolveExternalConstructorAsync(
+        Solution solution, SourceSymbolResolution source, CancellationToken cancellationToken)
+    {
+        Document? document = solution.GetDocument(source.DocumentId);
+        SemanticModel? model = document is null ? null : await document.GetSemanticModelAsync(cancellationToken);
+        if (model is null) return SourceSymbolResolutionResult.Succeeded(source);
+        SyntaxToken token = source.SyntaxTree.GetRoot(cancellationToken).FindToken(source.Position);
+        foreach (SyntaxNode node in token.Parent?.AncestorsAndSelf() ?? [])
+        {
+            bool typePosition = node switch
+            {
+                ObjectCreationExpressionSyntax creation => creation.Type.Span.Contains(source.Position),
+                Microsoft.CodeAnalysis.VisualBasic.Syntax.ObjectCreationExpressionSyntax creation => creation.Type.Span.Contains(source.Position),
+                _ => false
+            };
+            if (!typePosition) continue;
+            SymbolInfo info = model.GetSymbolInfo(node, cancellationToken);
+            if (info.Symbol is IMethodSymbol { MethodKind: MethodKind.Constructor } constructor)
+                return SourceSymbolResolutionResult.Succeeded(source with { Symbol = constructor, HasExactBinding = true });
+            if (info.CandidateReason != CandidateReason.None)
+                return SourceSymbolResolutionResult.Failed(DiagnosticIds.ExternalMemberAmbiguous,
+                    "The object creation has no unique constructor binding.", ExitCodes.UsageError);
+            break;
+        }
+        return SourceSymbolResolutionResult.Succeeded(source);
+    }
+
+    private static string ExternalMemberDiagnosticMessage(int diagnosticId, ISymbol? selected = null) => diagnosticId switch
     {
         DiagnosticIds.InvalidExternalSourceView => "External source supports only signature, declaration, or body views.",
         DiagnosticIds.ExternalImplementationUnavailable => "A matching local implementation assembly is unavailable.",
-        DiagnosticIds.ExternalMemberBodyUnavailable => "The exact external member has no implementation body.",
+        DiagnosticIds.ExternalMemberBodyUnavailable => selected is null
+            ? "The exact external member has no implementation body."
+            : $"The selected {selected.Kind} '{selected.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)}' has no implementation body. Use external-source metadata with signature or declaration for metadata facts; use ordinary dependency tools for members without a source call anchor.",
         DiagnosticIds.ExternalMemberAmbiguous => "The exact external member or implementation assembly is ambiguous.",
         DiagnosticIds.ExternalMemberStale => "The external assembly changed while the member was being read.",
         DiagnosticIds.ExternalMemberLimitExceeded => "The external assembly or decompilation exceeded the configured safety limits.",

@@ -77,6 +77,11 @@ internal static class SymbolFactsBuilder
             IsRecord: symbol is INamedTypeSymbol recordType ? recordType.IsRecord : null);
     }
 
+    public static string CreateMetadataSignature(ISymbol symbol) =>
+        symbol.ToDisplayString(symbol is IFieldSymbol { HasConstantValue: true }
+            ? SignatureFormat.WithMemberOptions(SignatureFormat.MemberOptions | SymbolDisplayMemberOptions.IncludeConstantValue)
+            : SignatureFormat);
+
     public static SymbolTypeFacts? CreateType(ITypeSymbol? type)
     {
         if (type is null)
