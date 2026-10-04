@@ -18,8 +18,8 @@ Commands:
 
 ```powershell
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- doctor --workspace navlyn.slnx
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- target --workspace navlyn.slnx --project "Navlyn.CommandLine(net10.0)" --query CheckCommand --assume-kind NamedType --limit 5
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- prepare-edit --workspace navlyn.slnx --project "Navlyn.CommandLine(net10.0)" --query CheckCommand --assume-kind NamedType --goal modify --change-kind behavior
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- target --workspace navlyn.slnx --project "Navlyn.CommandLine" --query CheckCommand --assume-kind NamedType --limit 5
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- prepare-edit --workspace navlyn.slnx --project "Navlyn.CommandLine" --query CheckCommand --assume-kind NamedType --goal modify --change-kind behavior
 ```
 
 Evidence to inspect:

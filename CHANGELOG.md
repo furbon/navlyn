@@ -2,6 +2,17 @@
 
 All notable public release changes for Navlyn are tracked here.
 
+## 0.9.0 - 2026-10-04
+
+- Require a .NET 10 SDK; publish only net10.0 CLI/MCP assets. Remove .NET 8 targets, installer fallback, SDK CI setup, and compatibility package checks.
+- Reuse the shared MCP workspace for target variants and focused navigation while preserving CLI validation, selected-symbol behavior, and content-sensitive freshness.
+- Add explicit `--target-framework` / MCP `targetFramework` and batch defaults/per-request selection; enforce it for source positions and cached candidate IDs.
+- Upgrade ModelContextProtocol to 2.0.0; retain actual legacy stdio and discovery-first clients, tool names, and structured envelopes.
+- Compact JSON text and nullable schemas. Correct advertised output-schema required fields to match the serializer's omitted nulls, and accept null sourceCommand in the shared error schema.
+- Prune generated/build trees before repository metadata discovery, reuse the scan, and fix sibling-directory prefix matching.
+- Keep the reduced validation pipeline; remove repeated publication recovery tests already run on tested source.
+- Record small fixed live-task and external-package corpus evidence, including failures and cases where Navlyn costs more than ordinary file reading.
+
 ## 0.8.7 - 2026-10-04
 
 - Stop and reap external MCP child processes on deadlines, caller cancellation, and blocked batch input. Bound retained stdout/stderr while draining both streams.

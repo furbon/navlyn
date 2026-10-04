@@ -35,13 +35,8 @@ function Get-NavlynPreferredTargetFramework {
         throw "No TargetFramework or TargetFrameworks found in $ProjectPath."
     }
 
-    if ($uniqueTargetFrameworks -contains $PreferredTargetFramework) {
-        return $PreferredTargetFramework
+    if ($uniqueTargetFrameworks.Count -ne 1 -or $uniqueTargetFrameworks[0] -ne 'net10.0' -or $PreferredTargetFramework -ne 'net10.0') {
+        throw "Navlyn tools require the single net10.0 target: $ProjectPath"
     }
-
-    if ($uniqueTargetFrameworks -contains 'net10.0') {
-        return 'net10.0'
-    }
-
-    return $uniqueTargetFrameworks[0]
+    return 'net10.0'
 }

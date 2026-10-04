@@ -2,6 +2,7 @@
 param(
     [switch]$NoBuild,
     [switch]$Acquire,
+    [string[]]$CaseIds = @(),
     [string]$Output = 'artifacts/external-member-corpus/report.json',
     [int]$TimeoutSeconds = 60
 )
@@ -19,6 +20,11 @@ $NavlynDll = Join-Path $RepoRoot 'navlyn/bin/Debug/net10.0/navlyn.dll'
 $McpDll = Join-Path $RepoRoot 'navlyn.Mcp/bin/Debug/net10.0/navlyn.Mcp.dll'
 $Packages = @(Get-Content -LiteralPath (Join-Path $CorpusRoot 'packages.json') -Raw | ConvertFrom-Json).packages
 $Cases = @(Get-Content -LiteralPath (Join-Path $CorpusRoot 'scenarios.json') -Raw | ConvertFrom-Json).cases
+if ($CaseIds.Count) {
+    $unknown = @($CaseIds | Where-Object { $_ -notin $Cases.id })
+    if ($unknown.Count) { throw "Unknown corpus cases: $($unknown -join ', ')" }
+    $Cases = @($Cases | Where-Object { $_.id -in $CaseIds })
+}
 $Utf8Bom = [System.Text.UTF8Encoding]::new($true)
 
 if ($TimeoutSeconds -lt 15 -or $TimeoutSeconds -gt 300) {
@@ -44,20 +50,31 @@ function Invoke-Bounded {
     foreach ($argument in $Arguments) { [void]$start.ArgumentList.Add($argument) }
     $watch = [System.Diagnostics.Stopwatch]::StartNew()
     $process = [System.Diagnostics.Process]::Start($start)
-    $stdout = $process.StandardOutput.ReadToEndAsync()
-    $stderr = $process.StandardError.ReadToEndAsync()
-    $timedOut = !$process.WaitForExit($Seconds * 1000)
-    if ($timedOut) {
-        try { $process.Kill($true) } catch { }
-        $process.WaitForExit()
-    }
-    $watch.Stop()
-    return [pscustomobject]@{
-        exitCode = if ($timedOut) { -1 } else { $process.ExitCode }
-        timedOut = $timedOut
-        elapsedMs = [int]$watch.ElapsedMilliseconds
-        stdout = $stdout.GetAwaiter().GetResult()
-        stderr = $stderr.GetAwaiter().GetResult()
+    $deadline = [Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds($Seconds))
+    try {
+        $stdout = $process.StandardOutput.ReadToEndAsync($deadline.Token)
+        $stderr = $process.StandardError.ReadToEndAsync($deadline.Token)
+        $timedOut = $false
+        try {
+            [void]$process.WaitForExitAsync($deadline.Token).GetAwaiter().GetResult()
+            [void]$stdout.WaitAsync($deadline.Token).GetAwaiter().GetResult()
+            [void]$stderr.WaitAsync($deadline.Token).GetAwaiter().GetResult()
+        } catch {
+            if (!$deadline.IsCancellationRequested) { throw }
+            $timedOut = $true
+        }
+        $watch.Stop()
+        return [pscustomobject]@{
+            exitCode = if ($timedOut) { -1 } else { $process.ExitCode }
+            timedOut = $timedOut
+            elapsedMs = [int]$watch.ElapsedMilliseconds
+            stdout = if ($stdout.IsCompletedSuccessfully) { $stdout.GetAwaiter().GetResult() } else { '' }
+            stderr = if ($stderr.IsCompletedSuccessfully) { $stderr.GetAwaiter().GetResult() } else { '' }
+        }
+    } finally {
+        if (!$process.HasExited) { $process.Kill($true); $process.WaitForExit() }
+        $process.Dispose()
+        $deadline.Dispose()
     }
 }
 
@@ -225,6 +242,7 @@ foreach ($case in $Cases) {
 }
 
 $BoundaryChecks = @()
+if ($CaseIds.Count -eq 0) {
 $baseline = $Cases[0]
 $baselineFile = Join-Path $CorpusRoot $baseline.file
 $baselineLines = Get-Content -LiteralPath $baselineFile
@@ -319,13 +337,15 @@ try {
 catch { $mcpError = $_.Exception.Message }
 finally {
     try { $server.StandardInput.Close() } catch { }
-    if (!$server.WaitForExit(5000)) { try { $server.Kill($true) } catch { } }
+    if (!$server.WaitForExit(5000)) { $server.Kill($true); $server.WaitForExit() }
     $mcpWatch.Stop()
     [void]$serverStderr.GetAwaiter().GetResult()
     $server.Dispose()
 }
 $BoundaryChecks += [pscustomobject]@{ id = 'real-package-mcp-cli-parity'; passed = $mcpPass; elapsedMs = [int]$mcpWatch.ElapsedMilliseconds }
 if (!$mcpPass) { $Findings += [pscustomobject]@{ case = 'real-package-mcp-cli-parity'; errors = @($mcpError) } }
+
+}
 
 $AfterHash = Get-CorpusHash
 if ($BeforeHash -ne $AfterHash) { $Findings += [pscustomobject]@{ case = 'ownership'; errors = @('corpus-source-changed') } }

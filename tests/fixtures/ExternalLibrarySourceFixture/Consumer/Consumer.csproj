@@ -1,4 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><TargetFrameworks>net8.0;net10.0</TargetFrameworks><OutputType>Exe</OutputType><LangVersion>14.0</LangVersion><Nullable>enable</Nullable><RestoreSources>$(MSBuildThisFileDirectory)..\packages</RestoreSources></PropertyGroup>
+  <PropertyGroup><TargetFrameworks>net10.0-windows7.0;net10.0</TargetFrameworks><OutputType>Exe</OutputType><LangVersion>14.0</LangVersion><Nullable>enable</Nullable><RestoreSources>$(MSBuildThisFileDirectory)..\packages</RestoreSources></PropertyGroup>
   <ItemGroup><PackageReference Include="Navlyn.ExternalLibrarySourceFixture" Version="1.0.0" /></ItemGroup>
 </Project>

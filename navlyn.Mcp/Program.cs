@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -8,6 +9,7 @@ using Navlyn.Mcp.Configuration;
 using Navlyn.Mcp.Execution;
 using Navlyn.Mcp.Tools;
 using Navlyn.Symbols;
+using Navlyn.Workspaces;
 
 if (await ExternalMemberWorker.RunIfRequestedAsync(args, CancellationToken.None))
 {
@@ -69,6 +71,24 @@ builder.Services
     .WithStdioServerTransport()
     .WithRequestFilters(filters =>
     {
+        filters.AddCallToolFilter(next => async (request, cancellationToken) =>
+        {
+            string? framework = null;
+            if (request.Params?.Arguments?.TryGetValue("targetFramework", out JsonElement value) == true)
+            {
+                if (value.ValueKind != JsonValueKind.Null &&
+                    (value.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(value.GetString())))
+                {
+                    NavlynMcpServerOptions settings = request.Services!.GetRequiredService<NavlynMcpServerOptions>();
+                    return NavlynToolResultFormatter.ToCallToolResult(NavlynToolResult.Failed(
+                        request.Params.Name, null, settings.Workspace,
+                        new NavlynToolError("NAVLYN_MCP_INVALID_ARGUMENT", "targetFramework must be a non-empty string or null.")));
+                }
+                framework = value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+            }
+            using WorkspaceSelectionScope selection = WorkspaceSelectionScope.Begin(framework);
+            return await next(request, cancellationToken);
+        });
         filters.AddListToolsFilter(next => async (request, cancellationToken) =>
         {
             ListToolsResult result = await next(request, cancellationToken);
@@ -81,6 +101,14 @@ builder.Services
                 .Select(name => toolsByName[name])
                 .ToList();
 
+            foreach (Tool tool in result.Tools)
+            {
+                tool.InputSchema = NavlynToolSchemaFormatter.Compact(tool.InputSchema, includeFramework: true);
+                if (tool.OutputSchema is JsonElement outputSchema)
+                {
+                    tool.OutputSchema = NavlynToolSchemaFormatter.Compact(outputSchema, output: true);
+                }
+            }
             return result;
         });
     })

@@ -16,13 +16,13 @@ Keeping the packages separate lets CLI users install only `navlyn` and MCP users
 
 The installed tools are local .NET tools. They do not install a background service, browser extension, editor plugin, or hosted component.
 
-Both tool packages include `net8.0` and `net10.0` assets. The .NET SDK selects the compatible tool asset during install or restore. Semantic workspace loading still requires an installed .NET SDK/MSBuild that can load the target repository.
+Both tool packages include only `net10.0` assets and require a .NET 10 SDK. Semantic workspace loading also requires SDK/MSBuild support for the target repository.
 
-The Windows CI lane runs the product suite and isolated package installation on .NET 10 once, retaining the tested packages for publication. Existing .NET 8 assets remain packaged only until 0.9.0.
+The Windows CI lane runs the product suite and isolated package installation on .NET 10 once, retaining the tested packages for publication.
 
 ## Current Release State
 
-The current package identity is `0.8.7`; `0.8.6` is the previous public release. The protected publish workflow, public NuGet indexing, tag, and GitHub Release are verified separately during the release sequence.
+The current package identity is `0.9.0`; `0.8.7` is the previous public release. The protected publish workflow, public NuGet indexing, tag, and GitHub Release are verified separately during the release sequence.
 
 To validate a candidate locally on Windows without changing global tools or real client settings, use .NET SDK 10 to build both target frameworks:
 
@@ -37,7 +37,7 @@ New-Item -ItemType Directory -Path $checks | Out-Null
 ./scripts/test-consumer-install.ps1 -Manifest $manifest -OutputReport (Join-Path $PWD "$checks/consumer-install.json")
 ```
 
-The consumer harness installs into isolated `--tool-path` directories and tests both target frameworks. To install manually from a local feed, use `dotnet tool install --tool-path <isolated-tool-dir> --add-source <local-feed> navlyn --version 0.8.7` (repeat for `navlyn-mcp`). Run the installed executable by absolute path from a separate consumer workspace. Rollback can be exercised by passing an older package manifest with `-RollbackManifest`; uninstall and cleanup are included in the harness. Reports and packages are written under ignored `artifacts/` paths.
+The consumer harness installs into isolated `--tool-path` directories and tests both target frameworks. To install manually from a local feed, use `dotnet tool install --tool-path <isolated-tool-dir> --add-source <local-feed> navlyn --version 0.9.0` (repeat for `navlyn-mcp`). Run the installed executable by absolute path from a separate consumer workspace. Rollback can be exercised by passing an older package manifest with `-RollbackManifest`; uninstall and cleanup are included in the harness. Reports and packages are written under ignored `artifacts/` paths.
 
 ## User Install Shape
 
@@ -67,8 +67,8 @@ For teams and agent workspaces, prefer a repository-local .NET tool manifest whe
 
 ```powershell
 dotnet new tool-manifest
-dotnet tool install navlyn --version 0.8.7
-dotnet tool install navlyn-mcp --version 0.8.7
+dotnet tool install navlyn --version 0.9.0
+dotnet tool install navlyn-mcp --version 0.9.0
 dotnet tool restore
 dotnet tool run navlyn -- doctor --workspace auto
 ```
@@ -100,7 +100,7 @@ When an agent needs several facts from one workspace, prefer CLI `navlyn batch`,
 
 ## Release Identity
 
-The final release identity is `0.8.7`; both package IDs and the source tag use that version.
+The final release identity is `0.9.0`; both package IDs and the source tag use that version.
 
 Keep `navlyn` and `navlyn-mcp` versions synchronized for the initial public releases. Both packages should use the same repository URL, license expression, README, package icon, author, and release notes discipline.
 
@@ -168,9 +168,9 @@ The exact-main Windows CI job completes release validation, installed-consumer a
 
 ## GitHub Release
 
-After both 0.8.7 packages are publicly indexed and independently installable:
+After both 0.9.0 packages are publicly indexed and independently installable:
 
-1. Push an annotated `v0.8.7` tag on the exact reviewed and published `main` commit.
+1. Push an annotated `v0.9.0` tag on the exact reviewed and published `main` commit.
 2. Wait for tag-triggered verification of the annotated tag, successful exact-main CI, completed protected publication, and both public package signatures/content. This does not rebuild or repeat the source suite.
 3. Create the GitHub Release with concise English and Japanese notes, the package manifest, and retained package artifacts where available.
 4. Verify tag target, artifact hashes, NuGet installs, and release links.
@@ -182,8 +182,8 @@ Do not create the public release before package smoke and dry-run publish have s
 After NuGet indexing completes, test installation from the public feed in a clean shell:
 
 ```powershell
-dotnet tool install --tool-path <clean-cli-tools> navlyn --version 0.8.7
-dotnet tool install --tool-path <clean-mcp-tools> navlyn-mcp --version 0.8.7
+dotnet tool install --tool-path <clean-cli-tools> navlyn --version 0.9.0
+dotnet tool install --tool-path <clean-mcp-tools> navlyn-mcp --version 0.9.0
 navlyn --help
 navlyn-mcp --help
 navlyn doctor --workspace auto

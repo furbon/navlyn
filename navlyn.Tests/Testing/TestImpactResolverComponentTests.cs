@@ -25,7 +25,7 @@ public sealed class TestImpactResolverComponentTests(ResolverComponentTestFixtur
             Limit: 20,
             CandidateId: null,
             Selection: new FuzzySelectionOptions("fail", "medium", ExplainSelection: false));
-        var subjectProjects = workspace.Solution.Projects.Where(project => project.Name == "Navlyn.Core(net10.0)").ToArray();
+        var subjectProjects = workspace.Solution.Projects.Where(project => project.Name == "Navlyn.Core").ToArray();
         FuzzyCandidateResolution resolution = await new FuzzyDiscoveryResolver().ResolveCandidatesForSelectionAsync(
             subjectProjects,
             query,

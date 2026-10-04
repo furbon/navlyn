@@ -19,7 +19,7 @@
       "minLength": 1
     },
     "sourceCommand": {
-      "type": "object",
+      "type": ["object", "null"],
       "additionalProperties": true,
       "required": [
         "command",

@@ -138,9 +138,8 @@ internal sealed class DocumentIndex
             return false;
         }
 
-        entry = project is null
-            ? entries.FirstOrDefault()
-            : entries.FirstOrDefault(candidate => candidate.Document.Project.Id == project.Id);
+        entry = entries.FirstOrDefault(candidate => WorkspaceSelectionScope.Includes(candidate.Document.Project) &&
+            (project is null || candidate.Document.Project.Id == project.Id));
         return entry is not null;
     }
 

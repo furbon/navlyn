@@ -24,7 +24,7 @@ MCP default:
 
 1. `navlyn.Mcp` receives an MCP tool, resource, or prompt request.
 2. MCP arguments are validated and mapped to an allowlisted logical Navlyn command.
-3. Reader-path tools such as `navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, and `navlyn_read` use direct Core resolver paths with a lazy per-server workspace cache and `DocumentIndex`. A simple `navlyn_target` query also uses the direct resolver when the workspace has a repository display root.
+3. Reader-path tools such as `navlyn_workspace_summary`, `navlyn_workspace_status`, `navlyn_workspace_refresh`, `navlyn_file_outline`, and `navlyn_read` use direct Core resolver paths with a lazy per-server workspace cache and `DocumentIndex`. All supported `navlyn_target` variants and focused `navlyn_navigate` operations execute the existing CLI resolvers against the borrowed cached workspace. The cache lease remains owned by MCP, and freshness is validated before the response.
 4. Other tools, and target calls with additional selection options or without a repository display root, use `NavlynInProcessCommandAdapter`, which runs the shared command runtime in-process.
 5. The MCP result envelope returns `sourceCommand` for traceability and the command JSON under `result`.
 
@@ -38,7 +38,7 @@ MCP legacy external CLI:
 
 ## Cache Boundary
 
-The MCP server reuses its process, loaded assemblies, command runtime, MSBuildLocator registration, a lazy workspace cache, and a workspace-scoped `DocumentIndex` for direct reader tools. `navlyn_file_outline` seeds an in-memory candidate target map for the current server process, so immediate `navlyn_read(candidateId: "...", view: "declaration")` follow-ups can avoid a broad candidate scan. Tools that still run through the command adapter preserve the existing CLI behavior and may load the workspace independently.
+The MCP server reuses its process, loaded assemblies, command runtime, MSBuildLocator registration, a lazy workspace cache, and a workspace-scoped `DocumentIndex` for direct reader tools, target selection, and focused navigation. `navlyn_file_outline` seeds an in-memory candidate target map for the current server process, so immediate `navlyn_read(candidateId: "...", view: "declaration")` follow-ups can avoid a broad candidate scan. Tools that still run through the command adapter preserve the existing CLI behavior and may load the workspace independently.
 
 The direct cache is session-local and has no file watcher. It hashes selected workspace, loaded project/document, and workspace-tree source/build inputs before leasing a snapshot and before returning a successful direct result. Stable changes reload the workspace; changes during a call receive one retry and then a deterministic stale-workspace error. Each snapshot generation owns its candidate-position map and remains alive until overlapping calls release their leases. An explicit refresh replaces the local generation even if a configured daemon answers its refresh request. The content-sensitive `snapshotId` identifies checked inputs as well as the graph; `workspaceFingerprint` remains the graph identity. Adapter-backed tools may load independently, and a later direct call checks its own inputs. Use `navlyn_batch` when several batch-supported adapter-backed facts should share one workspace load. Navlyn does not add an editing surface, network access, or arbitrary command execution.
 

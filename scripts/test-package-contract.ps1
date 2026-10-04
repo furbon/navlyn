@@ -10,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 . (Join-Path $PSScriptRoot 'lib/navlyn-release-version.ps1')
 $ExpectedVersion = Get-NavlynReleaseVersion
-$ExpectedFrameworks = @('net8.0', 'net10.0')
+$ExpectedFrameworks = @('net10.0')
 $Failures = [System.Collections.Generic.List[string]]::new()
 $PackageResults = [System.Collections.Generic.List[object]]::new()
 
@@ -60,10 +60,10 @@ function Test-PackageEntryPath {
 
     if ($Path -in @('_rels/.rels', '[Content_Types].xml', 'README.md', 'README_ja.md', 'THIRD-PARTY-NOTICES.md', 'navlyn-icon.png', "$PackageId.nuspec")) { return $true }
     if ($Path -match '^package/services/metadata/core-properties/[^/]+\.psmdcp$') { return $true }
-    if ($Path -match '^tools/(net8\.0|net10\.0)/any/([^/]+\.(dll|pdb|deps\.json|runtimeconfig\.json)|DotnetToolSettings\.xml)$') { return $true }
-    if ($Path -match '^tools/(net8\.0|net10\.0)/any/BuildHost-(net472|netcore)/[^/]+\.(dll|exe|pdb|json|config)$') { return $true }
-    if ($Path -match '^tools/(net8\.0|net10\.0)/any/[a-z]{2}(-[A-Za-z]{2,4})?/[^/]+\.resources\.dll$') { return $true }
-    if ($Path -match '^tools/(net8\.0|net10\.0)/any/runtimes/(browser|win)/lib/net(8|10)\.0/[^/]+\.dll$') { return $true }
+    if ($Path -match '^tools/net10\.0/any/([^/]+\.(dll|pdb|deps\.json|runtimeconfig\.json)|DotnetToolSettings\.xml)$') { return $true }
+    if ($Path -match '^tools/net10\.0/any/BuildHost-(net472|netcore)/[^/]+\.(dll|exe|pdb|json|config)$') { return $true }
+    if ($Path -match '^tools/net10\.0/any/[a-z]{2}(-[A-Za-z]{2,4})?/[^/]+\.resources\.dll$') { return $true }
+    if ($Path -match '^tools/net10\.0/any/runtimes/(browser|win)/lib/net(8|10)\.0/[^/]+\.dll$') { return $true }
     return $false
 }
 
@@ -130,7 +130,7 @@ try {
             licenseExpression = 'PackageLicenseExpression'; copyright = 'Copyright'; readme = 'PackageReadmeFile'; icon = 'PackageIcon'
         }
         foreach ($key in $mapping.Keys) { $metadata[$key] = Get-XmlValue -Document $project -XPath "/Project/PropertyGroup/$($mapping[$key])" }
-        $frameworks = (Get-XmlValue -Document $project -XPath '/Project/PropertyGroup/TargetFrameworks') -split ';' | Where-Object { $_ }
+        $frameworks = @(Get-XmlValue -Document $project -XPath '/Project/PropertyGroup/TargetFramework')
         $command = Get-XmlValue -Document $project -XPath '/Project/PropertyGroup/ToolCommandName'
         $packageId = Get-XmlValue -Document $project -XPath '/Project/PropertyGroup/PackageId'
         if ($packageId -ne $definition.Id -or $command -ne $definition.Command) { Add-Failure "Project contract mismatch for package '$($definition.Id)'." }

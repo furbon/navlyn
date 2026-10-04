@@ -13,12 +13,17 @@ internal sealed class NavlynInProcessCommandAdapter(NavlynMcpServerOptions optio
     private static readonly Regex DiagnosticCodeRegex = new(@"\bNAVLYN\d{4}\b", RegexOptions.CultureInvariant);
     private static readonly SemaphoreSlim ConsoleLock = new(1, 1);
 
-    public async Task<NavlynToolResult> RunAsync(
+    public Task<NavlynToolResult> RunAsync(string toolName, string cliCommand, IReadOnlyList<string> arguments,
+        string? standardInput, CancellationToken cancellationToken)
+        => RunWithWorkspaceAsync(toolName, cliCommand, arguments, standardInput, cancellationToken, null);
+
+    internal async Task<NavlynToolResult> RunWithWorkspaceAsync(
         string toolName,
         string cliCommand,
         IReadOnlyList<string> arguments,
         string? standardInput,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        LoadedWorkspace? preloadedWorkspace)
     {
         List<string> fullArguments = BuildArguments(cliCommand, arguments);
         NavlynSourceCommand sourceCommand = new(cliCommand, fullArguments);
@@ -26,7 +31,7 @@ internal sealed class NavlynInProcessCommandAdapter(NavlynMcpServerOptions optio
         NavlynCliResult executionResult;
         try
         {
-            executionResult = await RunCommandAsync(fullArguments, standardInput, cancellationToken);
+            executionResult = await RunCommandAsync(fullArguments, standardInput, cancellationToken, preloadedWorkspace);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -121,7 +126,7 @@ internal sealed class NavlynInProcessCommandAdapter(NavlynMcpServerOptions optio
     private async Task<NavlynCliResult> RunCommandAsync(
         IReadOnlyList<string> fullArguments,
         string? standardInput,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, LoadedWorkspace? preloadedWorkspace)
     {
         using CancellationTokenSource timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(options.TimeoutMilliseconds);
@@ -140,7 +145,7 @@ internal sealed class NavlynInProcessCommandAdapter(NavlynMcpServerOptions optio
             Console.SetIn(stdin);
             Directory.SetCurrentDirectory(options.WorkingDirectory);
 
-            int exitCode = await NavlynCli.RunAsync([.. fullArguments], timeoutSource.Token);
+            int exitCode = await NavlynCli.RunAsync([.. fullArguments], timeoutSource.Token, preloadedWorkspace);
             bool timedOut = timeoutSource.IsCancellationRequested && !cancellationToken.IsCancellationRequested;
             return new NavlynCliResult(exitCode, stdout.ToString(), Cap(stderr.ToString(), NavlynCliRunner.StderrLimit), timedOut);
         }

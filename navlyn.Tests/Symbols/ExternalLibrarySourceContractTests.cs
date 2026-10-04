@@ -10,7 +10,7 @@ namespace Navlyn.Tests.Symbols;
 public sealed class ExternalLibrarySourceContractTests
 {
     [Theory]
-    [InlineData("net8.0", "FIXTURE_NET8_INT_OVERLOAD_BODY")]
+    [InlineData("net10.0-windows7.0", "FIXTURE_WINDOWS_INT_OVERLOAD_BODY")]
     [InlineData("net10.0", "FIXTURE_NET10_INT_OVERLOAD_BODY")]
     public async Task NuGetRead_DecompilesExactTfmOverloadWithProvenance(string targetFramework, string expectedMarker)
     {

@@ -84,10 +84,18 @@ internal static class WorkspaceCommand
             ? new WorkspaceTimingCollector()
             : null;
         WorkspaceLoadOptions options = new(ParseWorkspaceRootPolicy(workspaceRootPolicy), timing);
+        LoadedWorkspace? borrowed = CliInvocationContext.Current?.PreloadedWorkspace;
+        if (borrowed is not null && workspace.Name != "auto" && !string.Equals(workspace.FullName, borrowed.FullPath,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+        {
+            borrowed = null;
+        }
         WorkspaceLoadResult loadResult;
         using (timing?.Measure("workspace.total-load"))
         {
-            loadResult = await new WorkspaceLoader().LoadAsync(workspace, options, cancellationToken);
+            loadResult = borrowed is null
+                ? await new WorkspaceLoader().LoadAsync(workspace, options, cancellationToken)
+                : WorkspaceLoadResult.Succeeded(borrowed, []);
         }
 
         foreach (WorkspaceLoadDiagnostic diagnostic in loadResult.Diagnostics)
@@ -101,7 +109,8 @@ internal static class WorkspaceCommand
             return loadResult.Error.ExitCode;
         }
 
-        using LoadedWorkspace workspaceHandle = loadResult.Workspace!;
+        using LoadedWorkspace? ownedWorkspace = borrowed is null ? loadResult.Workspace : null;
+        LoadedWorkspace workspaceHandle = loadResult.Workspace!;
         int exitCode;
         using (timing?.Measure("command.execute-and-serialize"))
         {

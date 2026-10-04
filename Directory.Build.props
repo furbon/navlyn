@@ -1,10 +1,10 @@
 <Project>
   <PropertyGroup>
-    <Version>0.8.7</Version>
+    <Version>0.9.0</Version>
     <PackageVersion>$(Version)</PackageVersion>
     <AssemblyVersion>$(Version.Split('-')[0]).0</AssemblyVersion>
     <FileVersion>$(AssemblyVersion)</FileVersion>
     <InformationalVersion>$(Version)</InformationalVersion>
-    <PackageReleaseNotes>$(Version) reaps canceled MCP process trees, bounds wrapper output, replaces redundant validation with a fast .NET 10 product suite and portable smoke, pins Actions, and measures repeated warm MCP calls.</PackageReleaseNotes>
+    <PackageReleaseNotes>$(Version) requires .NET 10, reuses warm MCP workspaces for target/navigation, adds explicit target-framework selection, upgrades MCP SDK 2.0, compacts schemas/results, and removes generated artifacts from repository summaries.</PackageReleaseNotes>
   </PropertyGroup>
 </Project>

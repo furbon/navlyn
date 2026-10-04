@@ -2,8 +2,8 @@
 param(
     [switch]$NoBuild,
     [string]$Output = 'artifacts/package-smoke/packages',
-    [ValidateSet('net8.0', 'net10.0')]
-    [string[]]$Frameworks = @('net8.0', 'net10.0')
+    [ValidateSet('net10.0')]
+    [string[]]$Frameworks = @('net10.0')
 )
 
 Set-StrictMode -Version Latest

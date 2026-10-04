@@ -69,7 +69,7 @@ internal static class SourcePositionCommand
                 if (hasCandidateId)
                 {
                     IReadOnlyList<Project> projects = project is null
-                        ? workspace.Solution.Projects.ToArray()
+                        ? workspace.Solution.Projects.Where(WorkspaceSelectionScope.Includes).ToArray()
                         : [project];
                     CandidateTargetResolutionResult targetResult = await new CandidateTargetResolver().ResolveAsync(
                         workspace.Solution,

@@ -23,6 +23,11 @@ internal sealed class NavlynMcpToolService(
                 new NavlynToolError("NAVLYN_MCP_INVALID_ARGUMENT", command.Error ?? "Invalid tool arguments."));
         }
 
+        if (Navlyn.Workspaces.WorkspaceSelectionScope.CurrentTargetFramework is string framework &&
+            !command.Arguments.Contains("--target-framework"))
+        {
+            command = CommandBuildResult.Valid(command.Command!, [.. command.Arguments, "--target-framework", framework], command.StandardInput);
+        }
         using CancellationTokenSource deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(options.TimeoutMilliseconds);
         long started = Stopwatch.GetTimestamp();

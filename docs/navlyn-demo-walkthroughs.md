@@ -9,8 +9,8 @@ Each walkthrough is reproducible from this repository or committed fixtures. Eac
 Run from this repository after restore:
 
 ```powershell
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- target --workspace navlyn.slnx --project "Navlyn.CommandLine(net10.0)" --query CheckCommand --assume-kind NamedType --limit 5
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- prepare-edit --workspace navlyn.slnx --project "Navlyn.CommandLine(net10.0)" --query CheckCommand --assume-kind NamedType --goal modify --change-kind behavior
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- target --workspace navlyn.slnx --project "Navlyn.CommandLine" --query CheckCommand --assume-kind NamedType --limit 5
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- prepare-edit --workspace navlyn.slnx --project "Navlyn.CommandLine" --query CheckCommand --assume-kind NamedType --goal modify --change-kind behavior
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- review --workspace navlyn.slnx --base HEAD --head HEAD --profile compact --symbol-limit 3 --impact-limit 3 --diagnostic-limit 3 --related-test-limit 3
 ```
 
@@ -59,7 +59,7 @@ Useful output excerpt:
   },
   "candidateId": "sym:v1:...",
   "selector": {
-    "project": "Navlyn.CommandLine(net10.0)",
+    "project": "Navlyn.CommandLine",
     "targetFramework": "net10.0"
   },
   "recommendedNextActions": [
@@ -115,7 +115,7 @@ Failure mode: an agent correctly anchors `CheckCommand`, edits elsewhere, and th
 Run:
 
 ```powershell
-navlyn target --workspace navlyn.slnx --project "Navlyn.CommandLine(net10.0)" --query CheckCommand --assume-kind NamedType --limit 5
+navlyn target --workspace navlyn.slnx --project "Navlyn.CommandLine" --query CheckCommand --assume-kind NamedType --limit 5
 navlyn prepare-edit --workspace navlyn.slnx --candidate-id sym:v1:... --goal modify --change-kind behavior
 navlyn wrong-symbol-guard --workspace navlyn.slnx --query CheckCommand --assume-kind NamedType --fail-on-risk medium
 ```

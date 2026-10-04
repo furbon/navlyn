@@ -122,9 +122,9 @@ try {
     Assert ($outputJson.effects.writes -eq $false -and $outputJson.effects.network -eq $false -and $outputJson.effects.clientLaunch -eq $false) 'Plan must report no effects.'
     Assert ($outputJson.target -eq 'Local') 'The default target must remain Local.'
     $fakeUserProfile=Join-Path $fixture 'synthetic-user';$fakeCliHome=Join-Path $fixture 'synthetic-cli-home';$fakeGlobalRoot=Join-Path $fakeCliHome '.dotnet/tools';$fakeStore=Join-Path $fakeGlobalRoot '.store/navlyn-mcp/0.8.1/navlyn-mcp/0.8.1'
-    [IO.Directory]::CreateDirectory((Join-Path $fakeStore 'tools/net8.0/any'))|Out-Null
+    [IO.Directory]::CreateDirectory((Join-Path $fakeStore 'tools/net10.0/any'))|Out-Null
     [IO.File]::WriteAllText((Join-Path $fakeStore 'navlyn-mcp.nuspec'),'<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd"><metadata><id>navlyn-mcp</id><version>0.8.1</version></metadata></package>')
-    [IO.File]::WriteAllText((Join-Path $fakeStore 'tools/net8.0/any/DotnetToolSettings.xml'),'<DotNetCliTool Version="1"><Commands><Command Name="navlyn-mcp" EntryPoint="navlyn.Mcp.dll" Runner="dotnet"/><Command Name="navlyn" EntryPoint="navlyn.Mcp.dll" Runner="dotnet"/></Commands></DotNetCliTool>')
+    [IO.File]::WriteAllText((Join-Path $fakeStore 'tools/net10.0/any/DotnetToolSettings.xml'),'<DotNetCliTool Version="1"><Commands><Command Name="navlyn-mcp" EntryPoint="navlyn.Mcp.dll" Runner="dotnet"/><Command Name="navlyn" EntryPoint="navlyn.Mcp.dll" Runner="dotnet"/></Commands></DotNetCliTool>')
     $fakeMcpShim=Join-Path $fakeGlobalRoot $(if($IsWindows){'navlyn-mcp.exe'}else{'navlyn-mcp'})
     $fakeCliShim=Join-Path $fakeGlobalRoot $(if($IsWindows){'navlyn.exe'}else{'navlyn'})
     [IO.File]::WriteAllBytes($fakeMcpShim,[byte[]](1,2,3,4));[IO.File]::WriteAllBytes($fakeCliShim,[byte[]](5,6,7,8));$env:USERPROFILE=$fakeUserProfile;$env:DOTNET_CLI_HOME=$fakeCliHome
@@ -149,7 +149,7 @@ try {
         $appData=Join-Path $fixtureBase 'a';[IO.Directory]::CreateDirectory($appData)|Out-Null
         $workspace=Join-Path $fixture 'package-workspace';[IO.Directory]::CreateDirectory($workspace)|Out-Null
         $project=Join-Path $workspace 'Probe.csproj';$sourceFile=Join-Path $workspace 'Probe.cs'
-        Set-Content -LiteralPath $project -Value '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework><Nullable>enable</Nullable></PropertyGroup></Project>' -Encoding utf8
+        Set-Content -LiteralPath $project -Value '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable></PropertyGroup></Project>' -Encoding utf8
         Set-Content -LiteralPath $sourceFile -Value "namespace Probe;`npublic class Sample {`n public int Value() => 1;`n}" -Encoding utf8
         $config=Join-Path $workspace '.vscode/mcp.json';$initial="{`r`n  /* preserved */`r`n  `"servers`": {`r`n    `"other`": { `"type`": `"stdio`" }`r`n  }`r`n}`r`n"
         $initialEncoding=[Text.UTF8Encoding]::new($false);$initialBody=$initialEncoding.GetBytes($initial);$initialBytes=[byte[]]::new($initialBody.Length+3);$initialBytes[0]=239;$initialBytes[1]=187;$initialBytes[2]=191;[Array]::Copy($initialBody,0,$initialBytes,3,$initialBody.Length);Write-SetupTestBytes $config $initialBytes
@@ -201,7 +201,7 @@ try {
             Assert ($afterSolutionUndo['servers'].Contains('other') -and $afterSolutionUndo['servers'].Contains('userOwned') -and !$afterSolutionUndo['servers'].Contains('navlyn')) 'Solution workspace Undo changed unrelated config entries.'
 
             $vbProject=Join-Path $workspace 'Probe.vbproj';$vbSource=Join-Path $workspace 'Probe.vb'
-            Set-Content -LiteralPath $vbProject -Value '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>' -Encoding utf8
+            Set-Content -LiteralPath $vbProject -Value '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>' -Encoding utf8
             Set-Content -LiteralPath $vbSource -Value "Public Class Sample`n Public Function Value() As Integer`n  Return 1`n End Function`nEnd Class" -Encoding utf8
             $vbInstalled=& (Join-Path $PSScriptRoot 'setup-navlyn.ps1') -Workspace $workspace -WorkspaceFile $vbProject -Version 0.8.1 -Feed $feed -Apply|Out-String|ConvertFrom-Json
             Assert ($vbInstalled.result -eq 'Applied') 'Visual Basic workspace setup did not apply.'
@@ -211,7 +211,7 @@ try {
             & (Join-Path $PSScriptRoot 'setup-navlyn.ps1') -Workspace $workspace -Action Undo -Apply|Out-Null
 
             $typeProject=Join-Path $workspace 'TypeOnly.csproj';$typeSource=Join-Path $workspace 'TypeOnly.cs'
-            Set-Content -LiteralPath $typeProject -Value '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup><ItemGroup><Compile Include="TypeOnly.cs" /></ItemGroup></Project>' -Encoding utf8
+            Set-Content -LiteralPath $typeProject -Value '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup><ItemGroup><Compile Include="TypeOnly.cs" /></ItemGroup></Project>' -Encoding utf8
             Set-Content -LiteralPath $typeSource -Value 'public class OnlyType { }' -Encoding utf8
             $typeInstalled=& (Join-Path $PSScriptRoot 'setup-navlyn.ps1') -Workspace $workspace -WorkspaceFile $typeProject -Version 0.8.1 -Feed $feed -Apply|Out-String|ConvertFrom-Json
             Assert ($typeInstalled.result -eq 'Applied') 'Type-only workspace setup did not apply.'

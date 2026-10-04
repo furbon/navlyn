@@ -48,7 +48,7 @@ jobs:
   publish:
     name: Publish NuGet packages
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     environment: nuget-production
 
     steps:
@@ -68,9 +68,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
+          dotnet-version: 10.0.x
 
       - name: Reuse validated exact-main release inputs
         if: inputs.mode == 'normal'
@@ -80,14 +78,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EXPECTED_SHA: ${{ inputs.expected-main-sha }}
         run: ./scripts/reuse-validated-release.ps1 -ExpectedSha $env:EXPECTED_SHA
-
-      - name: Validate publication recovery
-        shell: pwsh
-        run: |
-          ./scripts/test-publish-recovery.ps1
-          if (!$?) { throw 'Publication recovery core tests failed.' }
-          ./scripts/test-publish-orchestration.ps1
-          if (!$?) { throw 'Publication recovery orchestration tests failed.' }
 
       - name: Retain immutable exact inputs before publication
         if: inputs.mode == 'normal'

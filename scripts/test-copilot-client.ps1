@@ -159,14 +159,14 @@ try {
     @'
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 </Project>
 '@ | Set-Content -LiteralPath $projectPath -Encoding utf8
     'namespace CopilotConsumerFixture; public sealed class ConsumerProbe { public string Name => "consumer"; }' | Set-Content -LiteralPath (Join-Path $workspacePath 'ConsumerProbe.cs') -Encoding utf8
-    [void](Invoke-Process -FilePath 'dotnet' -Arguments @('tool', 'install', 'navlyn-mcp', '--tool-path', $toolPath, '--source', $feedPath, '--version', [string]$package[0].version, '--framework', 'net8.0', '--verbosity', 'quiet') -WorkingDirectory $workspacePath)
+    [void](Invoke-Process -FilePath 'dotnet' -Arguments @('tool', 'install', 'navlyn-mcp', '--tool-path', $toolPath, '--source', $feedPath, '--version', [string]$package[0].version, '--framework', 'net10.0', '--verbosity', 'quiet') -WorkingDirectory $workspacePath)
     $mcpExecutable = Join-Path $toolPath 'navlyn-mcp.exe'
     if (!(Test-Path -LiteralPath $mcpExecutable -PathType Leaf)) { throw 'The isolated tool install did not produce navlyn-mcp.exe.' }
     $mcpArgs = @('--workspace', $projectPath, '--working-directory', $workspacePath, '--timeout-ms', '60000', '--max-json-chars', '4000000')

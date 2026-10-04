@@ -36,7 +36,7 @@ foreach ($mode in @('missing-sdk', 'missing-client')) {
             foreach ($leaf in @('workspace', 'profile', 'temp', 'bin', 'local', 'roaming', 'cli-home', 'packages')) { [IO.Directory]::CreateDirectory((Join-Path $caseRoot $leaf)) | Out-Null }
             $workspace = Join-Path $caseRoot 'workspace'
             $project = Join-Path $workspace 'Probe.csproj'
-            [IO.File]::WriteAllText($project, '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>')
+            [IO.File]::WriteAllText($project, '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>')
             $bin = Join-Path $caseRoot 'bin'
             if ($mode -eq 'missing-sdk') {
                 $code = Join-Path $bin $(if ($IsWindows) { 'code.cmd' } else { 'code' })

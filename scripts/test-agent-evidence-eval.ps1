@@ -126,7 +126,7 @@ try {
     }
 
     $results = [System.Collections.ArrayList]::new()
-    $commonTarget = @('--workspace', 'navlyn.slnx', '--query', 'DoctorCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine(net10.0)')
+    $commonTarget = @('--workspace', 'navlyn.slnx', '--query', 'DoctorCommand', '--assume-kind', 'NamedType', '--project', 'Navlyn.CommandLine')
     $preflight = @(Assert-Eval -Results $results -Name 'edit-preflight anchors intended symbol' -Arguments (@($NavlynDll, 'edit-preflight') + $commonTarget + @('--goal', 'modify', '--change-kind', 'behavior', '--budget-tokens', '3000', '--item-limit', '5')) -ExpectedExitCode 0 -ValidateJson {
         param($json)
         $json.schemaVersion -eq 'navlyn.edit-preflight.v1' -and

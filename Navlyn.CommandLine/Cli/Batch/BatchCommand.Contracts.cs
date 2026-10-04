@@ -11,7 +11,7 @@ internal static partial class BatchCommand
 {
     private sealed record BatchInput(BatchDefaults Defaults, IReadOnlyList<BatchRequest> Requests);
 
-    private sealed record BatchDefaults(string? Project, bool? ExcludeGenerated);
+    private sealed record BatchDefaults(string? Project, bool? ExcludeGenerated, string? TargetFramework = null);
 
     private sealed record BatchRequest(string Id, string Command, JsonElement Payload)
     {

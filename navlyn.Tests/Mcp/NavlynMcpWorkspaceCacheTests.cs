@@ -34,6 +34,34 @@ public sealed class NavlynMcpWorkspaceCacheTests
     }
 
     [Fact]
+    public async Task CachedNavigation_MatchesCliAndRefreshesRelationshipsAfterEdit()
+    {
+        using TemporaryDirectory directory = TemporaryDirectory.Create();
+        string project = CreateProject(directory.Path);
+        string source = Path.Combine(directory.Path, "Fixture.cs");
+        await File.WriteAllTextAsync(source, "public class Alpha { public void Run() { Before(); } public void Before() { } public void After() { } }");
+        NavlynMcpServerOptions options = CreateOptions(project);
+        using NavlynMcpWorkspaceCache cache = new(options);
+        NavlynMcpDirectToolRunner runner = new(options, cache);
+        NavlynInProcessCommandAdapter cli = new(options);
+        CommandBuildResult command = CommandBuildResult.Valid("calls", ["--file", "Fixture.cs", "--line", "1", "--column", "34"]);
+        NavlynToolResult original = await cli.RunAsync(NavlynMcpTools.NavigateTool, "calls", command.Arguments, null, CancellationToken.None);
+        for (int i = 0; i < 2; i++)
+        {
+            NavlynToolResult result = await runner.RunAsync(NavlynMcpTools.NavigateTool, command, CancellationToken.None);
+            Assert.True(result.Ok, result.Error?.Message);
+            Assert.Equal(i > 0, result.Metadata!.WorkspaceCacheHit);
+            Assert.True(JsonNode.DeepEquals(JsonNode.Parse(original.Result!.Value.GetRawText()), JsonNode.Parse(result.Result!.Value.GetRawText())));
+        }
+        await File.WriteAllTextAsync(source, "public class Alpha { public void Run() { After(); } public void Before() { } public void After() { } }");
+        NavlynToolResult changed = await runner.RunAsync(NavlynMcpTools.NavigateTool, command, CancellationToken.None);
+        Assert.True(changed.Ok, changed.Error?.Message);
+        Assert.False(changed.Metadata!.WorkspaceCacheHit);
+        Assert.Contains("After", changed.Result!.Value.GetRawText());
+        Assert.DoesNotContain("Before", changed.Result.Value.GetRawText());
+    }
+
+    [Fact]
     public async Task DirectTarget_SimpleQueryMatchesCliAndRefreshesAfterSourceEdit()
     {
         using TemporaryDirectory directory = TemporaryDirectory.Create();
@@ -47,7 +75,7 @@ public sealed class NavlynMcpWorkspaceCacheTests
         NavlynInProcessCommandAdapter cli = new(options);
         CommandBuildResult command = CommandBuildResult.Valid("target", ["--query", "Alpha"]);
         Assert.True(runner.CanRun(command));
-        Assert.False(runner.CanRun(CommandBuildResult.Valid("target", ["--query", "Alpha", "--match", "exact"])));
+        Assert.True(runner.CanRun(CommandBuildResult.Valid("target", ["--query", "Alpha", "--match", "exact"])));
 
         NavlynToolResult direct = await runner.RunAsync(NavlynMcpTools.TargetTool, command, CancellationToken.None);
         NavlynToolResult original = await cli.RunAsync(
@@ -106,14 +134,14 @@ public sealed class NavlynMcpWorkspaceCacheTests
     }
 
     [Fact]
-    public void DirectTarget_WithoutRepositoryDisplayRootUsesCliFallback()
+    public void DirectTarget_WithoutRepositoryDisplayRootCanUseCachedCli()
     {
         using TemporaryDirectory directory = TemporaryDirectory.Create();
         string projectPath = CreateProject(directory.Path);
         NavlynMcpServerOptions options = CreateOptions(projectPath);
         using NavlynMcpWorkspaceCache cache = new(options);
         NavlynMcpDirectToolRunner runner = new(options, cache);
-        Assert.False(runner.CanRun(CommandBuildResult.Valid("target", ["--query", "Alpha"])));
+        Assert.True(runner.CanRun(CommandBuildResult.Valid("target", ["--query", "Alpha"])));
     }
 
     [Theory]

@@ -17,6 +17,12 @@ For an explicit workspace path, initial cache discovery checks the selected work
 
 For normal use, install only `navlyn-mcp` for MCP clients. A separate `navlyn` CLI installation is not required. The `navlyn` CLI and `navlyn-mcp` server share the same Navlyn core engine and command runtime.
 
+## v0.9.0 selection and transport
+
+Requires a .NET 10 SDK and uses MCP C# SDK 2.0.0 over stdio. Tool names and JSON result envelopes are preserved. Discovery schemas remove redundant nullable/default syntax while retaining constraints; text fallback JSON is compact, with structured content retained for clients.
+
+Tools accept optional `targetFramework` to select the binding context (for example `net10.0`). Use a project filter as well when multiple projects target the same framework. Batch defaults and individual requests can provide `targetFramework`. Target selection variants and focused navigation reuse the shared workspace, with input/freshness checks before returning results. Workspace-wide status inventories still describe all loaded contexts.
+
 ## When To Use It
 
 Use `navlyn-mcp` when an agent needs a semantic C# or Visual Basic fact that text search cannot safely provide:
@@ -108,7 +114,7 @@ Equivalent MCP client configuration for local development:
 }
 ```
 
-For the 0.8.7 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
+For the 0.9.0 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
 
 ## Server Options
 
