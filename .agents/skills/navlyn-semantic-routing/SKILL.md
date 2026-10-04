@@ -18,7 +18,7 @@ When using an installed CLI instead of MCP, the same referenced-member shortcut 
 navlyn read --workspace <project> --file <source> --line <line> --column <column> --view body --external-source decompiled
 ```
 
-CLI needs no MCP server. Use `--view members` and `--external-member <ID>` for the same DLL follow-through. Copy returned IDs unchanged, including parameter types; retain the external anchor. For several already-needed CLI reads, `batch` with `symbol-source` requests and externalSource/externalMember shares one workspace load. Ordinary work needs neither a Navlyn call nor loading these references.
+CLI needs no MCP server. Use `--view members` and `--external-member <ID>` for the same DLL follow-through. Copy returned IDs unchanged, including parameter types; retain an anchor in the intended assembly. In PowerShell, single-quote IDs to preserve generic backticks. Several known CLI facts share one load via batch stdin: `{"requests":[{"id":"body","command":"symbol-source","file":"Caller.cs","line":42,"column":27,"view":"body","externalSource":"decompiled"}]}`. Add requests with unique IDs and actual externalMember IDs as needed. Ordinary work needs neither a Navlyn call nor loading these references.
 
 ## Evidence And Edits
 

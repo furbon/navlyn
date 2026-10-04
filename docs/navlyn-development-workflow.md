@@ -48,7 +48,7 @@ C# files use UTF-8 BOM, CRLF, and spaces. Run `normalize-csharp-files.ps1` if fo
 
 ## CI and publication
 
-CI builds Release once on Windows, Linux, and macOS. Windows runs the full product suite on .NET 10 plus fast release checks; Linux/macOS run focused transport tests and portable CLI smoke. The v0.8 line still packages its existing .NET 8 assets until 0.9.0, without a separate .NET 8 test lane. The primary job budget is twelve minutes, with targets below ten minutes on Windows and five minutes on secondary platforms.
+CI builds Release once on Windows, Linux, and macOS. Windows runs the full product suite on .NET 10 plus fast release checks; Linux/macOS run focused transport tests and portable CLI smoke. Current packages target .NET 10. The primary job budget is twelve minutes, with targets below ten minutes on Windows and five minutes on secondary platforms.
 
 The Windows main run packs its tested outputs, checks package contents, runs installed-package smoke once on .NET 10, and retains publication inputs. Protected publication and tag verification reuse those bytes and successful source checks. Do not rebuild packages or rerun source tests during publication. Keep exact-main/artifact identity and recover from the reported state when publication is interrupted. See [distribution](navlyn-distribution.md) and [runtime support](navlyn-runtime-support.md).
 

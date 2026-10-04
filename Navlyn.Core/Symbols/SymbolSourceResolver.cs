@@ -121,7 +121,7 @@ internal sealed class SymbolSourceResolver
                 {
                     return SymbolSourceResolutionResult.Failed(new SymbolNavigationError(
                         diagnosticId,
-                        external.MemberNotFound ? $"Exact external member '{options.ExternalMember ?? externalSymbol.GetDocumentationCommentId()}' was not found in the bound implementation assembly. Copy the exact ID returned by members view, including parameter types; do not guess a namespace or overload."
+                        external.MemberNotFound ? $"Exact external member '{options.ExternalMember ?? externalSymbol.GetDocumentationCommentId()}' was not found in the bound implementation assembly '{externalSymbol.ContainingAssembly?.Identity.Name}'. Use an anchor in the intended assembly and copy the exact ID returned by members view, including parameter types; do not guess a namespace or overload."
                             : options.ExternalMember is null ? ExternalMemberDiagnosticMessage(diagnosticId, externalSymbol)
                             : $"External member '{options.ExternalMember}' in the bound assembly: {ExternalMemberDiagnosticMessage(diagnosticId)}",
                         ExitCodes.UsageError));
@@ -305,7 +305,7 @@ internal sealed class SymbolSourceResolver
         DiagnosticIds.ExternalMemberAmbiguous => "The exact external member or implementation assembly is ambiguous.",
         DiagnosticIds.ExternalMemberStale => "The external assembly changed while the member was being read.",
         DiagnosticIds.ExternalMemberLimitExceeded => "The external assembly or decompilation exceeded the configured safety limits.",
-        DiagnosticIds.ExternalMemberMalformedImage => "The external assembly is malformed or cannot be decompiled.",
+        DiagnosticIds.ExternalMemberMalformedImage => "The external assembly is malformed or the selected member cannot be reconstructed.",
         _ => "The external member could not be read."
     };
 

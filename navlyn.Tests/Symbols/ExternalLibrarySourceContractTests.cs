@@ -64,6 +64,34 @@ public sealed class ExternalLibrarySourceContractTests
     }
 
     [Theory]
+    [InlineData("System.Int32", "this", "body")]
+    [InlineData("System.Int32", "this", "declaration")]
+    [InlineData("System.Int32", "this", "signature")]
+    [InlineData("System.Int32,System.Boolean", "base", "body")]
+    [InlineData("System.Int32,System.Boolean", "base", "declaration")]
+    [InlineData("System.Int32,System.Boolean", "base", "signature")]
+    [InlineData("System.Uri", "base", "body")]
+    [InlineData("System.Uri", "base", "declaration")]
+    [InlineData("System.Uri", "base", "signature")]
+    public async Task ChainedExternalConstructor_PreservesInitializerAndSelectedBody(string parameters, string initializer, string view)
+    {
+        ExternalLibrarySourceFixture fixture = await ExternalLibrarySourceFixture.PrepareAsync();
+        (int line, int column) = fixture.Position(fixture.ConsumerSource, "normalizedShort", "Normalize");
+        string id = "M:Navlyn.ExternalFixture.ChainedProbe.#ctor(" + parameters + ")";
+        ExternalLibrarySourceFixture.CliResult response = await fixture.RunReadAsync(fixture.ConsumerProject,
+            fixture.ConsumerSource, line, column, "decompiled", view, "Consumer(net10.0)", externalMember: id);
+        Assert.True(response.ExitCode == 0, response.Stderr);
+        string text = SliceText(response.Stdout);
+        if (view != "body") Assert.Contains(": " + initializer + "(", text, StringComparison.Ordinal);
+        if (view != "signature" && initializer == "base")
+            Assert.Contains("FIXTURE_CHAINED_CONSTRUCTOR_BODY", text, StringComparison.Ordinal);
+        if (view == "signature") Assert.DoesNotContain("FIXTURE_CHAINED_CONSTRUCTOR_BODY", text, StringComparison.Ordinal);
+        using JsonDocument result = JsonDocument.Parse(response.Stdout);
+        Assert.Equal(id, result.RootElement.GetProperty("externalAssembly").GetProperty("memberDocumentationCommentId").GetString());
+        Assert.False(result.RootElement.GetProperty("truncated").GetBoolean());
+    }
+
+    [Theory]
     [InlineData("get_Accessed", "string")]
     [InlineData("set_Mutable(System.String)", "void")]
     [InlineData("get_CounterReference", "ref int")]

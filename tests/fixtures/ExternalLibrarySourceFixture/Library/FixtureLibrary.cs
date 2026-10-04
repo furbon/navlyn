@@ -51,6 +51,27 @@ public sealed class Probe
 #endif
 }
 
+public abstract class InitializedProbe
+{
+    protected InitializedProbe(int value) { BaseValue = value; }
+    protected InitializedProbe(System.Uri value) { BaseValue = value.OriginalString.Length; }
+    public int BaseValue { get; }
+}
+
+public sealed class ChainedProbe : InitializedProbe
+{
+    public ChainedProbe(int value) : this(value, true) { }
+    public ChainedProbe(int value, bool selected) : base(value)
+    {
+        Marker = "FIXTURE_CHAINED_CONSTRUCTOR_BODY";
+    }
+    public ChainedProbe(System.Uri value) : base(value)
+    {
+        Marker = "FIXTURE_CHAINED_CONSTRUCTOR_BODY";
+    }
+    public string Marker { get; }
+}
+
 public static class ProbeExtensions
 {
     public static string Extend(this Probe probe, int value) => "FIXTURE_EXTENSION_INT_BODY";

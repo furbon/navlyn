@@ -12,7 +12,7 @@ Use ordinary tools when a local read or search answers the question. Having Navl
 | `compact` profile | First scans and LLM context. | Smaller JSON and less downstream token pressure. |
 | `evidence` profile | Review/CI facts. | Enough detail for inspection without full output size. |
 
-The 0.9.1 default exposes four tools and compact results; `--surface full` restores the full inventory. See [measured task evidence and limits](evals/v0.9.1-product-evidence.md). Smaller discovery bytes do not establish task-time or monetary savings.
+The default exposes four tools and compact results; `--surface full` restores the full inventory. See [0.9.2 real-task evidence and limits](evals/v0.9.2-verification.md). Smaller discovery bytes do not establish task-time or monetary savings. Repeated CLI dependency reads can share one workspace load through batch symbol-source requests with externalSource/externalMember; copying exact returned IDs in JSON also avoids shell escaping mistakes.
 
 ## Execution Model
 

@@ -255,7 +255,7 @@ internal static class ExternalMemberWorker
         }
         if (selectedText is null)
         {
-            return new WorkerResponse(null, null, implementationPath, implementationHash, request.View == "body" ? "no-body" : "malformed-image");
+            return new WorkerResponse(null, null, implementationPath, implementationHash, "malformed-image");
         }
 
         if (Encoding.UTF8.GetByteCount(selectedText) > MaxWorkerOutputBytes)
@@ -297,8 +297,13 @@ internal static class ExternalMemberWorker
             return view == "body" && hasBody ? accessorBlock.ToFullString().Trim() : null;
         }
 
-        SyntaxNode? member = root.DescendantNodesAndSelf()
-            .FirstOrDefault(node => node is BaseMethodDeclarationSyntax or LocalFunctionStatementSyntax);
+        // A standalone constructor with a base/this initializer is not a valid
+        // top-level statement. Parse member context before the compilation fallback.
+        string memberText = root.WithUsings(default).ToFullString();
+        SyntaxNode? member = SyntaxFactory.ParseMemberDeclaration(memberText) is BaseMethodDeclarationSyntax parsedMethod
+            ? parsedMethod
+            : root.DescendantNodesAndSelf()
+                .FirstOrDefault(node => node is BaseMethodDeclarationSyntax or LocalFunctionStatementSyntax);
         if (member is LocalFunctionStatementSyntax localFunction)
         {
             if (view == "body")

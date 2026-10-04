@@ -2,23 +2,16 @@
 
 All notable public release changes for Navlyn are tracked here.
 
-## 0.9.2 - Unreleased
+## 0.9.2 - 2026-10-05
 
-- Follow DLL internals from a compiler-bound source anchor using bounded `read --view members` and exact `--external-member` method/type/field IDs, including private methods and enum constants. Preserve selected PE identity, freshness, overload identity and distinct anchor/member provenance without another MCP tool.
-- Shorten focused compact parameter descriptions while retaining every input, type and conditional constraint; verify equivalence over actual MCP discovery. Tighten optional skill guidance for source-only work and DLL follow-through.
-- Share one CLI workspace load for already-needed external reads through existing batch symbol-source requests, retaining provenance and per-request failures. Distinguish absent exact IDs from body-less definitions, guide unchanged ID reuse, and support typed explicit-accessor signatures.
-- Repair external constructor reads at C#/VB constructed type tokens, include metadata enum/constant values and canonical external member IDs, and locate redirected NuGet assets from the loaded project's compiler paths. Explain source-only target scope in CLI help and empty-query warnings; preserve ambiguity and dependency identity boundaries.
-
-- Apply outline page bounds before detailed facts, candidate registration and JSON generation. Keep exact semantic order/totals and unpaged CLI/full contracts; add optional CLI `--entry-limit`/`--entry-offset` and forward MCP bounds to a matching external CLI.
-- Describe bound referenced-DLL bodies as one call from a known source position; document occasional CLI integration without an always-running MCP server. Keep ordinary reading/search and clear local edits on ordinary tools.
-- Supply a short MCP initialization hint for missing compiler evidence, tighten skill activation boundaries, and test decompiled conditional arithmetic, negative coefficients and checked overflow by recompiling trusted fixture bodies.
-- Select exact external constructor bodies at C#/VB constructed type tokens, include enum/constant values in metadata declarations, identify body-less selections in errors, and return the canonical external member documentation ID. Clarify source-only target/call-graph limits.
-- Find restored assets from loaded compiler paths for redirected .NET artifacts output, retaining reference/implementation identity and freshness checks instead of assuming project-local `obj`.
-- Reduce the focused compact discovery envelope while retaining detailed schemas on the full surface. Advertise the effective result-profile default and complete bounded bodies in compact results.
-- Serialize external CLI invocations within one MCP server to prevent observed MSBuild generated-file races; include queue waits in cancellation and deadlines.
-- Add opt-in MCP stage timing on stderr with request-local collectors, including discovery, workspace, inventory/hash, resolution and response stages. Keep profiling independent of in-process console capture.
-- Add a reproducible local adoption comparison with unforced tool choice, exact task oracles, timestamped client events and server diagnostics. Preserve prior unfavorable results and distinguish total/cached input from attributable tool use.
-- Verify paged identity/order in C# and Visual Basic, concurrent request bounds and oversized-result behavior. Include compact paging and diagnostic isolation in portable CI; support managed routing-skill upgrades from 0.9.1.
+- Apply C#/VB outline page bounds before detailed facts, candidate registration and JSON generation. Preserve exact semantic order/totals and unpaged contracts; add optional CLI --entry-limit/--entry-offset and matching MCP forwarding.
+- Follow DLL internals from a compiler-bound source anchor with bounded members and exact method/type/field IDs, including private methods and constants. Preserve selected PE identity, freshness, overload identity and distinct anchor/member provenance without another MCP tool.
+- Repair exact C#/VB constructed-token selection, base/this constructor reconstruction with decompiler imports, typed accessor signatures and redirected NuGet assets. Distinguish absent IDs, genuinely bodyless members and reconstruction failures; clarify source-only query scope.
+- Share one CLI workspace load for independently needed external reads through batch symbol-source, retaining provenance and per-request failures. Document exact ID reuse, assembly anchors, PowerShell quoting and on-demand CLI versus persistent MCP.
+- Shorten focused compact discovery while preserving every input and conditional constraint. Keep full schemas available, tighten optional skill routing and initialization guidance, and retain ordinary reading/search for sufficient source evidence.
+- Serialize external CLI calls within one MCP server after observed MSBuild generated-file races; include queue waits in cancellation/deadlines. Add request-local opt-in MCP stage timing on stderr with no stdout/profiling cross-talk.
+- Add pinned realistic game/library/Web/application tasks, complete one-shot and two/three-prompt evaluation, independent behavioral/evidence review and bounded capture-failure recovery. Preserve unfavorable results and distinguish cumulative/cached input, backend measurements and actual tool use; keep live evaluations outside CI gates.
+- Cover paging identities, concurrency/oversized responses, constructor chains, exact private overloads, constant values, stale/redirected assets and trusted decompiled arithmetic. Retain portable CLI/transport checks, three-platform CI and managed routing-skill upgrades from 0.9.1.
 
 ## 0.9.1 - 2026-10-04
 
