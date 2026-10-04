@@ -15,6 +15,8 @@ param(
 
     [string]$Output = $null,
 
+    [string]$Baseline = $null,
+
     [switch]$NoBuild,
 
     [switch]$IncludeStageTimings,
@@ -567,8 +569,8 @@ function Invoke-McpToolScenario {
     param(
         [string]$WorkspaceArgument,
         [object[]]$ToolCalls,
-        [int]$Iteration,
-        [bool]$IsWarmup
+        [int]$SessionIterations,
+        [int]$SessionWarmup
     )
 
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
@@ -614,6 +616,9 @@ function Invoke-McpToolScenario {
             params = @{}
         }
 
+        for ($sessionRound = 1; $sessionRound -le ($SessionWarmup + $SessionIterations); $sessionRound++) {
+        $Iteration = [Math]::Max(1, $sessionRound - $SessionWarmup)
+        $IsWarmup = $sessionRound -le $SessionWarmup
         foreach ($toolCall in $ToolCalls) {
             $request = @{
                 jsonrpc = '2.0'
@@ -711,10 +716,12 @@ function Invoke-McpToolScenario {
                 counts = $counts
                 truncated = $truncated
                 warnings = $warnings
+                phase = if ($metadata -and $metadata.PSObject.Properties.Name -contains 'workspaceCacheHit' -and $metadata.workspaceCacheHit) { 'warm' } elseif ($metadata -and $metadata.executionPath -eq 'direct') { 'cold' } else { 'adapter' }
                 metadata = $metadata
                 timedOut = $false
                 skipped = $false
             })
+        }
         }
     }
     finally {
@@ -739,6 +746,7 @@ function Invoke-McpToolScenario {
         }
     }
 
+    $process.Dispose()
     return $measurementsForIteration.ToArray()
 }
 
@@ -868,13 +876,8 @@ foreach ($scenarioName in $scenarioNames) {
         else {
             $workspaceArg = ConvertTo-RepositoryPath -Path $workspacePath
             $commands = Get-ScenarioCommands -ScenarioName $scenarioName
-            for ($iteration = 1; $iteration -le ($Warmup + $Iterations); $iteration++) {
-                $isWarmup = $iteration -le $Warmup
-                $mcpResults = Invoke-McpToolScenario -WorkspaceArgument $workspaceArg -ToolCalls $commands -Iteration ([Math]::Max(1, $iteration - $Warmup)) -IsWarmup $isWarmup
-                foreach ($mcpResult in $mcpResults) {
-                    $measurements.Add($mcpResult)
-                }
-            }
+            $mcpResults = Invoke-McpToolScenario -WorkspaceArgument $workspaceArg -ToolCalls $commands -SessionIterations $Iterations -SessionWarmup $Warmup
+            foreach ($mcpResult in $mcpResults) { $measurements.Add($mcpResult) }
         }
         continue
     }
@@ -961,6 +964,9 @@ $environment = [ordered]@{
     os = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription
     dotnetVersion = $dotnetVersion
     processorCount = [Environment]::ProcessorCount
+    commit = [string](& git -C $repoRoot rev-parse HEAD)
+    workingTreeDirty = [bool](& git -C $repoRoot status --porcelain)
+    navlynVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($NavlynDll).ProductVersion
 }
 $summary = [ordered]@{
     totalCommands = @($measured).Count
@@ -982,9 +988,30 @@ $report = [ordered]@{
     scenario = $Scenario
     profile = $Profile
     environment = $environment
+    iterations = $Iterations
+    warmup = $Warmup
     summary = $summary
     stageBreakdown = $stageSummary
     measurements = $measurementArray
+}
+
+if (![string]::IsNullOrWhiteSpace($Baseline)) {
+    $previous = Get-Content -LiteralPath $Baseline -Raw | ConvertFrom-Json -Depth 100
+    foreach ($field in @('workspace','scenario','profile')) {
+        if ($previous.$field -ne $report[$field]) { throw "Baseline $field differs from this run." }
+    }
+    foreach ($field in @('os','dotnetVersion','processorCount')) {
+        if ($previous.environment.$field -ne $environment[$field]) { throw "Baseline environment $field differs from this run." }
+    }
+    $report['baselineComparison'] = @($measured | Group-Object name | ForEach-Object {
+        $current = $_
+        $old = @($previous.measurements | Where-Object { !$_.warmup -and !$_.skipped -and $_.name -eq $current.Name })
+        if ($old.Count -gt 0) {
+            $oldMean = ($old | Measure-Object elapsedMs -Average).Average
+            $newMean = ($current.Group | Measure-Object elapsedMs -Average).Average
+            [ordered]@{ name = $current.Name; baselineMeanMs = $oldMean; currentMeanMs = $newMean; ratio = if ($oldMean -gt 0) { $newMean / $oldMean } else { $null } }
+        }
+    })
 }
 
 $json = $report | ConvertTo-Json -Depth 100

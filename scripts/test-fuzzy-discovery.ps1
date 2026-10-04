@@ -17,76 +17,9 @@ $TargetFrameworkScript = Join-Path $RepoRoot 'scripts/lib/navlyn-target-framewor
 . $TargetFrameworkScript
 
 $TargetFramework = Get-NavlynPreferredTargetFramework -ProjectPath $ProjectPath
-$NavlynDll = Join-Path $ProjectDir "bin/Debug/$TargetFramework/navlyn.dll"
-
-function Join-ProcessArguments {
-    param([Parameter(Mandatory = $true)][string[]]$Arguments)
-    ($Arguments | ForEach-Object {
-        if ($_.IndexOfAny([char[]]@(' ', "`t", '"')) -lt 0) {
-            $_
-        }
-        else {
-            '"' + $_.Replace('"', '\"') + '"'
-        }
-    }) -join ' '
-}
-
-function Invoke-CheckedProcess {
-    param(
-        [Parameter(Mandatory = $true)][string]$Name,
-        [Parameter(Mandatory = $true)][string]$FilePath,
-        [Parameter(Mandatory = $true)][string[]]$Arguments,
-        [Parameter(Mandatory = $true)][int]$ExpectedExitCode,
-        [string]$StandardInput = $null
-    )
-
-    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-    $startInfo.FileName = $FilePath
-    $startInfo.WorkingDirectory = $RepoRoot
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError = $true
-    $startInfo.RedirectStandardInput = $null -ne $StandardInput
-    $startInfo.StandardOutputEncoding = [System.Text.Encoding]::UTF8
-    $startInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8
-    $startInfo.UseShellExecute = $false
-    $startInfo.Arguments = Join-ProcessArguments -Arguments $Arguments
-
-    $process = [System.Diagnostics.Process]::Start($startInfo)
-    if ($null -ne $StandardInput) {
-        $process.StandardInput.Write($StandardInput)
-        $process.StandardInput.Close()
-    }
-
-    $stdout = $process.StandardOutput.ReadToEnd()
-    $stderr = $process.StandardError.ReadToEnd()
-    $process.WaitForExit()
-
-    if ($process.ExitCode -ne $ExpectedExitCode) {
-        throw @"
-$Name failed with exit code $($process.ExitCode). Expected $ExpectedExitCode.
-Command: $FilePath $($Arguments -join ' ')
-stdout:
-$stdout
-stderr:
-$stderr
-"@
-    }
-
-    if ($ShowOutput) {
-        Write-Host ''
-        Write-Host "[$Name]"
-        Write-Host $stdout.TrimEnd()
-        if ($stderr.Length -gt 0) {
-            Write-Host 'stderr:'
-            Write-Host $stderr.TrimEnd()
-        }
-    }
-
-    [pscustomobject]@{
-        Stdout = $stdout
-        Stderr = $stderr
-    }
-}
+. $PSScriptRoot/lib/navlyn-test-harness.ps1
+Initialize-NavlynTestHarness -RepoRoot $RepoRoot -ShowOutput:$ShowOutput
+$NavlynDll = $script:NavlynTestDll
 
 function Invoke-Navlyn {
     param(

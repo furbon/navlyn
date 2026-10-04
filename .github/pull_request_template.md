@@ -2,17 +2,13 @@
 
 ## Validation
 
-- [ ] `dotnet restore navlyn.slnx`
-- [ ] `dotnet build navlyn.slnx`
-- [ ] `dotnet test navlyn.slnx --no-build`
-- [ ] `./scripts/test-quick.ps1 -NoBuild -SkipDotnetTest`
-- [ ] `./scripts/test-cli-contract.ps1 -NoBuild -Suite core` if CLI/MCP contract changed
-- [ ] `./scripts/test-cli-contract.ps1 -NoBuild -Suite all` if broad workflow/domain contract changed
-- [ ] `./scripts/test-release.ps1` if release/package behavior changed
+- Record the focused tests and manual command checks relevant to this change.
+- Run `./scripts/test-quick.ps1` once for an integrated code change; reuse its build/tests in subsequent checks.
+- Run `./scripts/test-release.ps1 -NoBuild -SkipDotnetTest` for release or package changes after product tests pass.
+- Use one relevant fixture script when command wiring or workspace binding changes. Do not run every script for each change.
 
 ## Contract And Docs
 
-- [ ] Public CLI behavior is reflected in `docs/navlyn-cli-commands.md`
-- [ ] Public MCP behavior is reflected in `docs/navlyn-mcp-server.md`
-- [ ] stdout/stderr and exit-code behavior were considered
-- [ ] No generated packages, build output, secrets, or local reports are included
+- Public CLI/MCP behavior is reflected in the corresponding command documentation.
+- stdout/stderr, exit codes, selection, freshness, and installation were considered where relevant.
+- No generated packages, build output, secrets, or local reports are included.

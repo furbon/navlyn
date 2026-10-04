@@ -15,11 +15,11 @@ public sealed class NavlynMcpStdioTests
     public async Task StdioServer_ListsToolsAndMapsSuccessAndCliErrors()
     {
         string repoRoot = FindRepositoryRoot();
-        string serverDll = Path.Combine(repoRoot, "navlyn.Mcp", "bin", "Debug", GetCurrentTargetFramework(), "navlyn.Mcp.dll");
+        string serverDll = Path.Combine(repoRoot, "navlyn.Mcp", "bin", Directory.GetParent(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory))!.Name, GetCurrentTargetFramework(), "navlyn.Mcp.dll");
         Assert.True(File.Exists(serverDll), $"MCP server assembly does not exist: {serverDll}");
 
         // This test makes many independent calls; allow slower hosted runners to complete all assertions.
-        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(600));
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(60));
         StdioClientTransport transport = new(
             new StdioClientTransportOptions
             {
@@ -27,7 +27,7 @@ public sealed class NavlynMcpStdioTests
                 Arguments =
                 [
                     serverDll,
-                    "--workspace", Path.Combine(repoRoot, "navlyn.slnx"),
+                    "--workspace", Path.Combine(repoRoot, "tests", "fixtures", "FuzzyDiscoveryFixture", "FuzzyDiscoveryFixture.csproj"),
                     "--working-directory", repoRoot,
                     "--timeout-ms", "60000",
                     "--max-json-chars", "4000000"
@@ -176,7 +176,7 @@ public sealed class NavlynMcpStdioTests
             {
                 ["mode"] = "handlers",
                 ["query"] = "ApplicationDomainResolver",
-                ["project"] = "Navlyn.Core(net10.0)",
+                ["project"] = "FuzzyDiscoveryFixture",
                 ["candidateLimit"] = 1,
                 ["handlerLimit"] = 1,
                 ["evidenceLimit"] = 1
@@ -209,7 +209,7 @@ public sealed class NavlynMcpStdioTests
             new Dictionary<string, object?>
             {
                 ["mode"] = "model",
-                ["project"] = "Navlyn.Core(net10.0)",
+                ["project"] = "FuzzyDiscoveryFixture",
                 ["entityLimit"] = 1,
                 ["querySiteLimit"] = 1,
                 ["evidenceLimit"] = 1
@@ -239,7 +239,7 @@ public sealed class NavlynMcpStdioTests
             {
                 ["mode"] = "usage",
                 ["package"] = "Microsoft.CodeAnalysis",
-                ["project"] = "Navlyn.Core(net10.0)",
+                ["project"] = "FuzzyDiscoveryFixture",
                 ["includeTests"] = false,
                 ["usageLimit"] = 1,
                 ["referenceLimit"] = 1
@@ -261,7 +261,7 @@ public sealed class NavlynMcpStdioTests
             NavlynMcpTools.TargetTool,
             new Dictionary<string, object?>
             {
-                ["query"] = "OutlineCommand"
+                ["query"] = "EnemyManagerTools"
             },
             cancellationToken: timeout.Token);
         Assert.False(selectTargetResult.IsError, selectTargetResult.StructuredContent?.ToString());
@@ -275,7 +275,7 @@ public sealed class NavlynMcpStdioTests
             new Dictionary<string, object?>
             {
                 ["mode"] = "list",
-                ["query"] = "OutlineCommand"
+                ["query"] = "EnemyManagerTools"
             },
             cancellationToken: timeout.Token);
         Assert.False(listTargetResult.IsError, listTargetResult.StructuredContent?.ToString());
@@ -341,7 +341,7 @@ public sealed class NavlynMcpStdioTests
             NavlynMcpTools.WorkspaceSummaryTool,
             new Dictionary<string, object?>
             {
-                ["project"] = "navlyn(net10.0)",
+                ["project"] = "FuzzyDiscoveryFixture",
                 ["relationshipLimit"] = 20
             },
             cancellationToken: timeout.Token);
@@ -378,7 +378,7 @@ public sealed class NavlynMcpStdioTests
             NavlynMcpTools.FileOutlineTool,
             new Dictionary<string, object?>
             {
-                ["file"] = "Navlyn.CommandLine/Cli/Commands/OutlineCommand.cs"
+                ["file"] = "FixtureCode.cs"
             },
             cancellationToken: timeout.Token);
 
@@ -396,7 +396,7 @@ public sealed class NavlynMcpStdioTests
             .GetProperty("result")
             .GetProperty("entries")
             .EnumerateArray()
-            .First(entry => entry.GetProperty("name").GetString() == "OutlineCommand");
+            .First(entry => entry.GetProperty("name").GetString() == "EnemyManagerTools");
         string candidateId = outlineEntry.GetProperty("candidateId").GetString()!;
         Assert.StartsWith("sym:v1:", candidateId, StringComparison.Ordinal);
 
@@ -929,7 +929,7 @@ public sealed class NavlynMcpStdioTests
     private static async Task<McpClient> CreateClientAsync(string? profile, string workspacePath)
     {
         string repoRoot = FindRepositoryRoot();
-        string serverDll = Path.Combine(repoRoot, "navlyn.Mcp", "bin", "Debug", GetCurrentTargetFramework(), "navlyn.Mcp.dll");
+        string serverDll = Path.Combine(repoRoot, "navlyn.Mcp", "bin", Directory.GetParent(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory))!.Name, GetCurrentTargetFramework(), "navlyn.Mcp.dll");
         Assert.True(File.Exists(serverDll), $"MCP server assembly does not exist: {serverDll}");
 
         List<string> arguments =

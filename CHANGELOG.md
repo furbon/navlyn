@@ -2,6 +2,16 @@
 
 All notable public release changes for Navlyn are tracked here.
 
+## 0.8.7 - 2026-10-04
+
+- Stop and reap external MCP child processes on deadlines, caller cancellation, and blocked batch input. Bound retained stdout/stderr while draining both streams.
+- Replace repeated repository loads, synthetic evaluation framework tests, duplicate runtime suites, and full release-script campaigns with one .NET 10 product suite and small portable CLI/MCP checks.
+- Reuse external-source fixture setup and warm reader sessions; preserve mutation/isolation assertions.
+- Use a shared process harness with argument-safe invocation and deadlines across fixture scripts. Fix Release packaging to validate the configuration it packs.
+- Pin workflow Actions to full commit SHAs. Retain stage logs, timing, TRX, and exact tested publication inputs.
+- Measure repeated MCP calls within one persistent session, with cold/warm and comparable version/environment metadata.
+- Plan full .NET 10 migration in 0.9.0; existing .NET 8 package assets receive no additional compatibility lane.
+
 ## 0.8.6
 
 - Enforce configured MCP deadlines across direct tools, adapters, and queue waits; distinguish caller cancellation and wait for resource cleanup.

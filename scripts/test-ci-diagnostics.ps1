@@ -26,5 +26,21 @@ try {
     $records = @(Get-Content (Join-Path $root 'timings.jsonl') | ForEach-Object { $_ | ConvertFrom-Json })
     if ($records.Count -ne 2 -or $records[0].exitCode -ne 0 -or $records[1].exitCode -ne 37 -or $records[1].elapsedSeconds -le 0) { throw 'CI timing/exit evidence is incorrect.' }
     if ((Get-Content -Raw $env:GITHUB_STEP_SUMMARY) -notmatch 'exit 37') { throw 'CI summary lost failure.' }
+    $argumentProbe = Join-Path $root 'arguments.ps1'
+    [IO.File]::WriteAllText($argumentProbe, '[Console]::WriteLine((ConvertTo-Json -InputObject @($args) -Compress))')
+    $arguments = @('', 'a b', 'quote"value', 'trailing space\')
+    $received = (Invoke-CheckedProcess -Name arguments -FilePath pwsh -Arguments (@('-NoProfile','-File',$argumentProbe) + $arguments) -ExpectedExitCode 0).Stdout | ConvertFrom-Json
+    if (($received | ConvertTo-Json -Compress) -cne ($arguments | ConvertTo-Json -Compress)) { throw 'Process arguments changed in transit.' }
+    $pidFile = Join-Path $root 'deadline.pid'
+    $deadlineProbe = Join-Path $root 'deadline.ps1'
+    [IO.File]::WriteAllText($deadlineProbe, "`$PID | Set-Content -LiteralPath '$($pidFile.Replace("'", "''"))'; Start-Sleep -Seconds 30")
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    try {
+        Invoke-CheckedProcess -Name deadline -FilePath pwsh -Arguments @('-NoProfile','-File',$deadlineProbe) -ExpectedExitCode 0 -TimeoutSeconds 1 | Out-Null
+        throw 'Deadline probe unexpectedly completed.'
+    } catch {
+        if ($_.Exception.Message -notmatch 'exceeded its 1 second process deadline') { throw }
+    }
+    if ($clock.Elapsed.TotalSeconds -gt 5 -or (Get-Process -Id ([int](Get-Content $pidFile)) -ErrorAction SilentlyContinue)) { throw 'Deadline did not stop/reap its process.' }
     Write-Host 'CI diagnostics success/failure retention checks passed.'
 } finally { $env:GITHUB_STEP_SUMMARY = $priorSummary }

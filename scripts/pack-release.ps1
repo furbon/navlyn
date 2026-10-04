@@ -74,7 +74,7 @@ function Invoke-Checked {
 Push-Location $RepoRoot
 try {
     if (!$NoValidation) {
-        & ./scripts/test-release.ps1
+        & ./scripts/test-release.ps1 -Configuration Release
         # The release suite already built and exercised the Release configuration.
         $NoBuild = $true
     }

@@ -10,6 +10,7 @@ using Navlyn.Tests.TestSupport;
 
 namespace Navlyn.Tests.Mcp;
 
+[Collection(ExternalReadCollection.Name)]
 public sealed class ExternalLibrarySourceProtocolTests
 {
     [Fact]
