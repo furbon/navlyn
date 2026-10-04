@@ -1685,7 +1685,7 @@ Lists C# or Visual Basic symbols resolved from identifier tokens on a source lin
 
 ```powershell
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --start-column 37 --end-column 49 --project Navlyn.CommandLine
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --start-column 37 --end-column 49 --project "Navlyn.CommandLine(net10.0)"
 ```
 
 Required options:
@@ -1793,7 +1793,7 @@ Outline entries include additive `candidateId` values that can be reused with ca
 Resolves the C# or Visual Basic symbol at a source position.
 
 ```powershell
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-at --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23 --project Navlyn.CommandLine
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-at --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23 --project "Navlyn.CommandLine(net10.0)"
 ```
 
 Required options:
@@ -2490,7 +2490,7 @@ Generated source files with `--exclude-generated` produce `NAVLYN1307` on stderr
 Finds source definitions for the C# or Visual Basic symbol at a source position.
 
 ```powershell
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- definition --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --column 37 --project Navlyn.CommandLine
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- definition --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --column 37 --project "Navlyn.CommandLine(net10.0)"
 ```
 
 Required options:
@@ -2556,7 +2556,7 @@ Generated source files with `--exclude-generated` produce `NAVLYN1307` on stderr
 Finds source references for the C# or Visual Basic symbol at a source position. Declaration locations are not included unless Roslyn reports them as reference locations for that symbol kind.
 
 ```powershell
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- references --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --column 37 --project Navlyn.CommandLine
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- references --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --column 37 --project "Navlyn.CommandLine(net10.0)"
 ```
 
 Required options:

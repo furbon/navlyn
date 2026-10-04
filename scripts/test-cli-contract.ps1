@@ -1283,7 +1283,7 @@ try {
     else {
     $symbols = Invoke-Navlyn `
         -Name 'symbols partial query' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--query', 'Check') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', 'Check') `
         -ExpectedExitCode 0
 
     $symbolsJson = $symbols.Stdout | ConvertFrom-Json
@@ -1304,7 +1304,7 @@ try {
 
     $symbolsLimit = Invoke-Navlyn `
         -Name 'symbols limited query' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--query', 'Check', '--limit', '1') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', 'Check', '--limit', '1') `
         -ExpectedExitCode 0
 
     $symbolsLimitJson = $symbolsLimit.Stdout | ConvertFrom-Json
@@ -1315,7 +1315,7 @@ try {
 
     $symbolsKind = Invoke-Navlyn `
         -Name 'symbols kind filter query' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--query', 'Check', '--kind', 'cLaSs') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', 'Check', '--kind', 'cLaSs') `
         -ExpectedExitCode 0
 
     $symbolsKindJson = $symbolsKind.Stdout | ConvertFrom-Json
@@ -1326,7 +1326,7 @@ try {
 
     $symbolsNamespace = Invoke-Navlyn `
         -Name 'symbols namespace container accessibility filters' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--query', 'Create', '--namespace', 'Navlyn.Cli.Commands', '--namespace-match', 'exact', '--container', 'CheckCommand', '--container-match', 'contains', '--accessibility', 'Public', '--limit', '1') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', 'Create', '--namespace', 'Navlyn.Cli.Commands', '--namespace-match', 'exact', '--container', 'CheckCommand', '--container-match', 'contains', '--accessibility', 'Public', '--limit', '1') `
         -ExpectedExitCode 0
 
     $symbolsNamespaceJson = $symbolsNamespace.Stdout | ConvertFrom-Json
@@ -1337,7 +1337,7 @@ try {
 
     $symbolsExact = Invoke-Navlyn `
         -Name 'symbols exact query' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--query', 'CheckCommand', '--match', 'exact') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', 'CheckCommand', '--match', 'exact') `
         -ExpectedExitCode 0
 
     $symbolsExactJson = $symbolsExact.Stdout | ConvertFrom-Json
@@ -1347,7 +1347,7 @@ try {
 
     $symbolsRegex = Invoke-Navlyn `
         -Name 'symbols regex query' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--query', '^Check.*Command$', '--match', 'regex') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', '^Check.*Command$', '--match', 'regex') `
         -ExpectedExitCode 0
 
     $symbolsRegexJson = $symbolsRegex.Stdout | ConvertFrom-Json
@@ -1357,7 +1357,7 @@ try {
 
     $symbolsCaseSensitive = Invoke-Navlyn `
         -Name 'symbols case-sensitive query' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--query', 'check', '--case-sensitive') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', 'check', '--case-sensitive') `
         -ExpectedExitCode 0
 
     $symbolsCaseSensitiveJson = $symbolsCaseSensitive.Stdout | ConvertFrom-Json
@@ -1366,28 +1366,28 @@ try {
 
     $symbolsInvalidRegex = Invoke-Navlyn `
         -Name 'symbols invalid regex' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--query', '[', '--match', 'regex') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', '[', '--match', 'regex') `
         -ExpectedExitCode 2
     Assert-Empty -Name 'symbols invalid regex stdout' -Text $symbolsInvalidRegex.Stdout
     Assert-Contains -Name 'symbols invalid regex stderr' -Text $symbolsInvalidRegex.Stderr -Expected 'NAVLYN1002:'
 
     $symbolsInvalidMatch = Invoke-Navlyn `
         -Name 'symbols invalid match mode' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--query', 'Check', '--match', 'starts-with') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', 'Check', '--match', 'starts-with') `
         -ExpectedExitCode 2
     Assert-Empty -Name 'symbols invalid match stdout' -Text $symbolsInvalidMatch.Stdout
     Assert-Contains -Name 'symbols invalid match stderr' -Text $symbolsInvalidMatch.Stderr -Expected 'NAVLYN1001:'
 
     $symbolsInvalidLimit = Invoke-Navlyn `
         -Name 'symbols invalid limit' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--query', 'Check', '--limit', '0') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', 'Check', '--limit', '0') `
         -ExpectedExitCode 2
     Assert-Empty -Name 'symbols invalid limit stdout' -Text $symbolsInvalidLimit.Stdout
     Assert-Contains -Name 'symbols invalid limit stderr' -Text $symbolsInvalidLimit.Stderr -Expected 'NAVLYN1003:'
 
     $symbolsInvalidKind = Invoke-Navlyn `
         -Name 'symbols invalid kind' `
-        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine', '--query', 'Check', '--kind', '1') `
+        -Arguments @('symbols', '--workspace', 'navlyn.slnx', '--project', 'Navlyn.CommandLine(net8.0)', '--project', 'Navlyn.CommandLine(net10.0)', '--query', 'Check', '--kind', '1') `
         -ExpectedExitCode 2
     Assert-Empty -Name 'symbols invalid kind stdout' -Text $symbolsInvalidKind.Stdout
     Assert-Contains -Name 'symbols invalid kind stderr' -Text $symbolsInvalidKind.Stderr -Expected 'NAVLYN1004:'
