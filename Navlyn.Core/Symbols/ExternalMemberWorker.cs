@@ -231,6 +231,27 @@ internal static class ExternalMemberWorker
             string reconstructed = decompiler.DecompileAsString(matches[0]);
             selectedText = SelectView(reconstructed, request.View, hasBody);
             signature = SelectView(reconstructed, "signature", hasBody);
+            // Exact accessor handles decompile to a bare block. Obtain their
+            // declaration from ILSpy's metadata type system, without guessing a property.
+            if (signature is null)
+            {
+                var entity = decompiler.TypeSystem.MainModule.ResolveEntity(matches[0], default);
+                if (entity is ICSharpCode.Decompiler.TypeSystem.IMethod method)
+                {
+                    var astBuilder = new ICSharpCode.Decompiler.CSharp.Syntax.TypeSystemAstBuilder();
+                    string parameters = string.Join(", ", method.Parameters.Select(parameter =>
+                        $"{astBuilder.ConvertType(parameter.Type)} {parameter.Name}"));
+                    var returnType = method.ReturnType;
+                    string returnModifier = "";
+                    if (returnType is ICSharpCode.Decompiler.TypeSystem.ByReferenceType referenceType)
+                    {
+                        returnModifier = method.ReturnTypeIsRefReadOnly ? "ref readonly " : "ref ";
+                        returnType = referenceType.ElementType;
+                    }
+                    signature = $"{returnModifier}{astBuilder.ConvertType(returnType)} {method.Name}({parameters});";
+                }
+                if (request.View is "signature" or "declaration") selectedText = signature;
+            }
         }
         if (selectedText is null)
         {

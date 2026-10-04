@@ -103,6 +103,10 @@ internal sealed class ExternalLibrarySourceFixture
         }
     }
 
+    public Task<CliResult> RunBatchAsync(object payload) => RunProcessAsync("dotnet",
+        [CliAssembly, "batch", "--workspace", ConsumerProject], root, TimeSpan.FromSeconds(60),
+        JsonSerializer.Serialize(payload));
+
     private async Task<McpClient> CreateReaderAsync(string project)
     {
         string framework = Path.GetFileName(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory));
@@ -376,7 +380,7 @@ internal sealed class ExternalLibrarySourceFixture
         return false;
     }
 
-    private static async Task<CliResult> RunProcessAsync(string executable, IReadOnlyList<string> arguments, string workingDirectory, TimeSpan timeout)
+    private static async Task<CliResult> RunProcessAsync(string executable, IReadOnlyList<string> arguments, string workingDirectory, TimeSpan timeout, string? standardInput = null)
     {
         using Process process = new();
         process.StartInfo = new ProcessStartInfo(executable)
@@ -384,6 +388,7 @@ internal sealed class ExternalLibrarySourceFixture
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            RedirectStandardInput = standardInput is not null,
             UseShellExecute = false
         };
         string fixturesDirectory = Path.Combine(FindRepositoryRoot(), "tests", "fixtures", "ExternalLibrarySourceFixture");
@@ -411,6 +416,11 @@ internal sealed class ExternalLibrarySourceFixture
         using CancellationTokenSource timeoutSource = new(timeout);
         try
         {
+            if (standardInput is not null)
+            {
+                await process.StandardInput.WriteAsync(standardInput.AsMemory(), timeoutSource.Token);
+                process.StandardInput.Close();
+            }
             await process.WaitForExitAsync(timeoutSource.Token);
         }
         catch (OperationCanceledException)

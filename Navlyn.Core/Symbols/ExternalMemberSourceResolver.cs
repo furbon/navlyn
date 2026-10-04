@@ -116,7 +116,7 @@ internal sealed class ExternalMemberSourceResolver
         int? workerDiagnostic = MapWorkerError(worker.Error, view);
         if (workerDiagnostic is not null)
         {
-            return ExternalMemberResolutionResult.Failed(workerDiagnostic.Value);
+            return ExternalMemberResolutionResult.Failed(workerDiagnostic.Value, worker.Error == "member-not-found");
         }
 
         if (worker.Text is null || worker.ImplementationPath is null || worker.ImplementationSha256 is null || worker.ImplementationMvid is null)
@@ -314,8 +314,8 @@ internal sealed record ExternalAssemblyProvenance(string Identity, string Target
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? MemberSignature = null,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? MembersTotal = null);
 internal sealed record ExternalMemberResolution(string SourceOrigin, ExternalAssemblyProvenance ExternalAssembly, IReadOnlyList<SymbolSourceSlice> Slices, ExternalMemberSnapshot? Snapshot);
-internal sealed record ExternalMemberResolutionResult(ExternalMemberResolution? Resolution, int? DiagnosticId)
+internal sealed record ExternalMemberResolutionResult(ExternalMemberResolution? Resolution, int? DiagnosticId, bool MemberNotFound = false)
 {
     public static ExternalMemberResolutionResult Succeeded(ExternalMemberResolution resolution) => new(resolution, null);
-    public static ExternalMemberResolutionResult Failed(int diagnosticId) => new(null, diagnosticId);
+    public static ExternalMemberResolutionResult Failed(int diagnosticId, bool memberNotFound = false) => new(null, diagnosticId, memberNotFound);
 }

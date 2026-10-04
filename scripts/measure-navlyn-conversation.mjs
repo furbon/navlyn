@@ -188,11 +188,28 @@ for (let attempt = 1; attempt <= attempts; attempt++) {
         await new Promise(resolve => trace.end(resolve));
         fs.writeFileSync(path.join(output, id + '.stderr.txt'), stderr);
       }
-      const status = checked('git', ['-C', cwd, 'status', '--porcelain']).trim();
-      // Capture only the agent's edits before injecting independent acceptance checks.
-      checked('git', ['-C', cwd, 'add', '--intent-to-add', '.']);
-      const diffStat = checked('git', ['-C', cwd, 'diff', '--stat']).trim();
-      fs.writeFileSync(path.join(output, id + '.diff'), checked('git', ['-C', cwd, 'diff']));
+      // Persist completed/expired turns before optional artifact capture can fail.
+      report.inProgress = { condition, workflow, attempt, threadId, workspace: cwd, turns,
+        totalUsage: latestUsage, elapsedMs: +((completedAt ?? performance.now()) - started).toFixed(3), fatal };
+      save();
+      let status = '', diffStat = '', captureError, captureStage = 'status';
+      try {
+        status = checked('git', ['-C', cwd, 'status', '--porcelain']).trim();
+        // Capture only the agent's edits before injecting independent acceptance checks.
+        captureStage = 'intent-to-add';
+        checked('git', ['-C', cwd, 'add', '--intent-to-add', '.']);
+        captureStage = 'diff-stat';
+        diffStat = checked('git', ['-C', cwd, 'diff', '--stat']).trim();
+        captureStage = 'diff';
+        fs.writeFileSync(path.join(output, id + '.diff'), checked('git', ['-C', cwd, 'diff']));
+      } catch (error) {
+        // Locally installed tools/packages can exceed the bounded capture buffer.
+        // Keep the task result and original workspace; do not stop later independent cells.
+        captureError = { stage: captureStage, code: error.code ?? 'capture-failed', message: error.message };
+        if (captureStage === 'diff' && error.stdout)
+          fs.writeFileSync(path.join(output, id + '.partial.diff'), error.stdout);
+        fs.writeFileSync(path.join(output, id + '.capture-error.json'), JSON.stringify(captureError, null, 2));
+      }
       const validation = [];
       if (!probe && !fatal) for (const file of task.validationFiles ?? []) {
         const destination = path.resolve(cwd, file.destination);
@@ -210,8 +227,8 @@ for (let attempt = 1; attempt <= attempts; attempt++) {
         validationPassed: !probe && !fatal && validation.length > 0 && validation.every(v => v.exitCode === 0),
         validationKind: task.validationKind ?? 'behavior', correctness: 'Requires independent review of acceptance scope and evidence',
         serverStartup: notifications.filter(m => m.method === 'mcpServer/startupStatus/updated' && m.params.name === 'navlyn').at(-1)?.params,
-        status, diffStat };
-      report.results.push(result); save();
+        status, diffStat, captureError };
+      report.results.push(result); delete report.inProgress; save();
       console.log(JSON.stringify({ ...result, turns: undefined, validation: undefined }));
       // A failed/expired session is evidence. Continue independent conditions; never retry it automatically.
     }

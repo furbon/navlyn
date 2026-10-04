@@ -6,6 +6,7 @@ All notable public release changes for Navlyn are tracked here.
 
 - Follow DLL internals from a compiler-bound source anchor using bounded `read --view members` and exact `--external-member` method/type/field IDs, including private methods and enum constants. Preserve selected PE identity, freshness, overload identity and distinct anchor/member provenance without another MCP tool.
 - Shorten focused compact parameter descriptions while retaining every input, type and conditional constraint; verify equivalence over actual MCP discovery. Tighten optional skill guidance for source-only work and DLL follow-through.
+- Share one CLI workspace load for already-needed external reads through existing batch symbol-source requests, retaining provenance and per-request failures. Distinguish absent exact IDs from body-less definitions, guide unchanged ID reuse, and support typed explicit-accessor signatures.
 - Repair external constructor reads at C#/VB constructed type tokens, include metadata enum/constant values and canonical external member IDs, and locate redirected NuGet assets from the loaded project's compiler paths. Explain source-only target scope in CLI help and empty-query warnings; preserve ambiguity and dependency identity boundaries.
 
 - Apply outline page bounds before detailed facts, candidate registration and JSON generation. Keep exact semantic order/totals and unpaged CLI/full contracts; add optional CLI `--entry-limit`/`--entry-offset` and forward MCP bounds to a matching external CLI.

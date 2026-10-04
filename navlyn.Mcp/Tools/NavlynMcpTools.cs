@@ -220,7 +220,7 @@ internal static class NavlynMcpTools
         [Description("Maximum source lines per slice. Must be 1 or greater.")] int? maxLines = null,
         [Description("Approximate token budget per slice. Must be 1 or greater.")] int? budgetTokens = null,
         [Description("External member source: none (default), metadata, or decompiled. Read at the member token; enum values need the field token, not the containing type.")] string? externalSource = null,
-        [Description("Exact M:, T:, or F: documentation ID in the same bound assembly; requires decompiled. Use T: with members to find private methods, then M: with body.")] string? externalMember = null,
+        [Description("Copy an exact returned M:, T:, or F: ID unchanged, including parameter types. Same bound assembly; requires decompiled. Use T: with members, M: with body.")] string? externalMember = null,
         CancellationToken cancellationToken = default)
     {
         return RunAsync(

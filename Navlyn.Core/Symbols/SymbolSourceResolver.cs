@@ -121,7 +121,8 @@ internal sealed class SymbolSourceResolver
                 {
                     return SymbolSourceResolutionResult.Failed(new SymbolNavigationError(
                         diagnosticId,
-                        options.ExternalMember is null ? ExternalMemberDiagnosticMessage(diagnosticId, externalSymbol)
+                        external.MemberNotFound ? $"Exact external member '{options.ExternalMember ?? externalSymbol.GetDocumentationCommentId()}' was not found in the bound implementation assembly. Copy the exact ID returned by members view, including parameter types; do not guess a namespace or overload."
+                            : options.ExternalMember is null ? ExternalMemberDiagnosticMessage(diagnosticId, externalSymbol)
                             : $"External member '{options.ExternalMember}' in the bound assembly: {ExternalMemberDiagnosticMessage(diagnosticId)}",
                         ExitCodes.UsageError));
                 }
@@ -300,7 +301,7 @@ internal sealed class SymbolSourceResolver
         DiagnosticIds.ExternalImplementationUnavailable => "A matching local implementation assembly is unavailable.",
         DiagnosticIds.ExternalMemberBodyUnavailable => selected is null
             ? "The exact external member has no implementation body."
-            : $"The selected {selected.Kind} '{selected.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)}' has no implementation body. Use external-source metadata with signature or declaration for metadata facts; use ordinary dependency tools for members without a source call anchor.",
+            : $"The selected {selected.Kind} '{selected.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)}' has no implementation body. Use external-source metadata with signature or declaration for metadata facts. To follow another implementation member, keep a bound external anchor and copy an exact ID from members view.",
         DiagnosticIds.ExternalMemberAmbiguous => "The exact external member or implementation assembly is ambiguous.",
         DiagnosticIds.ExternalMemberStale => "The external assembly changed while the member was being read.",
         DiagnosticIds.ExternalMemberLimitExceeded => "The external assembly or decompilation exceeded the configured safety limits.",

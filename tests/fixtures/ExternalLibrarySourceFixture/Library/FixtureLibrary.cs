@@ -22,6 +22,9 @@ public sealed class Probe
     public string Optional(int value = 7) => "FIXTURE_OPTIONAL_INT_BODY";
     public string Optional(string value) => "FIXTURE_OPTIONAL_STRING_BODY";
     public string Accessed => "FIXTURE_PROPERTY_GETTER_BODY";
+    private int referenceCounter = 7;
+    public ref int CounterReference => ref referenceCounter;
+    public ref readonly int CounterReadOnlyReference => ref referenceCounter;
     public string Mutable
     {
         get => "FIXTURE_MUTABLE_GETTER_BODY";
