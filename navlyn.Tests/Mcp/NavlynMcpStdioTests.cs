@@ -30,7 +30,8 @@ public sealed class NavlynMcpStdioTests
                     "--workspace", Path.Combine(repoRoot, "tests", "fixtures", "FuzzyDiscoveryFixture", "FuzzyDiscoveryFixture.csproj"),
                     "--working-directory", repoRoot,
                     "--timeout-ms", "60000",
-                    "--max-json-chars", "4000000"
+                    "--max-json-chars", "4000000",
+                    "--surface", "full"
                 ],
                 WorkingDirectory = repoRoot
             },
@@ -976,13 +977,60 @@ public sealed class NavlynMcpStdioTests
         yield return ["full"];
     }
 
+    [Fact]
+    public async Task FocusedSurface_PreservesIdentityBoundsAndFullOverride()
+    {
+        string workspace = Path.Combine(FindRepositoryRoot(), "tests", "fixtures", "FuzzyDiscoveryFixture", "FuzzyDiscoveryFixture.csproj");
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(60));
+        await using McpClient client = await CreateClientAsync(null, workspace, surface: null);
+        IList<McpClientTool> tools = await client.ListToolsAsync(cancellationToken: timeout.Token);
+        Assert.Equal(new[] { NavlynMcpTools.TargetTool, NavlynMcpTools.ReadTool, NavlynMcpTools.FileOutlineTool, NavlynMcpTools.NavigateTool }, tools.Select(tool => tool.Name));
+        Assert.True(tools[0].JsonSchema.TryGetProperty("allOf", out _));
+        CallToolResult target = await client.CallToolAsync(NavlynMcpTools.TargetTool,
+            new Dictionary<string, object?> { ["query"] = "Alpha.EnemyManagerTools", ["match"] = "exact" }, cancellationToken: timeout.Token);
+        Assert.False(target.IsError, target.StructuredContent?.ToString());
+        JsonElement root = target.StructuredContent!.Value;
+        Assert.Equal("compact", root.GetProperty("resultProfile").GetString());
+        JsonElement result = root.GetProperty("result");
+        Assert.Equal("Alpha", result.GetProperty("selectedTarget").GetProperty("container").GetString());
+        Assert.Equal("net10.0", result.GetProperty("selector").GetProperty("targetFramework").GetString());
+        string candidate = result.GetProperty("candidateId").GetString()!;
+        CallToolResult read = await client.CallToolAsync(NavlynMcpTools.ReadTool,
+            new Dictionary<string, object?> { ["candidateId"] = candidate, ["view"] = "signature" }, cancellationToken: timeout.Token);
+        Assert.False(read.IsError, read.StructuredContent?.ToString());
+        Assert.Contains("EnemyManagerTools", read.StructuredContent!.Value.GetProperty("result").ToString(), StringComparison.Ordinal);
+        CallToolResult outline = await client.CallToolAsync(NavlynMcpTools.FileOutlineTool,
+            new Dictionary<string, object?> { ["file"] = "FixtureCode.cs", ["entryLimit"] = 2 }, cancellationToken: timeout.Token);
+        JsonElement page = outline.StructuredContent!.Value.GetProperty("result");
+        Assert.Equal(2, page.GetProperty("entries").GetArrayLength());
+        Assert.True(page.GetProperty("entriesTruncated").GetBoolean());
+        int next = page.GetProperty("nextEntryOffset").GetInt32();
+        CallToolResult second = await client.CallToolAsync(NavlynMcpTools.FileOutlineTool,
+            new Dictionary<string, object?> { ["file"] = "FixtureCode.cs", ["entryLimit"] = 2, ["entryOffset"] = next }, cancellationToken: timeout.Token);
+        Assert.Equal(next, second.StructuredContent!.Value.GetProperty("result").GetProperty("entryOffset").GetInt32());
+        CallToolResult full = await client.CallToolAsync(NavlynMcpTools.FileOutlineTool,
+            new Dictionary<string, object?> { ["file"] = "FixtureCode.cs", ["resultProfile"] = "full" }, cancellationToken: timeout.Token);
+        JsonElement fullRoot = full.StructuredContent!.Value;
+        Assert.False(fullRoot.TryGetProperty("resultProfile", out _));
+        Assert.Equal(page.GetProperty("entriesTotal").GetInt32(), fullRoot.GetProperty("result").GetProperty("entries").GetArrayLength());
+        Assert.NotEqual(JsonValueKind.Null, fullRoot.GetProperty("sourceCommand").ValueKind);
+        Assert.Equal(fullRoot.GetRawText(), Assert.IsType<TextContentBlock>(Assert.Single(full.Content)).Text);
+        CallToolResult invalid = await client.CallToolAsync(NavlynMcpTools.FileOutlineTool,
+            new Dictionary<string, object?> { ["file"] = "FixtureCode.cs", ["entryLimit"] = "bad" }, cancellationToken: timeout.Token);
+        Assert.True(invalid.IsError);
+        CallToolResult hidden = await client.CallToolAsync(NavlynMcpTools.DoctorTool,
+            new Dictionary<string, object?>(), cancellationToken: timeout.Token);
+        Assert.True(hidden.IsError);
+        Assert.Equal("NAVLYN_MCP_TOOL_UNAVAILABLE", hidden.StructuredContent!.Value.GetProperty("error").GetProperty("code").GetString());
+    }
+
     private static async Task<McpClient> CreateClientAsync(string? profile)
     {
         string repoRoot = FindRepositoryRoot();
         return await CreateClientAsync(profile, Path.Combine(repoRoot, "navlyn.slnx"));
     }
 
-    private static async Task<McpClient> CreateClientAsync(string? profile, string workspacePath)
+    private static async Task<McpClient> CreateClientAsync(string? profile, string workspacePath, string? surface = "full")
     {
         string repoRoot = FindRepositoryRoot();
         string serverDll = Path.Combine(repoRoot, "navlyn.Mcp", "bin", Directory.GetParent(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory))!.Name, GetCurrentTargetFramework(), "navlyn.Mcp.dll");
@@ -1001,6 +1049,8 @@ public sealed class NavlynMcpStdioTests
             arguments.Add("--tool-profile");
             arguments.Add(profile);
         }
+
+        if (surface is not null) arguments.AddRange(["--surface", surface]);
 
         StdioClientTransport transport = new(
             new StdioClientTransportOptions

@@ -48,6 +48,9 @@ Existing advanced commands remain supported for scripts and specialized workflow
 
 All commands accept `--target-framework <tfm>` to restrict project/symbol selection to one exact loaded target framework. For example, `navlyn target --workspace App.csproj --query Widget --target-framework net10.0` resolves against that framework, including source-position and candidate-ID selection. An unknown framework fails selection; omission retains existing all-framework behavior. Combine it with `--project` when several projects share the same framework. This selects semantic binding; workspace-wide lifecycle/status inventories still describe the loaded workspace.
 
+Fuzzy query commands also accept `--type-kind <class|interface|struct|enum|delegate|record|record-class|record-struct>` as a filter, independently of the ranking hint `--assume-kind`. It requires query selection; batch defaults and individual query requests accept `typeKind`. Classes/structs include their corresponding record forms; `record` selects either record form. Type facts add `typeKind` and `isRecord`. Non-regex queries can qualify a member with its containing type or namespace (for example `Sample.Formatter.Format`); unmatched containers do not broaden to unrelated symbols and overload ambiguity is retained. These are declaration queries, not arbitrary C# expressions; use a source position for precise expression binding.
+
+
 Batch accepts `defaults.targetFramework` and a per-request `targetFramework` override. Names are trimmed and compared without case sensitivity; blank/non-string values fail validation. Supported batch command names remain unchanged (`resolve-target`, rather than `target`, selects a target in batch).
 
 ## General Contract

@@ -86,7 +86,7 @@ navlyn impact --workspace navlyn.slnx --candidate-id sym:v1:... --depth 2
 
 If `target` returns `confidence: "ambiguous"` or no selected target, inspect `ambiguityReason`, `ambiguitySummary.reasonCodes`, and `ambiguitySummary.groups` before doing anything broader. Typical next moves are to add `--project`, switch to a source position, ask the user which candidate they meant, or choose one returned `candidateId` explicitly. Do not open or edit source from an ambiguous name alone.
 
-Use `about` for a compact selected-symbol summary, `references` with `usageKind` and `groupBy` when the agent needs precise read/write/invocation/construction evidence, `related` for a file-first reading map, and `impact` before edits or risk analysis.
+Use `about` for a compact selected-symbol summary, `references` with `usageKind` and `groupBy` when the agent needs precise read/write/invocation/construction evidence, `related` for a file-first reading map, and `impact` when the requested change or risk analysis needs dependency evidence. For a known local body or literal edit, normal reads and editing tools are sufficient; stop when the requested fact or change is established.
 
 MCP clients can use the same stop rules with dedicated file-first tools:
 

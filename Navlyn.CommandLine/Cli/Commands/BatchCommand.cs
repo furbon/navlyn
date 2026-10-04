@@ -1844,7 +1844,17 @@ internal static partial class BatchCommand
             error = $"defaults.{batchError!.Message}";
             return false;
         }
-        defaults = new BatchDefaults(Project: project, ExcludeGenerated: excludeGenerated, TargetFramework: targetFramework);
+        if (!TryGetOptionalString(defaultsElement, "typeKind", out string? typeKind, out batchError))
+        {
+            error = $"defaults.{batchError!.Message}";
+            return false;
+        }
+        if (!WorkspaceSelectionScope.IsValidTypeKind(typeKind))
+        {
+            error = "Unsupported typeKind in defaults.";
+            return false;
+        }
+        defaults = new BatchDefaults(Project: project, ExcludeGenerated: excludeGenerated, TargetFramework: targetFramework, TypeKind: typeKind);
         error = null;
         return true;
     }

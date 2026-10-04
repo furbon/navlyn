@@ -2,6 +2,15 @@
 
 All notable public release changes for Navlyn are tracked here.
 
+## 0.9.1 - 2026-10-04
+
+- Change MCP defaults to four focused tools and compact evidence. Use `--surface full` for the previous 25-tool inventory and full results; CLI contracts stay complete. Support per-call `resultProfile` and paged file outlines.
+- Match qualified symbol declarations without broadening to unrelated containers; add independent type-kind filtering to CLI/MCP/batch query selection and actual type-category facts.
+- Advertise conditional argument constraints; retain identity, scope, freshness, warnings, error states, and identical text/structured JSON.
+- Shorten routing guidance and remove compulsory semantic preparation for ordinary reads and local edits. Correct previous evaluation claims and record an unforced comparison, including limits.
+- Repair managed routing-skill upgrades from recent releases, include shared test/package inputs in CI selection, and select skill contracts for skill-only changes.
+- Submit both NuGet packages before one shared indexing wait, preserving durable intent and recovery. Generate canonical and versioned setup aliases from identical validated bytes; setup checks the focused default.
+
 ## 0.9.0 - 2026-10-04
 
 - Require a .NET 10 SDK; publish only net10.0 CLI/MCP assets. Remove .NET 8 targets, installer fallback, SDK CI setup, and compatibility package checks.

@@ -383,9 +383,9 @@ function Test-SetupMcp([string]$Executable,[string]$WorkspaceRoot,[string]$Works
         if (!$init.result -or $init.result.protocolVersion -ne '2025-06-18' -or $init.result.serverInfo.name -ne 'navlyn.Mcp' -or $init.result.serverInfo.version -ne $expectedServerVersion) { throw "MCP initialize metadata/version did not match the staged package: $($init.result.serverInfo | ConvertTo-Json -Compress)." }
         Send-SetupNotification $p @{jsonrpc='2.0';method='notifications/initialized';params=@{}}
         $tools=Send-SetupRpc $p @{jsonrpc='2.0';id=2;method='tools/list';params=@{}} 30000 ([ref]$stderrTask)
-        $expected=@('navlyn_target','navlyn_read','navlyn_file_outline','navlyn_navigate','navlyn_prepare_edit','navlyn_verify_edit','navlyn_review','navlyn_workspace_summary','navlyn_workspace_status','navlyn_workspace_refresh','navlyn_doctor','navlyn_impact','navlyn_context_pack','navlyn_entrypoints','navlyn_tests_for_symbol','navlyn_tests_for_diff','navlyn_diagnostics','navlyn_di','navlyn_public_api_diff','navlyn_routes','navlyn_options','navlyn_messages','navlyn_ef','navlyn_packages','navlyn_batch')
+        $expected = @('navlyn_target', 'navlyn_read', 'navlyn_file_outline', 'navlyn_navigate')
         $names=@($tools.result.tools | ForEach-Object { [string]$_.name })
-        if (($names -join "`n") -cne ($expected -join "`n")) { throw 'MCP tools/list did not match the locked 25-tool inventory and order.' }
+        if (($names -join "`n") -cne ($expected -join "`n")) { throw 'MCP tools/list did not match the default four-tool inventory and order.' }
         $summaryA=Send-SetupRpc $p @{jsonrpc='2.0';id=3;method='tools/call';params=@{name='navlyn_workspace_summary';arguments=@{}}} 60000 ([ref]$stderrTask)
         $summaryB=Send-SetupRpc $p @{jsonrpc='2.0';id=4;method='tools/call';params=@{name='navlyn_workspace_summary';arguments=@{}}} 60000 ([ref]$stderrTask)
         if ($summaryA.result.isError -or $summaryB.result.isError -or !$summaryA.result.structuredContent.ok -or !$summaryB.result.structuredContent.ok -or !$summaryA.result.structuredContent.result -or !$summaryB.result.structuredContent.result) { throw 'Workspace summary returned no successful structured fact.' }
@@ -498,7 +498,7 @@ if ($Target -eq 'Local' -and $journal -and $Version -and $Action -in @('Install'
 $candidateText=$oldText.Text
 if ($Action -in @('Install','Update') -and !$conflict) {
     $plannedCommand=Join-Path (Join-Path $toolsRoot ("$Version-pending")) $(if($IsWindows){'navlyn-mcp.exe'}else{'navlyn-mcp'})
-    $entry=[ordered]@{type='stdio';command=$plannedCommand;args=@('--workspace',$workspaceArgument,'--working-directory',$selected,'--timeout-ms','60000');cwd='${workspaceFolder}'}
+    $entry=[ordered]@{type='stdio';command=$plannedCommand;args=@('--workspace',$workspaceArgument,'--working-directory',$selected,'--timeout-ms','60000','--surface','focused');cwd='${workspaceFolder}'}
     $candidateText=Set-NavlynJsoncServer -Text $candidateText -Name navlyn -EntryJson ($entry|ConvertTo-Json -Depth 10 -Compress)
 }
 if (!$Apply) {
@@ -596,7 +596,7 @@ if($Target -eq 'Global'){
             $verifiedList=Invoke-SetupGlobalDotnet -Arguments @('tool','list','--global') -LogRoot $logRoot
             if($verifiedList.exit-ne 0 -or $verifiedList.stdout -cnotmatch ('(?m)^navlyn-mcp\s+'+[regex]::Escape($effectiveVersion)+'\s+')){throw 'Global list does not confirm effective version.'}
             $protocol=Test-SetupMcp $globalShim $selected $workspaceArgument $effectiveVersion
-            $candidateText=Set-NavlynJsoncServer -Text $oldText.Text -Name navlyn -EntryJson (([ordered]@{type='stdio';command=$globalShim;args=@('--workspace',$workspaceArgument,'--working-directory',$selected,'--timeout-ms','60000');cwd='${workspaceFolder}'}|ConvertTo-Json -Depth 10 -Compress))
+            $candidateText=Set-NavlynJsoncServer -Text $oldText.Text -Name navlyn -EntryJson (([ordered]@{type='stdio';command=$globalShim;args=@('--workspace',$workspaceArgument,'--working-directory',$selected,'--timeout-ms','60000','--surface','focused');cwd='${workspaceFolder}'}|ConvertTo-Json -Depth 10 -Compress))
             $currentState=Get-GlobalRawState $globalToolsRoot $commands
             Assert-GlobalRawState $pending.expectedState
             $journalOut=[ordered]@{schema='navlyn.setup.global-ownership.v2';transactionId=$transactionId;workspace=$selected;workspaceFile=$selectedFile;config=$configPath;targetRoot=$globalToolsRoot;packageId='navlyn-mcp';installedVersion=$effectiveVersion;packageOwned=$packageOwned;priorSnapshot=$snapshot;currentState=$currentState;priorConfigPresent=($null-ne $oldBytes);priorConfigBase64=if($null-ne $oldBytes){[Convert]::ToBase64String($oldBytes)}else{$null};priorConfigHash=$oldConfigHash;priorEntryRaw=$rawCurrent;entryHash=Get-SetupHashText (Get-SetupRawEntry $candidateText);committedConfigHash=$null;protocol=$protocol;feed=$feedPath;feedPackageSha256=if($feedPackage){Get-SetupHashFile $feedPackage.FullName}else{$null};priorJournal=$journal}
@@ -676,7 +676,7 @@ if ($Action -in @('Undo','Remove') -and (Test-Path -LiteralPath $configPath) -an
             $files=[ordered]@{}
             Get-ChildItem -LiteralPath $stagePath -Recurse -File -Force | ForEach-Object { Assert-SetupNoReparsePath $_.FullName; $rel=$_.FullName.Substring($stagePath.Length).TrimStart('\','/').Replace('\','/'); if($rel -ne '.navlyn-setup-owner.json'){$files[$rel]=Get-SetupHashFile $_.FullName} }
             $stageRecord=[ordered]@{installId=$installId;workspaceKey=$workspaceKey;path=$stagePath;version=$Version;files=$files}
-            $entry=[ordered]@{type='stdio';command=$executable;args=@('--workspace',$workspaceArgument,'--working-directory',$selected,'--timeout-ms','60000');cwd='${workspaceFolder}'}
+            $entry=[ordered]@{type='stdio';command=$executable;args=@('--workspace',$workspaceArgument,'--working-directory',$selected,'--timeout-ms','60000','--surface','focused');cwd='${workspaceFolder}'}
             $candidateText=Set-NavlynJsoncServer -Text $oldText.Text -Name navlyn -EntryJson ($entry|ConvertTo-Json -Depth 10 -Compress)
             $pending=[ordered]@{schema='navlyn.setup.pending.v1';workspace=$selected;config=$configPath;priorConfigPresent=($null-ne $oldBytes);priorConfigBase64=if($oldBytes){[Convert]::ToBase64String($oldBytes)}else{$null};priorConfigHash=$oldConfigHash;expectedConfigHash=(Get-SetupHashBytes (Get-SetupUtf8Bytes $candidateText $oldText.Bom));stage=$stageRecord}
             Write-SetupJournal $pendingPath $pending

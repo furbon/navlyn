@@ -212,7 +212,7 @@ function Get-NavlynNuGetObservation {
 function Assert-NavlynReleaseAssets {
     param([string]$Root, [Collections.IDictionary]$Manifest, [string]$RepositoryRoot)
     $assets = @($Manifest.assets)
-    if ($assets.Count -ne 1 -or $assets[0].kind -cne 'setup' -or $assets[0].path -cne 'navlyn-setup.zip') { throw 'Exact setup asset identity is required.' }
+    if ($assets.Count -notin @(1, 2) -or @($assets | Where-Object { $_.kind -ceq 'setup' -and $_.path -ceq 'navlyn-setup.zip' }).Count -ne 1) { throw 'Exact setup asset identity is required.' }
     $zip = [IO.Compression.ZipFile]::OpenRead((Get-NavlynPublicationInputFile $Root 'navlyn-setup.zip'))
     try {
         $allowed = @('setup-navlyn.ps1', 'lib/navlyn-jsonc.ps1', 'README.md', 'integrity.json', 'lib/')

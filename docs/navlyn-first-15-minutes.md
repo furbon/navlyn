@@ -1,6 +1,8 @@
 # Navlyn First 15 Minutes
 
-Use the [Windows first 10 minutes guide](navlyn-first-10-minutes.md) to install 0.9.0 into an isolated tool path and ask one semantic question using the installed absolute executable. This guide starts after that install.
+This is an optional CLI walkthrough of several capabilities, not a required edit workflow. For a supplied literal or configuration value, use a normal read/search and stop. For an unresolved binding or relationship, ask for that precise semantic fact and stop when it is established. MCP defaults to four focused tools; preparation and verification below use the CLI or `--surface full`.
+
+Use the [Windows first 10 minutes guide](navlyn-first-10-minutes.md) to install 0.9.1 into an isolated tool path and ask one semantic question using the installed absolute executable. This guide starts after that install.
 
 ## 0–3 Minutes: Diagnose
 

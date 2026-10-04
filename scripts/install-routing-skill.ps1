@@ -19,7 +19,7 @@ $script:SchemaId = 'furbon.navlyn.semantic-routing-install'
 $script:SchemaVersion = 1
 . (Join-Path $PSScriptRoot 'lib/navlyn-release-version.ps1')
 $script:ReleaseVersion = Get-NavlynReleaseVersion
-$script:SupportedMarkerVersions = @($script:ReleaseVersion, '0.8.4', '0.8.3', '0.8.2', '0.8.1', '0.8.0', '0.8.0-preview.1', '0.8.0-preview.0')
+$script:SupportedMarkerVersions = @($script:ReleaseVersion, '0.9.0', '0.8.7', '0.8.6', '0.8.5', '0.8.4', '0.8.3', '0.8.2', '0.8.1', '0.8.0', '0.8.0-preview.1', '0.8.0-preview.0')
 $script:RelativeFiles = @(
     'SKILL.md',
     'references/routing-matrix.md',

@@ -72,7 +72,9 @@ internal static class SymbolFactsBuilder
             PropertyType: symbol is IPropertySymbol property ? CreateType(property.Type) : null,
             EventType: symbol is IEventSymbol eventSymbol ? CreateType(eventSymbol.Type) : null,
             FieldType: symbol is IFieldSymbol field ? CreateType(field.Type) : null,
-            Attributes: GetAttributes(symbol));
+            Attributes: GetAttributes(symbol),
+            TypeKind: symbol is INamedTypeSymbol named ? named.TypeKind.ToString().ToLowerInvariant() : null,
+            IsRecord: symbol is INamedTypeSymbol recordType ? recordType.IsRecord : null);
     }
 
     public static SymbolTypeFacts? CreateType(ITypeSymbol? type)
@@ -312,7 +314,11 @@ internal sealed record SymbolFacts(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     SymbolTypeFacts? FieldType,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    IReadOnlyList<SymbolAttributeFacts>? Attributes);
+    IReadOnlyList<SymbolAttributeFacts>? Attributes,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? TypeKind = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    bool? IsRecord = null);
 
 internal sealed record SymbolTypeFacts(
     string Name,

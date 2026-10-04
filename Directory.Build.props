@@ -1,10 +1,10 @@
 <Project>
   <PropertyGroup>
-    <Version>0.9.0</Version>
+    <Version>0.9.1</Version>
     <PackageVersion>$(Version)</PackageVersion>
     <AssemblyVersion>$(Version.Split('-')[0]).0</AssemblyVersion>
     <FileVersion>$(AssemblyVersion)</FileVersion>
     <InformationalVersion>$(Version)</InformationalVersion>
-    <PackageReleaseNotes>$(Version) requires .NET 10, reuses warm MCP workspaces for target/navigation, adds explicit target-framework selection, upgrades MCP SDK 2.0, compacts schemas/results, and removes generated artifacts from repository summaries.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.9.1 adds a focused four-tool MCP surface, compact paged responses with per-call full detail, qualified symbol queries and independent type-kind filtering, smaller hybrid routing guidance, recent-release skill upgrades, and shorter bounded publication indexing waits.</PackageReleaseNotes>
   </PropertyGroup>
 </Project>

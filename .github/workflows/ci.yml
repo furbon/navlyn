@@ -46,9 +46,10 @@ jobs:
           $filter = if ('${{ matrix.os }}' -eq 'windows-latest') { '' } else { 'FullyQualifiedName~NavlynCliRunnerTests|FullyQualifiedName~NavlynMcpServerOptionsTests|FullyQualifiedName~PathDisplayTests|FullyQualifiedName~StdioServer_ListsToolsAndMapsSuccessAndCliErrors' }
           if ($env:EVENT_ACTION -eq 'synchronize' -and $env:BEFORE_SHA -match '^[a-f0-9]{40}$') {
             $changed = @(git diff --name-only $env:BEFORE_SHA $env:GITHUB_SHA)
-            $product = @($changed | Where-Object { $_ -match '^(Navlyn.Core|Navlyn.CommandLine|navlyn|navlyn.Mcp)/|^Directory\.|^global.json|^tests/fixtures/|^navlyn.slnx|^navlyn.Tests/(TestSupport|Contracts/GoldenSnapshots|.*\.csproj)|^docs/schemas/' })
+            $product = @($changed | Where-Object { $_ -match '^(Navlyn.Core|Navlyn.CommandLine|navlyn|navlyn.Mcp)/|^Directory\.|^global.json|^NuGet\.[Cc]onfig|^tests/fixtures/|^navlyn.slnx|^navlyn.Tests/(TestSupport|Contracts/GoldenSnapshots|.*\.csproj)|^navlyn.Tests/(?!.*Tests\.cs$).*\.cs$|^docs/schemas/' })
             if ($product.Count -eq 0) {
               $classes = @($changed | Where-Object { $_ -match '^navlyn.Tests/.+Tests\.cs$' } | ForEach-Object { 'FullyQualifiedName~' + [IO.Path]::GetFileNameWithoutExtension($_) })
+              if (@($changed | Where-Object { $_ -like '.agents/skills/*' }).Count) { $classes += 'FullyQualifiedName~NavlynRoutingSkillContractTests' }
               $filter = if ($classes.Count) { $classes -join '|' } else { 'FullyQualifiedName~NavlynMcpServerOptionsTests' }
             }
           }

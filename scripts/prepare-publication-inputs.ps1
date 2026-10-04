@@ -30,8 +30,10 @@ foreach ($entry in $pack.packages) {
     $packages += @{ id = $entry.id; version = $version; path = $name; sha256 = $entry.sha256 }
 }
 Copy-Item -LiteralPath $setup -Destination (Join-Path $root 'navlyn-setup.zip')
+Copy-Item -LiteralPath $setup -Destination (Join-Path $root "navlyn-setup-$version.zip")
 $inputs = [ordered]@{ schema = 'navlyn.publication-inputs.v1'; repository = 'furbon/navlyn'; workflow = '.github/workflows/publish-nuget.yml'; sourceSha = $SourceSha; version = $version; packages = $packages; assets = @(
-    @{ kind = 'setup'; path = 'navlyn-setup.zip'; sha256 = Get-NavlynPublicationHash (Join-Path $root 'navlyn-setup.zip'); sourceSha = $SourceSha }
+    @{ kind = 'setup'; path = 'navlyn-setup.zip'; sha256 = Get-NavlynPublicationHash (Join-Path $root 'navlyn-setup.zip'); sourceSha = $SourceSha },
+    @{ kind = 'setup'; path = "navlyn-setup-$version.zip"; sha256 = Get-NavlynPublicationHash (Join-Path $root "navlyn-setup-$version.zip"); sourceSha = $SourceSha }
 ) }
 $path = Join-Path $root 'navlyn-publication-inputs.json'
 [IO.File]::WriteAllText($path, ($inputs | ConvertTo-Json -Depth 30))
