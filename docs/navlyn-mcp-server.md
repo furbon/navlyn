@@ -108,7 +108,7 @@ Equivalent MCP client configuration for local development:
 }
 ```
 
-For the 0.8.6 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
+For the 0.8.7 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
 
 ## Server Options
 
@@ -117,7 +117,7 @@ For the 0.8.6 candidate, use the unique-output pack, package-contract, and isola
 - `--navlyn-executable <command>`: legacy external Navlyn CLI command or executable. Omit for standalone in-process execution. Use only for compatibility, debugging, or development investigations.
 - `--navlyn-arg <arg>`: prefix argument passed before the CLI command on the legacy external path. Repeat for local development with `dotnet navlyn.dll`.
 - `--working-directory <path>`: working directory for in-process execution or the legacy child process. Defaults to the repository root when found.
-- `--timeout-ms <number>`: per-tool deadline, including queue time, direct execution, and command-adapter execution. Defaults to `120000`. Expiry returns `NAVLYN_MCP_TIMEOUT`; caller cancellation returns `NAVLYN_MCP_CANCELED`. Cancellation is cooperative and waits for resource cleanup, so synchronous MSBuild/Roslyn work may delay the response beyond the deadline. A completed call after expiry is never returned as success.
+- `--timeout-ms <number>`: per-tool deadline, including queue time, direct execution, and command-adapter execution. Defaults to `120000`. Expiry returns `NAVLYN_MCP_TIMEOUT`; caller cancellation returns `NAVLYN_MCP_CANCELED`. Cancellation is cooperative and waits for resource cleanup, so synchronous MSBuild/Roslyn work may delay the response beyond the deadline. A completed call after expiry is never returned as success. External CLI calls kill and reap their child process tree before returning, including caller cancellation and blocked batch stdin. Output pipes retain bounded data while draining to avoid deadlocks or unbounded wrapper memory.
 - `--max-json-chars <number>`: maximum command JSON size accepted by the MCP wrapper. Defaults to `4000000`.
 - `--daemon-pipe <name>`: optional local `navlyn serve --pipe <name>` daemon used for `navlyn_workspace_status` and `navlyn_workspace_refresh`. If the pipe is unavailable, the in-process server falls back to its normal direct workspace path.
 - `--version`: print the installed MCP server version and exit without starting a session.

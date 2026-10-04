@@ -1,10 +1,10 @@
 <Project>
   <PropertyGroup>
-    <Version>0.8.6</Version>
+    <Version>0.8.7</Version>
     <PackageVersion>$(Version)</PackageVersion>
     <AssemblyVersion>$(Version.Split('-')[0]).0</AssemblyVersion>
     <FileVersion>$(AssemblyVersion)</FileVersion>
     <InformationalVersion>$(Version)</InformationalVersion>
-    <PackageReleaseNotes>$(Version) enforces MCP deadlines, preserves workflow reproduction inputs and historical version records, and adds CI diagnostics and publication recovery summaries.</PackageReleaseNotes>
+    <PackageReleaseNotes>$(Version) reaps canceled MCP process trees, bounds wrapper output, replaces redundant validation with a fast .NET 10 product suite and portable smoke, pins Actions, and measures repeated warm MCP calls.</PackageReleaseNotes>
   </PropertyGroup>
 </Project>

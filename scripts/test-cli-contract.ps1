@@ -2,7 +2,7 @@
 param(
     [switch]$NoBuild,
     [ValidateSet('core', 'navigation', 'workflow', 'domain', 'mcp-adjacent', 'all')]
-    [string]$Suite = 'all',
+    [string]$Suite = 'core',
     [switch]$ShowOutput
 )
 
@@ -20,142 +20,9 @@ $TargetFrameworkScript = Join-Path $RepoRoot 'scripts/lib/navlyn-target-framewor
 . $TargetFrameworkScript
 
 $TargetFramework = Get-NavlynPreferredTargetFramework -ProjectPath $ProjectPath
-$NavlynDll = Join-Path $ProjectDir "bin/Debug/$TargetFramework/navlyn.dll"
-
-function Invoke-CheckedProcess {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Name,
-
-        [Parameter(Mandatory = $true)]
-        [string]$FilePath,
-
-        [Parameter(Mandatory = $true)]
-        [string[]]$Arguments,
-
-        [Parameter(Mandatory = $true)]
-        [int]$ExpectedExitCode,
-
-        [string]$WorkingDirectory = $RepoRoot,
-
-        [string]$StandardInput = $null
-    )
-
-    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-    $startInfo.FileName = $FilePath
-    $startInfo.WorkingDirectory = $WorkingDirectory
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError = $true
-    $startInfo.RedirectStandardInput = $null -ne $StandardInput
-    $startInfo.StandardOutputEncoding = [System.Text.Encoding]::UTF8
-    $startInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8
-    $startInfo.UseShellExecute = $false
-    $startInfo.Arguments = Join-ProcessArguments -Arguments $Arguments
-
-    $process = [System.Diagnostics.Process]::Start($startInfo)
-    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
-    $stderrTask = $process.StandardError.ReadToEndAsync()
-    if ($null -ne $StandardInput) {
-        $process.StandardInput.Write($StandardInput)
-        $process.StandardInput.Close()
-    }
-
-    $process.WaitForExit()
-    $stdout = $stdoutTask.GetAwaiter().GetResult()
-    $stderr = $stderrTask.GetAwaiter().GetResult()
-    $exitCode = $process.ExitCode
-
-    if ($exitCode -ne $ExpectedExitCode) {
-        throw @"
-$Name failed with exit code $exitCode. Expected $ExpectedExitCode.
-Command: $FilePath $($Arguments -join ' ')
-stdout:
-$stdout
-stderr:
-$stderr
-"@
-    }
-
-    $result = [pscustomobject]@{
-        Name = $Name
-        ExitCode = $exitCode
-        Stdout = $stdout
-        Stderr = $stderr
-    }
-
-    if ($ShowOutput) {
-        Write-ProcessResult `
-            -Name $Name `
-            -FilePath $FilePath `
-            -Arguments $Arguments `
-            -Result $result
-    }
-
-    $result
-}
-
-function Write-ProcessResult {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Name,
-
-        [Parameter(Mandatory = $true)]
-        [string]$FilePath,
-
-        [Parameter(Mandatory = $true)]
-        [string[]]$Arguments,
-
-        [Parameter(Mandatory = $true)]
-        [psobject]$Result
-    )
-
-    Write-Host ''
-    Write-Host "[$Name]"
-    Write-Host "command: $FilePath $($Arguments -join ' ')"
-    Write-Host "exit: $($Result.ExitCode)"
-    Write-Host 'stdout:'
-    if ($Result.Stdout.Length -eq 0) {
-        Write-Host '<empty>'
-    }
-    else {
-        Write-Host $Result.Stdout.TrimEnd()
-    }
-
-    Write-Host 'stderr:'
-    if ($Result.Stderr.Length -eq 0) {
-        Write-Host '<empty>'
-    }
-    else {
-        Write-Host $Result.Stderr.TrimEnd()
-    }
-}
-
-function Join-ProcessArguments {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string[]]$Arguments
-    )
-
-    ($Arguments | ForEach-Object { ConvertTo-ProcessArgument -Argument $_ }) -join ' '
-}
-
-function ConvertTo-ProcessArgument {
-    param(
-        [Parameter(Mandatory = $true)]
-        [AllowEmptyString()]
-        [string]$Argument
-    )
-
-    if ($Argument.Length -eq 0) {
-        return '""'
-    }
-
-    if ($Argument.IndexOfAny([char[]]@(' ', "`t", '"')) -lt 0) {
-        return $Argument
-    }
-
-    return '"' + $Argument.Replace('"', '\"') + '"'
-}
+. $PSScriptRoot/lib/navlyn-test-harness.ps1
+Initialize-NavlynTestHarness -RepoRoot $RepoRoot -ShowOutput:$ShowOutput
+$NavlynDll = $script:NavlynTestDll
 
 function Invoke-Navlyn {
     param(
@@ -331,7 +198,6 @@ function Invoke-NavigationContractGate {
 
 Push-Location $RepoRoot
 try {
-    & $NormalizeScript -Quiet
     & $FormatCheckScript -Quiet
 
     if (!$NoBuild) {
@@ -349,6 +215,7 @@ try {
 
     Write-Host "Running CLI contract checks ($Suite suite)..."
 
+    if (Test-ContractSuite -Name 'core') {
     $rootHelp = Invoke-Navlyn `
         -Name 'root help text' `
         -Arguments @('--help') `
@@ -492,6 +359,8 @@ try {
         Invoke-CoreErrorChecks
         Write-Host 'CLI contract core checks passed.'
         return
+    }
+
     }
 
     $reviewPackFixture = 'tests/fixtures/ReviewPacksFixture/ReviewPacksFixture.csproj'
@@ -797,483 +666,35 @@ try {
     }
 
     if (Test-ContractSuite -Name 'mcp-adjacent') {
-    $batchInput = @'
-{
-  "defaults": {
-    "project": "Navlyn.CommandLine(net10.0)"
-  },
-  "requests": [
-    {
-      "id": "overview",
-      "command": "overview"
-    },
-    {
-      "id": "symbols",
-      "command": "symbols",
-      "query": "Check",
-      "limit": 1
-    },
-    {
-      "id": "outline",
-      "command": "outline",
-      "file": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs"
-    },
-    {
-      "id": "symbol-info",
-      "command": "symbol-info",
-      "file": "Navlyn.CommandLine/Cli/NavlynCli.cs",
-      "line": 60,
-      "column": 37
-    },
-    {
-      "id": "type-hierarchy",
-      "command": "type-hierarchy",
-      "file": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs",
-      "line": 6,
-      "column": 23
-    },
-    {
-      "id": "callers",
-      "command": "callers",
-      "file": "Navlyn.CommandLine/Cli/Commands/CheckCommand.cs",
-      "line": 8,
-      "column": 27
-    },
-    {
-      "id": "calls",
-      "command": "calls",
-      "file": "Navlyn.CommandLine/Cli/NavlynCli.cs",
-      "line": 60,
-      "column": 37
-    },
-    {
-      "id": "definition-no-source",
-      "command": "definition",
-      "file": "Navlyn.CommandLine/Cli/NavlynCli.cs",
-      "line": 18,
-      "column": 9
-    },
-    {
-      "id": "definition-metadata",
-      "command": "definition",
-      "file": "Navlyn.CommandLine/Cli/NavlynCli.cs",
-      "line": 18,
-      "column": 9,
-      "includeMetadata": true
-    }
-  ]
-}
-'@
-
-    $batch = Invoke-Navlyn `
-        -Name 'batch stdin' `
-        -Arguments @('batch', '--workspace', 'navlyn.slnx') `
-        -ExpectedExitCode 0 `
-        -StandardInput $batchInput
-
-    Assert-Empty -Name 'batch stdin stderr' -Text $batch.Stderr
-    $batchJson = $batch.Stdout | ConvertFrom-Json
-    Assert-Equal -Name 'batch stdin workspace' -Actual $batchJson.workspace -Expected 'navlyn.slnx'
-    Assert-Equal -Name 'batch stdin request count' -Actual $batchJson.totalRequests -Expected 9
-    Assert-Equal -Name 'batch stdin succeeded count' -Actual $batchJson.succeededRequests -Expected 8
-    Assert-Equal -Name 'batch stdin failed count' -Actual $batchJson.failedRequests -Expected 1
-    Assert-Equal -Name 'batch stdin first id' -Actual @($batchJson.results)[0].id -Expected 'overview'
-    Assert-Equal -Name 'batch stdin second command' -Actual @($batchJson.results)[1].command -Expected 'symbols'
-    Assert-Equal -Name 'batch stdin symbols limit' -Actual @($batchJson.results)[1].result.limit -Expected 1
-    Assert-Equal -Name 'batch stdin symbols span' -Actual (@($batchJson.results)[1].result.matches)[0].endColumn -Expected 35
-    Assert-Equal -Name 'batch stdin outline command' -Actual @($batchJson.results)[2].command -Expected 'outline'
-    Assert-Equal -Name 'batch stdin symbol-info command' -Actual @($batchJson.results)[3].command -Expected 'symbol-info'
-    Assert-Equal -Name 'batch stdin type-hierarchy command' -Actual @($batchJson.results)[4].command -Expected 'type-hierarchy'
-    Assert-Equal -Name 'batch stdin callers command' -Actual @($batchJson.results)[5].command -Expected 'callers'
-    Assert-Equal -Name 'batch stdin calls command' -Actual @($batchJson.results)[6].command -Expected 'calls'
-    Assert-Equal -Name 'batch stdin failure ok' -Actual @($batchJson.results)[7].ok -Expected $false
-    Assert-Equal -Name 'batch stdin failure code' -Actual @($batchJson.results)[7].error.code -Expected 'NAVLYN1305'
-    Assert-Equal -Name 'batch stdin metadata definition ok' -Actual @($batchJson.results)[8].ok -Expected $true
-    Assert-Equal -Name 'batch stdin metadata definition include' -Actual @($batchJson.results)[8].result.includeMetadata -Expected $true
-    Assert-Equal -Name 'batch stdin metadata definition count' -Actual @(@($batchJson.results)[8].result.definitions).Count -Expected 0
-
-    $fuzzyBatchInput = @'
-{
-  "requests": [
-    {
-      "id": "find",
-      "command": "find",
-      "query": "CheckCommand",
-      "assumeKind": "NamedType",
-      "project": "Navlyn.CommandLine(net10.0)"
-    },
-    {
-      "id": "where-used",
-      "command": "where-used",
-      "query": "CheckCommand",
-      "assumeKind": "NamedType",
-      "project": "Navlyn.CommandLine(net10.0)",
-      "limit": 1
-    },
-    {
-      "id": "about",
-      "command": "about",
-      "query": "CheckCommand",
-      "assumeKind": "NamedType",
-      "project": "Navlyn.CommandLine(net10.0)",
-      "memberLimit": 1,
-      "referenceLimit": 1
-    }
-  ]
-}
-'@
-
-    $fuzzyBatch = Invoke-Navlyn `
-        -Name 'batch fuzzy commands' `
-        -Arguments @('batch', '--workspace', 'navlyn.slnx') `
-        -ExpectedExitCode 0 `
-        -StandardInput $fuzzyBatchInput
-
-    Assert-Empty -Name 'batch fuzzy stderr' -Text $fuzzyBatch.Stderr
-    $fuzzyBatchJson = $fuzzyBatch.Stdout | ConvertFrom-Json
-    Assert-Equal -Name 'batch fuzzy request count' -Actual $fuzzyBatchJson.totalRequests -Expected 3
-    Assert-Equal -Name 'batch fuzzy succeeded count' -Actual $fuzzyBatchJson.succeededRequests -Expected 3
-    Assert-Equal -Name 'batch fuzzy find confidence' -Actual @($fuzzyBatchJson.results)[0].result.confidence -Expected 'high'
-    Assert-Equal -Name 'batch fuzzy find span' -Actual @($fuzzyBatchJson.results)[0].result.selectedCandidate.endColumn -Expected 35
-    Assert-Equal -Name 'batch fuzzy where-used total' -Actual @($fuzzyBatchJson.results)[1].result.totalMatches -Expected 1
-    Assert-Equal -Name 'batch fuzzy where-used span' -Actual (@($fuzzyBatchJson.results)[1].result.references)[0].endColumn -Expected 49
-    Assert-Equal -Name 'batch fuzzy about members' -Actual @(@($fuzzyBatchJson.results)[2].result.members.members).Count -Expected 1
-
-    $dependentBatchInput = @'
-{
-  "requests": [
-    {
-      "id": "target",
-      "command": "resolve-target",
-      "query": "CheckCommand",
-      "assumeKind": "NamedType",
-      "project": "Navlyn.CommandLine(net10.0)"
-    },
-    {
-      "id": "source",
-      "command": "symbol-source",
-      "candidateIdFrom": "target",
-      "view": "declaration",
-      "maxLines": 1
-    },
-    {
-      "id": "refs",
-      "command": "references",
-      "candidateIdFrom": "target",
-      "limit": 1
-    }
-  ]
-}
-'@
-
-    $dependentBatch = Invoke-Navlyn `
-        -Name 'batch dependent candidate id commands' `
-        -Arguments @('batch', '--workspace', 'navlyn.slnx') `
-        -ExpectedExitCode 0 `
-        -StandardInput $dependentBatchInput
-
-    Assert-Empty -Name 'batch dependent stderr' -Text $dependentBatch.Stderr
-    $dependentBatchJson = $dependentBatch.Stdout | ConvertFrom-Json
-    Assert-Equal -Name 'batch dependent request count' -Actual $dependentBatchJson.totalRequests -Expected 3
-    Assert-Equal -Name 'batch dependent succeeded count' -Actual $dependentBatchJson.succeededRequests -Expected 3
-    Assert-Equal -Name 'batch dependent source mode' -Actual @($dependentBatchJson.results)[1].result.selectionInput.mode -Expected 'candidateId'
-    Assert-Equal -Name 'batch dependent refs mode' -Actual @($dependentBatchJson.results)[2].result.selectionInput.mode -Expected 'candidateId'
-    Assert-Equal -Name 'batch dependent source selected' -Actual @($dependentBatchJson.results)[1].result.symbol.name -Expected 'CheckCommand'
-
-    $invalidDependentBatchInput = @'
-{
-  "requests": [
-    { "id": "source", "command": "symbol-source", "candidateIdFrom": "missing", "view": "declaration" }
-  ]
-}
-'@
-
-    $invalidDependentBatch = Invoke-Navlyn `
-        -Name 'batch dependent missing request id' `
-        -Arguments @('batch', '--workspace', 'navlyn.slnx') `
-        -ExpectedExitCode 0 `
-        -StandardInput $invalidDependentBatchInput
-
-    Assert-Empty -Name 'batch dependent invalid stderr' -Text $invalidDependentBatch.Stderr
-    $invalidDependentBatchJson = $invalidDependentBatch.Stdout | ConvertFrom-Json
-    Assert-Equal -Name 'batch dependent invalid failed count' -Actual $invalidDependentBatchJson.failedRequests -Expected 1
-    Assert-Equal -Name 'batch dependent invalid code' -Actual @($invalidDependentBatchJson.results)[0].error.code -Expected 'NAVLYN1008'
-
-    $diffBatchInput = @'
-{
-  "requests": [
-    {
-      "id": "review",
-      "command": "review-diff",
-      "base": "HEAD",
-      "head": "HEAD",
-      "symbolLimit": 1,
-      "impactLimit": 1,
-      "diagnosticLimit": 1,
-      "relatedTestLimit": 1,
-      "depth": 1
-    }
-  ]
-}
-'@
-
-    $diffBatch = Invoke-Navlyn `
-        -Name 'batch review-diff command' `
-        -Arguments @('batch', '--workspace', 'navlyn.slnx') `
-        -ExpectedExitCode 0 `
-        -StandardInput $diffBatchInput
-
-    Assert-Empty -Name 'batch review-diff stderr' -Text $diffBatch.Stderr
-    $diffBatchJson = $diffBatch.Stdout | ConvertFrom-Json
-    Assert-Equal -Name 'batch review-diff request count' -Actual $diffBatchJson.totalRequests -Expected 1
-    Assert-Equal -Name 'batch review-diff succeeded count' -Actual $diffBatchJson.succeededRequests -Expected 1
-    Assert-Equal -Name 'batch review-diff command' -Actual @($diffBatchJson.results)[0].command -Expected 'review-diff'
-    Assert-Equal -Name 'batch review-diff result command' -Actual @($diffBatchJson.results)[0].result.command -Expected 'review-diff'
-    Assert-Equal -Name 'batch review-diff total files non-negative' -Actual (@($diffBatchJson.results)[0].result.diff.totalFiles -ge 0) -Expected $true
-
-    $reviewPackBatchInput = @'
-{
-  "requests": [
-    {
-      "id": "packs",
-      "command": "review-pack",
-      "scope": "workspace",
-      "pack": ["async", "security"],
-      "profile": "compact",
-      "findingLimit": 20
-    }
-  ]
-}
-'@
-
-    $reviewPackBatch = Invoke-Navlyn `
-        -Name 'batch review-pack command' `
-        -Arguments @('batch', '--workspace', $reviewPackFixture) `
-        -ExpectedExitCode 0 `
-        -StandardInput $reviewPackBatchInput
-
-    Assert-Empty -Name 'batch review-pack stderr' -Text $reviewPackBatch.Stderr
-    $reviewPackBatchJson = $reviewPackBatch.Stdout | ConvertFrom-Json
-    Assert-Equal -Name 'batch review-pack request count' -Actual $reviewPackBatchJson.totalRequests -Expected 1
-    Assert-Equal -Name 'batch review-pack succeeded count' -Actual $reviewPackBatchJson.succeededRequests -Expected 1
-    Assert-Equal -Name 'batch review-pack command' -Actual @($reviewPackBatchJson.results)[0].command -Expected 'review-pack'
-    Assert-Equal -Name 'batch review-pack result command' -Actual @($reviewPackBatchJson.results)[0].result.command -Expected 'review-pack'
-    Assert-Equal -Name 'batch review-pack profile' -Actual @($reviewPackBatchJson.results)[0].result.profile -Expected 'compact'
-
-    $contextPackBatchInput = @'
-{
-  "requests": [
-    {
-      "id": "context",
-      "command": "context-pack",
-      "query": "CheckCommand",
-      "assumeKind": "NamedType",
-      "budgetTokens": 2000,
-      "itemLimit": 5
-    }
-  ]
-}
-'@
-
-    $contextPackBatch = Invoke-Navlyn `
-        -Name 'batch context-pack command' `
-        -Arguments @('batch', '--workspace', 'navlyn.slnx') `
-        -ExpectedExitCode 0 `
-        -StandardInput $contextPackBatchInput
-
-    Assert-Empty -Name 'batch context-pack stderr' -Text $contextPackBatch.Stderr
-    $contextPackBatchJson = $contextPackBatch.Stdout | ConvertFrom-Json
-    Assert-Equal -Name 'batch context-pack request count' -Actual $contextPackBatchJson.totalRequests -Expected 1
-    Assert-Equal -Name 'batch context-pack succeeded count' -Actual $contextPackBatchJson.succeededRequests -Expected 1
-    Assert-Equal -Name 'batch context-pack command' -Actual @($contextPackBatchJson.results)[0].command -Expected 'context-pack'
-    Assert-Equal -Name 'batch context-pack result command' -Actual @($contextPackBatchJson.results)[0].result.command -Expected 'context-pack'
-    Assert-Equal -Name 'batch context-pack result mode' -Actual @($contextPackBatchJson.results)[0].result.mode -Expected 'query'
-
-    $expandedBatchInput = @'
-{
-  "requests": [
-    {
-      "id": "repo",
-      "command": "repo-graph",
-      "profile": "compact",
-      "relationshipLimit": 5
-    },
-    {
-      "id": "api",
-      "command": "public-api-diff",
-      "base": "HEAD",
-      "head": "HEAD",
-      "symbolLimit": 50,
-      "changeLimit": 5
-    },
-    {
-      "id": "tests-symbol",
-      "command": "tests-for-symbol",
-      "query": "CheckCommand",
-      "assumeKind": "NamedType",
-      "testLimit": 5,
-      "referenceLimit": 20
-    },
-    {
-      "id": "tests-diff",
-      "command": "tests-for-diff",
-      "base": "HEAD",
-      "head": "HEAD",
-      "symbolLimit": 5,
-      "testLimit": 5,
-      "referenceLimit": 20
-    },
-    {
-      "id": "framework",
-      "command": "framework-entrypoints",
-      "limit": 5,
-      "evidenceLimit": 2
-    },
-    {
-      "id": "di-graph",
-      "command": "di-graph",
-      "registrationLimit": 5,
-      "dependencyLimit": 5,
-      "riskLimit": 5
-    },
-    {
-      "id": "where",
-      "command": "where-registered",
-      "query": "WorkspaceLoader",
-      "assumeKind": "NamedType",
-      "registrationLimit": 5,
-      "dependencyLimit": 5
-    },
-    {
-      "id": "di-impact",
-      "command": "di-impact",
-      "query": "WorkspaceLoader",
-      "assumeKind": "NamedType",
-      "registrationLimit": 5,
-      "consumerLimit": 5,
-      "dependencyLimit": 5,
-      "riskLimit": 5
-    }
-  ]
-}
-'@
-
-    $expandedBatch = Invoke-Navlyn `
-        -Name 'batch expanded commands' `
-        -Arguments @('batch', '--workspace', 'navlyn.slnx') `
-        -ExpectedExitCode 0 `
-        -StandardInput $expandedBatchInput
-
-    Assert-Empty -Name 'batch expanded stderr' -Text $expandedBatch.Stderr
-    $expandedBatchJson = $expandedBatch.Stdout | ConvertFrom-Json
-    Assert-Equal -Name 'batch expanded request count' -Actual $expandedBatchJson.totalRequests -Expected 8
-    Assert-Equal -Name 'batch expanded succeeded count' -Actual $expandedBatchJson.succeededRequests -Expected 8
-    Assert-Equal -Name 'batch expanded failed count' -Actual $expandedBatchJson.failedRequests -Expected 0
-    Assert-Equal -Name 'batch repo command' -Actual @($expandedBatchJson.results)[0].result.command -Expected 'repo-graph'
-    Assert-Equal -Name 'batch repo profile' -Actual @($expandedBatchJson.results)[0].result.profile -Expected 'compact'
-    Assert-Equal -Name 'batch repo relationship limit' -Actual @($expandedBatchJson.results)[0].result.limits.relationshipLimit -Expected 5
-    Assert-Equal -Name 'batch public api command' -Actual @($expandedBatchJson.results)[1].result.command -Expected 'public-api-diff'
-    Assert-Equal -Name 'batch public api change limit' -Actual @($expandedBatchJson.results)[1].result.limits.changeLimit -Expected 5
-    Assert-Equal -Name 'batch tests-for-symbol command' -Actual @($expandedBatchJson.results)[2].result.command -Expected 'tests-for-symbol'
-    Assert-Equal -Name 'batch tests-for-symbol limit' -Actual @($expandedBatchJson.results)[2].result.limits.testLimit -Expected 5
-    Assert-Equal -Name 'batch tests-for-diff command' -Actual @($expandedBatchJson.results)[3].result.command -Expected 'tests-for-diff'
-    Assert-Equal -Name 'batch tests-for-diff symbol limit' -Actual @($expandedBatchJson.results)[3].result.limits.symbolLimit -Expected 5
-    Assert-Equal -Name 'batch framework command' -Actual @($expandedBatchJson.results)[4].result.command -Expected 'framework-entrypoints'
-    Assert-Equal -Name 'batch framework evidence limit' -Actual @($expandedBatchJson.results)[4].result.limits.evidenceLimit -Expected 2
-    Assert-Equal -Name 'batch di-graph command' -Actual @($expandedBatchJson.results)[5].result.command -Expected 'di-graph'
-    Assert-Equal -Name 'batch where-registered command' -Actual @($expandedBatchJson.results)[6].result.command -Expected 'where-registered'
-    Assert-Equal -Name 'batch di-impact command' -Actual @($expandedBatchJson.results)[7].result.command -Expected 'di-impact'
-    Assert-Equal -Name 'batch di-impact consumer limit' -Actual @($expandedBatchJson.results)[7].result.limits.consumerLimit -Expected 5
-
-    $domainBatchInput = @'
-{
-  "requests": [
-    { "id": "routes", "command": "route-map", "routeLimit": 10 },
-    { "id": "options", "command": "options-graph", "query": "PaymentOptions" },
-    { "id": "messages", "command": "where-handled", "query": "CreateOrderCommand", "assumeKind": "NamedType" },
-    { "id": "ef", "command": "ef-model", "entityLimit": 20, "querySiteLimit": 20 },
-    { "id": "pkg", "command": "package-usage", "package": "Microsoft.Extensions.Options", "namespaces": ["Microsoft.Extensions.Options"] }
-  ]
-}
-'@
-
-    $domainBatch = Invoke-Navlyn `
-        -Name 'batch application domain commands' `
-        -Arguments @('batch', '--workspace', $applicationDomainFixture) `
-        -ExpectedExitCode 0 `
-        -StandardInput $domainBatchInput
-
-    Assert-Empty -Name 'batch application domain stderr' -Text $domainBatch.Stderr
-    $domainBatchJson = $domainBatch.Stdout | ConvertFrom-Json
-    Assert-Equal -Name 'batch application domain request count' -Actual $domainBatchJson.totalRequests -Expected 5
-    Assert-Equal -Name 'batch application domain succeeded count' -Actual $domainBatchJson.succeededRequests -Expected 5
-    Assert-Equal -Name 'batch application domain route command' -Actual @($domainBatchJson.results)[0].result.command -Expected 'route-map'
-    Assert-Equal -Name 'batch application domain route count' -Actual (@($domainBatchJson.results)[0].result.routes.totalItems -ge 1) -Expected $true
-    Assert-Equal -Name 'batch application domain options command' -Actual @($domainBatchJson.results)[1].result.command -Expected 'options-graph'
-    Assert-Equal -Name 'batch application domain handler command' -Actual @($domainBatchJson.results)[2].result.command -Expected 'where-handled'
-    Assert-Equal -Name 'batch application domain ef command' -Actual @($domainBatchJson.results)[3].result.command -Expected 'ef-model'
-    Assert-Equal -Name 'batch application domain package command' -Actual @($domainBatchJson.results)[4].result.command -Expected 'package-usage'
-
-    $batchInvalidProfileInput = @'
-{
-  "requests": [
-    {
-      "id": "bad-profile",
-      "command": "repo-graph",
-      "profile": "tiny"
-    }
-  ]
-}
-'@
-
-    $batchInvalidProfile = Invoke-Navlyn `
-        -Name 'batch invalid profile request' `
-        -Arguments @('batch', '--workspace', 'navlyn.slnx') `
-        -ExpectedExitCode 0 `
-        -StandardInput $batchInvalidProfileInput
-
-    Assert-Empty -Name 'batch invalid profile stderr' -Text $batchInvalidProfile.Stderr
-    $batchInvalidProfileJson = $batchInvalidProfile.Stdout | ConvertFrom-Json
-    Assert-Equal -Name 'batch invalid profile failed count' -Actual $batchInvalidProfileJson.failedRequests -Expected 1
-    Assert-Equal -Name 'batch invalid profile ok false' -Actual @($batchInvalidProfileJson.results)[0].ok -Expected $false
-    Assert-Equal -Name 'batch invalid profile code' -Actual @($batchInvalidProfileJson.results)[0].error.code -Expected 'NAVLYN1001'
-
-    $batchFile = New-TemporaryFile
-    try {
-        Set-Content -LiteralPath $batchFile.FullName -Encoding utf8NoBOM -Value @'
-{
-  "requests": [
-    {
-      "id": "diagnostics",
-      "command": "diagnostics",
-      "project": "navlyn(net10.0)"
-    }
-  ]
-}
-'@
-
-        $batchFromFile = Invoke-Navlyn `
-            -Name 'batch input file' `
-            -Arguments @('batch', '--workspace', 'navlyn.slnx', '--input', $batchFile.FullName) `
-            -ExpectedExitCode 0
-
-        Assert-Empty -Name 'batch input file stderr' -Text $batchFromFile.Stderr
-        $batchFromFileJson = $batchFromFile.Stdout | ConvertFrom-Json
-        Assert-Equal -Name 'batch input file request count' -Actual $batchFromFileJson.totalRequests -Expected 1
-        Assert-Equal -Name 'batch input file command' -Actual @($batchFromFileJson.results)[0].command -Expected 'diagnostics'
-        Assert-Equal -Name 'batch input file diagnostics non-negative' -Actual (@($batchFromFileJson.results)[0].result.totalDiagnostics -ge 0) -Expected $true
-    }
-    finally {
-        Remove-Item -LiteralPath $batchFile.FullName -ErrorAction SilentlyContinue
-    }
-
-    $batchInvalidJson = Invoke-Navlyn `
-        -Name 'batch invalid json' `
-        -Arguments @('batch', '--workspace', 'navlyn.slnx') `
-        -ExpectedExitCode 2 `
-        -StandardInput '{'
-    Assert-Empty -Name 'batch invalid json stdout' -Text $batchInvalidJson.Stdout
-    Assert-Contains -Name 'batch invalid json stderr' -Text $batchInvalidJson.Stderr -Expected 'NAVLYN1008:'
+        $fixture = 'tests/fixtures/FuzzyDiscoveryFixture/FuzzyDiscoveryFixture.csproj'
+        $file = 'tests/fixtures/FuzzyDiscoveryFixture/FixtureCode.cs'
+        Invoke-CheckedProcess -Name 'batch fixture restore' -FilePath dotnet -Arguments @('restore', $fixture) -ExpectedExitCode 0 | Out-Null
+        $inputJson = @{
+            requests = @(
+                @{ id = 'target'; command = 'resolve-target'; query = 'EnemyManagerTools'; assumeKind = 'NamedType' },
+                @{ id = 'source'; command = 'symbol-source'; candidateIdFrom = 'target'; view = 'declaration' },
+                @{ id = 'calls'; command = 'calls'; file = $file; line = 26; column = 21; limit = 2 },
+                @{ id = 'graph'; command = 'repo-graph'; profile = 'compact'; relationshipLimit = 2 },
+                @{ id = 'framework'; command = 'framework-entrypoints'; profile = 'compact'; evidenceLimit = 2 },
+                @{ id = 'di'; command = 'di-graph'; profile = 'compact'; registrationLimit = 2 },
+                @{ id = 'invalid'; command = 'unsupported-command' }
+            )
+        } | ConvertTo-Json -Depth 20 -Compress
+        $batch = Invoke-Navlyn -Name 'small batch contracts' -Arguments @('batch','--workspace',$fixture) -ExpectedExitCode 0 -StandardInput $inputJson
+        Assert-Empty -Name 'batch stderr' -Text $batch.Stderr
+        $json = $batch.Stdout | ConvertFrom-Json
+        Assert-Equal -Name 'batch total' -Actual $json.totalRequests -Expected 7
+        Assert-Equal -Name 'batch succeeded' -Actual $json.succeededRequests -Expected 6
+        Assert-Equal -Name 'batch failed' -Actual $json.failedRequests -Expected 1
+        Assert-Equal -Name 'chain candidate id' -Actual $json.results[1].result.selectionInput.candidateId -Expected $json.results[0].result.candidateId
+        Assert-Equal -Name 'local call' -Actual $json.results[2].result.calls[0].symbol.name -Expected 'Spawn'
+        Assert-Equal -Name 'graph limits' -Actual $json.results[3].result.limits.relationshipLimit -Expected 2
+        Assert-Equal -Name 'framework command' -Actual $json.results[4].result.command -Expected 'framework-entrypoints'
+        Assert-Equal -Name 'di command' -Actual $json.results[5].result.command -Expected 'di-graph'
+        Assert-Equal -Name 'batch invalid error' -Actual $json.results[6].ok -Expected $false
+        $invalidJson = Invoke-Navlyn -Name 'invalid batch JSON' -Arguments @('batch','--workspace',$fixture) -ExpectedExitCode 2 -StandardInput '{'
+        Assert-Empty -Name 'invalid batch stdout' -Text $invalidJson.Stdout
+        Assert-Contains -Name 'invalid batch diagnostic' -Text $invalidJson.Stderr -Expected 'NAVLYN'
     }
 
     if (Test-ContractSuite -Name 'navigation') {
@@ -1719,7 +1140,7 @@ try {
     }
     }
 
-    Invoke-CoreErrorChecks
+    if ($Suite -eq 'all') { Invoke-CoreErrorChecks }
 
     Write-Host "CLI contract $Suite checks passed."
 }

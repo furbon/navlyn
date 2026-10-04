@@ -33,18 +33,7 @@ For MCP clients, use `navlyn_file_outline` for one known source file, `navlyn_ta
 
 ## Verification
 
-For general code changes, start with:
-
-```powershell
-dotnet restore navlyn.slnx
-dotnet build navlyn.slnx
-dotnet test navlyn.slnx --no-build
-./scripts/test-quick.ps1 -NoBuild
-```
-
-For CLI contract changes, also run `./scripts/test-cli-contract.ps1 -NoBuild` with a 600 second automation timeout and manually inspect the affected command. For semantic navigation behavior, add or update xUnit resolver component coverage when possible, then run the focused fixture scripts that match the change. For large refactors or release preparation, run `./scripts/test-release.ps1`. Timeout and file-lock guidance lives in `docs/navlyn-development-workflow.md`.
-
-If CLI behavior changes, run the affected command manually and inspect stdout, stderr, deterministic JSON shape, and exit behavior.
+Use the smallest useful check for the change: focused xUnit component tests and one affected command or fixture. For integrated changes, `./scripts/test-quick.ps1` builds once, runs product tests on .NET 10 once, and runs a small portable CLI smoke. Reuse successful outputs with `-NoBuild -SkipDotnetTest` rather than repeating checks. Release preparation adds `./scripts/test-release.ps1 -NoBuild -SkipDotnetTest`. CI runs the full product suite on Windows and small transport/CLI checks on Linux/macOS; packaging and installed-package smoke use one retained build. Do not make every fixture, live evaluation, or historical scoring campaign a release gate. See `docs/navlyn-development-workflow.md` for focused commands and diagnostics.
 
 ## Documentation
 

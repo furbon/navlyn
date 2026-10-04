@@ -6,6 +6,7 @@ using Navlyn.Workspaces;
 
 namespace Navlyn.Tests.Symbols;
 
+[Collection(ExternalReadCollection.Name)]
 public sealed class ExternalLibrarySourceContractTests
 {
     [Theory]

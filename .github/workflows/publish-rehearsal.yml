@@ -10,11 +10,11 @@ jobs:
   rehearse:
     name: NuGet publish rehearsal (Ubuntu)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 12
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
@@ -25,7 +25,7 @@ jobs:
           if ((git rev-parse HEAD).Trim() -ne $env:GITHUB_SHA) { throw 'Checked-out commit differs from the dispatched commit.' }
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: |
             8.0.x
@@ -37,7 +37,7 @@ jobs:
 
       - name: Pack release
         shell: pwsh
-        run: ./scripts/pack-release.ps1 -NoValidation -Output artifacts/packages
+        run: ./scripts/pack-release.ps1 -NoValidation -NoBuild -Output artifacts/packages
 
       - name: Validate package contract
         shell: pwsh
@@ -45,7 +45,7 @@ jobs:
 
       - name: Retain rehearsal package bytes
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: navlyn-publish-rehearsal
           path: artifacts/packages

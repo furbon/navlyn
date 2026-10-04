@@ -6,7 +6,7 @@ Run the checked-in v2 baseline from the repository root:
 
 ```powershell
 ./scripts/test-tool-selection-eval.ps1 -UseBaselineTraces
-dotnet test navlyn.Tests/navlyn.Tests.csproj --no-restore --framework net10.0 --filter FullyQualifiedName~ToolSelectionEvalTests
+./scripts/test-tool-selection-eval.ps1
 ```
 
 To score an observed run, provide a trace file with schemaVersion `navlyn.tool-selection-eval.trace.v2` and one trace per scenario id. Each call records an explicit `kind` (`mcp` or `ordinary`), exact invoked name, actual arguments, and selected result fields. MCP names must be from the current 25-tool surface; ordinary actions are `file-read`, `rg`, `git`, `build`, or `test`. A CLI logical command is not an MCP tool name. Include skill activation, stop reason, semantic checks, claims, availability/freshness environment, stdout character count, latency, `outputValid`, and stderr cleanliness. `outputValid` means valid MCP JSON for MCP calls, or the expected captured output format for the named ordinary action; it does not mean every ordinary output is JSON. MCP selected-result evidence is nested under the actual envelope key, for example `result.command` for success or `error.message` for a reported failure; ordinary evidence names the selected action output, such as `stdout` or `exitCode`. The baseline traces are synthetic contract fixtures, not captured product telemetry.

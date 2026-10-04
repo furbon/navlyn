@@ -19,7 +19,8 @@ function Initialize-NavlynTestHarness {
 
     $targetFramework = Get-NavlynPreferredTargetFramework -ProjectPath $script:NavlynTestProjectPath
     $script:NavlynTestTargetFramework = $targetFramework
-    $script:NavlynTestDll = Join-Path $script:NavlynTestProjectDir "bin/Debug/$targetFramework/navlyn.dll"
+    $configuration = if ($env:NAVLYN_TEST_CONFIGURATION) { $env:NAVLYN_TEST_CONFIGURATION } else { 'Debug' }
+    $script:NavlynTestDll = Join-Path $script:NavlynTestProjectDir "bin/$configuration/$targetFramework/navlyn.dll"
 }
 
 function Invoke-CheckedProcess {
@@ -31,6 +32,7 @@ function Invoke-CheckedProcess {
         [string]$FilePath,
 
         [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
         [string[]]$Arguments,
 
         [Parameter(Mandatory = $true)]
@@ -38,7 +40,9 @@ function Invoke-CheckedProcess {
 
         [string]$WorkingDirectory = $script:NavlynTestRepoRoot,
 
-        [string]$StandardInput = $null
+        [string]$StandardInput = $null,
+
+        [ValidateRange(1, 600)][int]$TimeoutSeconds = 60
     )
 
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
@@ -50,20 +54,39 @@ function Invoke-CheckedProcess {
     $startInfo.StandardOutputEncoding = [System.Text.Encoding]::UTF8
     $startInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8
     $startInfo.UseShellExecute = $false
-    $startInfo.Arguments = Join-ProcessArguments -Arguments $Arguments
+    foreach ($argument in $Arguments) { $startInfo.ArgumentList.Add($argument) }
 
-    $process = [System.Diagnostics.Process]::Start($startInfo)
-    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
-    $stderrTask = $process.StandardError.ReadToEndAsync()
-    if ($null -ne $StandardInput) {
-        $process.StandardInput.Write($StandardInput)
-        $process.StandardInput.Close()
+    $deadline = [Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds($TimeoutSeconds))
+    $process = $null
+    try {
+        $process = [System.Diagnostics.Process]::Start($startInfo)
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync($deadline.Token)
+        $stderrTask = $process.StandardError.ReadToEndAsync($deadline.Token)
+        if ($null -ne $StandardInput) {
+            [void]$process.StandardInput.WriteAsync([MemoryExtensions]::AsMemory($StandardInput), $deadline.Token).GetAwaiter().GetResult()
+            $process.StandardInput.Close()
+        }
+        [void]$process.WaitForExitAsync($deadline.Token).GetAwaiter().GetResult()
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+        $exitCode = $process.ExitCode
     }
-
-    $process.WaitForExit()
-    $stdout = $stdoutTask.GetAwaiter().GetResult()
-    $stderr = $stderrTask.GetAwaiter().GetResult()
-    $exitCode = $process.ExitCode
+    catch {
+        if ($deadline.IsCancellationRequested) {
+            if ($null -ne $process -and !$process.HasExited) { $process.Kill($true); $process.WaitForExit() }
+            $partialOut = if ($null -ne $process -and $stdoutTask.IsCompletedSuccessfully) { $stdoutTask.GetAwaiter().GetResult() } else { '' }
+            $partialError = if ($null -ne $process -and $stderrTask.IsCompletedSuccessfully) { $stderrTask.GetAwaiter().GetResult() } else { '' }
+            throw "$Name exceeded its $TimeoutSeconds second process deadline. Command: $FilePath $($Arguments -join ' ')`nstdout:`n$partialOut`nstderr:`n$partialError"
+        }
+        throw
+    }
+    finally {
+        if ($null -ne $process) {
+            if (!$process.HasExited) { $process.Kill($true); $process.WaitForExit() }
+            $process.Dispose()
+        }
+        $deadline.Dispose()
+    }
 
     if ($exitCode -ne $ExpectedExitCode) {
         throw @"
@@ -128,33 +151,6 @@ function Write-ProcessResult {
     else {
         Write-Host $Result.Stderr.TrimEnd()
     }
-}
-
-function Join-ProcessArguments {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string[]]$Arguments
-    )
-
-    ($Arguments | ForEach-Object { ConvertTo-ProcessArgument -Argument $_ }) -join ' '
-}
-
-function ConvertTo-ProcessArgument {
-    param(
-        [Parameter(Mandatory = $true)]
-        [AllowEmptyString()]
-        [string]$Argument
-    )
-
-    if ($Argument.Length -eq 0) {
-        return '""'
-    }
-
-    if ($Argument.IndexOfAny([char[]]@(' ', "`t", '"')) -lt 0) {
-        return $Argument
-    }
-
-    return '"' + $Argument.Replace('"', '\"') + '"'
 }
 
 function Invoke-Navlyn {

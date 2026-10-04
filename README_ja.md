@@ -21,7 +21,7 @@ Codex に Navlyn を使う場面も覚えさせる場合は、[Codex 用スキ�
 調べたいリポジトリを読み込める .NET SDK が必要です。NuGet からツールをインストールします。
 
 ```powershell
-dotnet tool install --global navlyn --version 0.8.6
+dotnet tool install --global navlyn --version 0.8.7
 ```
 
 新しいターミナルを開き、調べたいリポジトリのルートで `navlyn` が対象を見つけられるか確認します。

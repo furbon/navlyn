@@ -53,7 +53,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
@@ -66,7 +66,7 @@ jobs:
           EXPECTED_SHA: ${{ inputs.expected-main-sha }}
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: |
             8.0.x
@@ -92,7 +92,7 @@ jobs:
       - name: Retain immutable exact inputs before publication
         if: inputs.mode == 'normal'
         id: prepush
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: navlyn-publication-inputs-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/publication-inputs
@@ -127,7 +127,7 @@ jobs:
           }
 
       - name: NuGet login
-        uses: NuGet/login@v1
+        uses: NuGet/login@ebc737b6fc418a6ca0073cf116ec8dc156d8b81e # v1
         id: nuget-login
         with:
           user: ${{ vars.NUGET_USER }}
@@ -143,7 +143,7 @@ jobs:
       - name: Retain attempt journal on every outcome
         if: always()
         id: journal
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: navlyn-publication-journal-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/publication-attempt/journal/navlyn-publication-journal.json
@@ -160,7 +160,7 @@ jobs:
 
       - name: Retain publication diagnostics
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: navlyn-publication-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: |

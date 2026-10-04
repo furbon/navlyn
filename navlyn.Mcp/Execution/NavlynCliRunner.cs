@@ -137,32 +137,43 @@ internal sealed class NavlynCliRunner(NavlynMcpServerOptions options) : INavlynC
             StartInfo = startInfo
         };
 
-        process.Start();
-
-        Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        Task<string> stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-        if (standardInput is not null)
-        {
-            await process.StandardInput.WriteAsync(standardInput.AsMemory(), cancellationToken);
-            process.StandardInput.Close();
-        }
-
         using CancellationTokenSource timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(options.TimeoutMilliseconds);
+        timeoutSource.Token.ThrowIfCancellationRequested();
+        process.Start();
+
+        Task<string> stdoutTask = ReadBoundedAsync(process.StandardOutput, options.MaxJsonChars, timeoutSource.Token);
+        Task<string> stderrTask = ReadBoundedAsync(process.StandardError, StderrLimit, timeoutSource.Token);
         bool timedOut = false;
         try
         {
+            if (standardInput is not null)
+            {
+                await process.StandardInput.WriteAsync(standardInput.AsMemory(), timeoutSource.Token);
+                process.StandardInput.Close();
+            }
+
             await process.WaitForExitAsync(timeoutSource.Token);
+            await Task.WhenAll(stdoutTask, stderrTask);
+            timedOut = timeoutSource.IsCancellationRequested;
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (timeoutSource.IsCancellationRequested)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             timedOut = true;
+        }
+        finally
+        {
+            // A caller's token can also be the service deadline. Always stop and reap the
+            // process before returning, including failures while writing batch stdin.
             TryKill(process);
+            await process.WaitForExitAsync(CancellationToken.None);
+            await Task.WhenAll(stdoutTask, stderrTask);
         }
 
-        string stdout = await CompleteReadAsync(stdoutTask);
-        string stderr = await CompleteReadAsync(stderrTask);
-        int exitCode = process.HasExited ? process.ExitCode : -1;
+        string stdout = await stdoutTask;
+        string stderr = await stderrTask;
+        int exitCode = process.ExitCode;
         return new NavlynCliResult(exitCode, stdout, Cap(stderr, StderrLimit), timedOut);
     }
 
@@ -217,15 +228,24 @@ internal sealed class NavlynCliRunner(NavlynMcpServerOptions options) : INavlynC
         }
     }
 
-    private static async Task<string> CompleteReadAsync(Task<string> task)
+    private static async Task<string> ReadBoundedAsync(StreamReader reader, int limit, CancellationToken cancellationToken)
     {
+        StringBuilder text = new();
+        char[] buffer = new char[4096];
         try
         {
-            return await task;
+            int count;
+            while ((count = await reader.ReadAsync(buffer.AsMemory(), cancellationToken)) != 0)
+            {
+                // Retain one extra character to signal overflow while draining the pipe.
+                int retained = (int)Math.Min(count, Math.Max(0L, (long)limit + 1 - text.Length));
+                text.Append(buffer, 0, retained);
+            }
         }
         catch (OperationCanceledException)
         {
-            return "";
         }
+
+        return text.ToString();
     }
 }

@@ -5,6 +5,9 @@ using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Navlyn.Mcp.Tools;
+using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol.Client;
 
 namespace Navlyn.Tests.TestSupport;
 
@@ -12,6 +15,8 @@ internal sealed class ExternalLibrarySourceFixture
 {
     private static readonly SemaphoreSlim SetupLock = new(1, 1);
     private static Task? setupTask;
+    private static ExternalLibrarySourceFixture? shared;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<McpClient>> readers = new();
 
     private readonly string root;
     private readonly string fixtureRoot;
@@ -47,19 +52,19 @@ internal sealed class ExternalLibrarySourceFixture
     public static async Task<ExternalLibrarySourceFixture> PrepareAsync()
     {
         string root = FindRepositoryRoot();
-        ExternalLibrarySourceFixture fixture = new(root);
         await SetupLock.WaitAsync();
         try
         {
+            ExternalLibrarySourceFixture fixture = shared ??= new(root);
             setupTask ??= fixture.BuildFromSourceAsync();
             await setupTask;
+            return fixture;
         }
         finally
         {
             SetupLock.Release();
         }
 
-        return fixture;
     }
 
     public async Task<CliResult> RunReadAsync(
@@ -73,39 +78,48 @@ internal sealed class ExternalLibrarySourceFixture
         int? maxLines = null,
         int? budgetTokens = null)
     {
-        List<string> arguments =
-        [
-            "read", "--workspace", project,
-            "--file", source,
-            "--line", line.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            "--column", column.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            "--view", view
-        ];
-        if (projectName is not null)
+        bool sharedProject = project.StartsWith(fixtureRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        McpClient client = sharedProject ? await readers.GetOrAdd(project, CreateReaderAsync) : await CreateReaderAsync(project);
+        try
         {
-            arguments.Add("--project");
-            arguments.Add(projectName);
+            using CancellationTokenSource deadline = new(TimeSpan.FromSeconds(20));
+            var response = await client.CallToolAsync(NavlynMcpTools.ReadTool, new Dictionary<string, object?>
+            {
+                ["file"] = source, ["line"] = line, ["column"] = column, ["view"] = view,
+                ["project"] = projectName, ["maxLines"] = maxLines, ["budgetTokens"] = budgetTokens,
+                ["externalSource"] = externalSource
+            }, cancellationToken: deadline.Token);
+            JsonElement result = response.StructuredContent!.Value;
+            return result.GetProperty("ok").GetBoolean()
+                ? new(0, result.GetProperty("result").GetRawText(), "")
+                : new(1, "", result.GetProperty("error").ToString());
         }
-
-        if (externalSource is not null)
+        finally
         {
-            arguments.Add("--external-source");
-            arguments.Add(externalSource);
+            if (!sharedProject) { await client.DisposeAsync(); }
         }
+    }
 
-        if (maxLines is not null)
+    private async Task<McpClient> CreateReaderAsync(string project)
+    {
+        string framework = Path.GetFileName(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory));
+        string configuration = Directory.GetParent(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory))!.Name;
+        StdioClientTransport transport = new(new StdioClientTransportOptions
         {
-            arguments.Add("--max-lines");
-            arguments.Add(maxLines.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        }
+            Command = "dotnet",
+            Arguments = [Path.Combine(root, "navlyn.Mcp", "bin", configuration, framework, "navlyn.Mcp.dll"),
+                "--workspace", project, "--working-directory", root, "--timeout-ms", "15000"],
+            WorkingDirectory = root,
+            EnvironmentVariables = new Dictionary<string, string?> { ["NUGET_PACKAGES"] = PackagesHome }
+        }, NullLoggerFactory.Instance);
+        return await McpClient.CreateAsync(transport);
+    }
 
-        if (budgetTokens is not null)
-        {
-            arguments.Add("--budget-tokens");
-            arguments.Add(budgetTokens.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        }
-
-        return await RunProcessAsync("dotnet", [CliAssembly, .. arguments], root, TimeSpan.FromSeconds(180));
+    internal static async Task DisposeReadersAsync()
+    {
+        if (shared is null) { return; }
+        foreach (Task<McpClient> reader in shared.readers.Values) { await (await reader).DisposeAsync(); }
+        shared.readers.Clear();
     }
 
     public (int Line, int Column) Position(string sourcePath, string lineMarker, string target)

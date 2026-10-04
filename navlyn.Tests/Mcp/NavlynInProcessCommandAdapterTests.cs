@@ -44,7 +44,7 @@ public sealed class NavlynInProcessCommandAdapterTests
             [
                 "find",
                 "--workspace",
-                "navlyn.slnx",
+                "tests/fixtures/FuzzyDiscoveryFixture/FuzzyDiscoveryFixture.csproj",
                 "--workspace-root-policy",
                 WorkspaceLoader.FormatWorkspaceRootPolicy(NavlynMcpServerOptions.DefaultWorkspaceRootPolicy),
                 "--query",
@@ -61,7 +61,7 @@ public sealed class NavlynInProcessCommandAdapterTests
         NavlynToolResult result = await adapter.RunAsync(
             NavlynMcpTools.WorkspaceSummaryTool,
             "repo-graph",
-            ["--project", "Navlyn.Core(net10.0)", "--relationship-limit", "10", "--profile", "compact"],
+            ["--project", "FuzzyDiscoveryFixture", "--relationship-limit", "10", "--profile", "compact"],
             standardInput: null,
             CancellationToken.None);
 
@@ -96,7 +96,7 @@ public sealed class NavlynInProcessCommandAdapterTests
         NavlynToolResult result = await adapter.RunAsync(
             NavlynMcpTools.WorkspaceSummaryTool,
             "repo-graph",
-            ["--project", "Navlyn.Core(net10.0)", "--relationship-limit", "10"],
+            ["--project", "FuzzyDiscoveryFixture", "--relationship-limit", "10"],
             standardInput: null,
             CancellationToken.None);
 
@@ -108,8 +108,8 @@ public sealed class NavlynInProcessCommandAdapterTests
     {
         string repoRoot = FindRepositoryRoot();
         return new NavlynMcpServerOptions(
-            Workspace: Path.Combine(repoRoot, "navlyn.slnx"),
-            WorkspaceArgument: "navlyn.slnx",
+            Workspace: Path.Combine(repoRoot, "tests", "fixtures", "FuzzyDiscoveryFixture", "FuzzyDiscoveryFixture.csproj"),
+            WorkspaceArgument: "tests/fixtures/FuzzyDiscoveryFixture/FuzzyDiscoveryFixture.csproj",
             NavlynExecutable: null,
             NavlynArguments: [],
             WorkingDirectory: repoRoot,

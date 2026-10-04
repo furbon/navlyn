@@ -21,7 +21,7 @@ To help Codex choose when to use Navlyn, see [install the Codex routing skill](h
 You need a .NET SDK that can load the repository you want to inspect. Install the tools from NuGet:
 
 ```powershell
-dotnet tool install --global navlyn --version 0.8.6
+dotnet tool install --global navlyn --version 0.8.7
 ```
 
 Open a new terminal at the root of the repository you want to inspect and check that Navlyn can select a workspace:

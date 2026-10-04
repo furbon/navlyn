@@ -47,6 +47,8 @@ Use the performance script from the repository root:
 ./scripts/measure-navlyn-performance.ps1 -Workspace navlyn.slnx -Scenario quick -Iterations 1 -Warmup 0 -NoBuild -IncludeStageTimings
 ```
 
+For `-Scenario mcp`, all warmup and measured rounds use one persistent server. Reports include commit, dirty state, tool version, OS, SDK, processor count, iteration/warmup counts, and each tool's cold/warm cache phase. Use `-Baseline <report>` for per-command comparisons on the same environment; mismatched workspace, scenario, profile, OS, SDK, or processor count is rejected. Adapter calls report `adapter` as their phase because they do not reuse the direct workspace cache.
+
 Reports are structured JSON with:
 
 - command/tool name and arguments;
