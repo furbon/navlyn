@@ -64,6 +64,8 @@ MCP measurements repeat calls within one server session. Reports separate cold/w
 
 ## Versions and environment failures
 
+For an optional complete-task comparison, run `node scripts/measure-navlyn-adoption.mjs --client <codex-executable> --cli-dll <built-navlyn.dll> --server-dll <built-navlyn.Mcp.dll> --disable-server <unrelated-server-name> --routing-skill --attempts 2 --output artifacts/adoption/<fresh-directory>`. It needs Node, .NET 10 and an authenticated client; it is not a CI gate. Repeat `--disable-server` for configured unrelated servers. Default tasks cover a directly readable setting and a bound DLL body; `--tasks config,binary,interface` also covers the small caller fixture. No Navlyn invocation or skill read is required. Keep all attempts, including failures and no-call conditions; record model/client/commit, actual tool use, correctness, time, total/cached input and event timestamps. The MCP proxy enables opt-in server timing and records it separately from protocol stdout. Compare equivalent evidence/scope, separate cold/warm costs, and avoid tests/builds running alongside timed model trials.
+
 `update-release-version.ps1 -Version <version>` updates current instructions and tool manifests while preserving historical/dates evidence and changelog history. Add current changelog entries and release notes separately.
 
 The common process harness uses `ArgumentList`, concurrently drains both output streams, and applies a sixty-second per-process deadline by default. Build and product-test callers use explicit larger bounds. Timeouts kill/reap the owned process tree and report the command and available output. Do not increase limits to hide repeated setup or deadlocks.

@@ -2,7 +2,9 @@
 
 [English](navlyn-codex-routing-skill.md)
 
-Codex 用の `navlyn-semantic-routing` スキルは、C# や Visual Basic の型・メソッドについて、Navlyn を使うべき場面を Codex に伝えるファイルです。Navlyn のツールを実際に呼べるようにするには、先に [Codex の MCP 設定](navlyn-client-setup_ja.md#codex)を済ませます。
+任意の `navlyn-semantic-routing` スキルは、C# や Visual Basic の束縛が不確かな場面で、意味的な証拠を得る方法を Codex に伝えます。必要時だけ使う場合は、インストール済みの `navlyn` CLI で足り、MCP サーバーの常時起動は不要です。同じセッションで意味解析を繰り返す場合は、[Codex の MCP 設定](navlyn-client-setup_ja.md#codex)でワークスペースを再利用できます。通常の読取り・検索・明確な局所編集には通常ツールを使います。
+
+軽量な CLI 導線として、リポジトリの指示に「束縛や関係が不確かな場合に Navlyn CLI を利用できる。既知の呼出し位置には `navlyn read --workspace <project> --file <source> --line <line> --column <column> --view body --external-source decompiled` で参照メンバーの本体を取得できる」と記載できます。以下のスキルは追加の判断支援であり、ファイル読取りの前提ではありません。
 
 ## 1. Navlyn のソースを用意する
 
@@ -27,7 +29,7 @@ New-Item -ItemType Directory -Force $skillRoot | Out-Null
 Get-ChildItem (Join-Path $skillRoot 'navlyn-semantic-routing')
 ```
 
-`SKILL.md` と `references` が表示されたら、Codex の新しいセッションを作ります。C# の型やメソッドの参照元を調べるよう依頼し、必要に応じて Navlyn のツールが選ばれるか確認します。スキルの導入だけでは MCP 接続の確認にならないため、[MCP の接続確認](navlyn-client-setup_ja.md#codex)も実行します。
+`SKILL.md` と `references` が表示されたら、Codex の新しいセッションを作り、束縛が不確かな事実を依頼して実際のツール選択を確認します。スキルは実行ツールをインストールしません。CLI は `navlyn --version`、MCP を選んだ場合は [MCP の接続確認](navlyn-client-setup_ja.md#codex)で確認します。
 
 ## 更新と削除
 

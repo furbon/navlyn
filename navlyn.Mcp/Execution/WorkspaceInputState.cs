@@ -52,56 +52,63 @@ internal sealed class WorkspaceInputState
         IEnumerable<string>? projectDirectories = null,
         bool scanSourceTrees = true)
     {
-        string root = Path.GetFullPath(workspaceRoot);
         HashSet<string> paths = new(PathComparer);
         List<string> inventoryErrors = [];
-        List<string> roots = GetSweepRoots(root, additionalRoots);
-        foreach (string path in selectedInputs.Concat(loadedInputs))
+        string[] sortedPaths;
+        using (NavlynMcpTimingScope.Measure("input.inventory"))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            AddPath(paths, path);
-        }
-
-        foreach (string sweepRoot in roots)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
+            string root = Path.GetFullPath(workspaceRoot);
+            List<string> roots = GetSweepRoots(root, additionalRoots);
+            foreach (string path in selectedInputs.Concat(loadedInputs))
             {
-                if (scanSourceTrees)
+                cancellationToken.ThrowIfCancellationRequested();
+                AddPath(paths, path);
+            }
+
+            foreach (string sweepRoot in roots)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                try
                 {
-                    AddTreeInputs(sweepRoot, paths, inventoryErrors, cancellationToken);
+                    if (scanSourceTrees)
+                    {
+                        AddTreeInputs(sweepRoot, paths, inventoryErrors, cancellationToken);
+                    }
+                }
+                catch (Exception exception) when (IsFileSystemException(exception))
+                {
+                    inventoryErrors.Add($"{Normalize(sweepRoot)}: inventory failed ({exception.GetType().Name})");
+                }
+
+                AddAncestorConfigurationInputs(sweepRoot, paths, cancellationToken);
+            }
+
+            foreach (string projectDirectory in projectDirectories?.Distinct(PathComparer) ?? [])
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    AddBuildAssetsInput(projectDirectory, paths, inventoryErrors);
+                }
+                catch (Exception exception) when (IsFileSystemException(exception))
+                {
+                    inventoryErrors.Add($"{Normalize(projectDirectory)}: assets inventory failed ({exception.GetType().Name})");
                 }
             }
-            catch (Exception exception) when (IsFileSystemException(exception))
-            {
-                inventoryErrors.Add($"{Normalize(sweepRoot)}: inventory failed ({exception.GetType().Name})");
-            }
 
-            AddAncestorConfigurationInputs(sweepRoot, paths, cancellationToken);
+            sortedPaths = paths.OrderBy(path => path, PathComparer).ThenBy(path => path, StringComparer.Ordinal).ToArray();
         }
-
-        foreach (string projectDirectory in projectDirectories?.Distinct(PathComparer) ?? [])
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                AddBuildAssetsInput(projectDirectory, paths, inventoryErrors);
-            }
-            catch (Exception exception) when (IsFileSystemException(exception))
-            {
-                inventoryErrors.Add($"{Normalize(projectDirectory)}: assets inventory failed ({exception.GetType().Name})");
-            }
-        }
-
-        string[] sortedPaths = paths.OrderBy(path => path, PathComparer).ThenBy(path => path, StringComparer.Ordinal).ToArray();
         WorkspaceInputFile[] files = new WorkspaceInputFile[sortedPaths.Length];
-        Parallel.For(0, sortedPaths.Length,
-            new ParallelOptions
-            {
-                CancellationToken = cancellationToken,
-                MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, 16)
-            },
-            index => files[index] = ReadInput(sortedPaths[index], cancellationToken));
+        using (NavlynMcpTimingScope.Measure("input.hash"))
+        {
+            Parallel.For(0, sortedPaths.Length,
+                new ParallelOptions
+                {
+                    CancellationToken = cancellationToken,
+                    MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, 16)
+                },
+                index => files[index] = ReadInput(sortedPaths[index], cancellationToken));
+        }
         string[] errors = files.Where(file => file.Error is not null).Select(file => $"{file.Path}: {file.Error}")
             .Concat(inventoryErrors).OrderBy(error => error, StringComparer.Ordinal).ToArray();
         return new WorkspaceInputState(files, errors);

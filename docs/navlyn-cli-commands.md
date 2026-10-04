@@ -1768,6 +1768,10 @@ Optional options:
 
 - `--project <project>`: resolves the source file in the context of an exact project name or repository-relative `.csproj`/`.vbproj` path.
 - `--exclude-generated`: rejects generated input files.
+- `--entry-limit <number>`: optional page size, 1–1000. Limits detailed facts and JSON construction to the page; declarations are still inspected to count and order entries.
+- `--entry-offset <number>`: nonnegative offset. Omit both paging options for the existing complete result. Offset alone returns the remaining entries.
+
+Paged results add `entriesTotal`, `entryOffset`, `entriesTruncated`, and `nextEntryOffset` when another page exists. Continue only within unchanged source and project/framework context. Invalid bounds produce `NAVLYN1003`, exit `2`, and empty stdout. For example: `navlyn outline --workspace App.csproj --file Code.cs --entry-limit 100 --entry-offset 100`.
 
 Result shape:
 

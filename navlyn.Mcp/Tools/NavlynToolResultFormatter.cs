@@ -13,6 +13,7 @@ internal static class NavlynToolResultFormatter
 
     public static CallToolResult ToCallToolResult(NavlynToolResult result)
     {
+        using IDisposable? timing = Navlyn.Mcp.Execution.NavlynMcpTimingScope.Measure("response.envelope");
         string json = ToJson(result);
         using JsonDocument document = JsonDocument.Parse(json);
         return new CallToolResult

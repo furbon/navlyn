@@ -45,6 +45,8 @@ if (options.DeprecatedToolProfileSpecified)
 }
 
 Directory.SetCurrentDirectory(options.WorkingDirectory);
+// Keep profiling on transport stderr even while an in-process CLI captures Console.Error.
+NavlynMcpTimingScope.ConfigureDiagnostics(Console.Error);
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder([]);
 builder.Logging.ClearProviders();
@@ -73,6 +75,7 @@ builder.Services
     {
         filters.AddCallToolFilter(next => async (request, cancellationToken) =>
         {
+            using NavlynMcpTimingScope? timing = NavlynMcpTimingScope.Begin(request.Params!.Name);
             NavlynMcpServerOptions settings = request.Services!.GetRequiredService<NavlynMcpServerOptions>();
             if (!NavlynMcpToolProfilePolicy.Allows(settings.ToolProfile, request.Params!.Name, settings.Surface))
                 return NavlynToolResultFormatter.ToCallToolResult(NavlynToolResult.Failed(request.Params.Name, null, settings.WorkspaceArgument,
@@ -104,11 +107,14 @@ builder.Services
                 typeKind = kindValue.GetString();
             }
             using WorkspaceSelectionScope selection = WorkspaceSelectionScope.Begin(framework, typeKind);
+            using NavlynMcpResponseScope responseScope = NavlynMcpResponseScope.Begin(entryLimit, entryOffset);
             CallToolResult result = await next(request, cancellationToken);
             return NavlynMcpResponsePolicy.Project(result, resultProfile, entryLimit, entryOffset);
         });
         filters.AddListToolsFilter(next => async (request, cancellationToken) =>
         {
+            using NavlynMcpTimingScope? timing = NavlynMcpTimingScope.Begin("tools/list");
+            using IDisposable? discovery = NavlynMcpTimingScope.Measure("discovery.schema");
             ListToolsResult result = await next(request, cancellationToken);
             NavlynMcpServerOptions serverOptions = request.Services!.GetRequiredService<NavlynMcpServerOptions>();
             IReadOnlyList<string> allowedNames = NavlynMcpToolProfilePolicy.GetToolNames(serverOptions.ToolProfile, serverOptions.Surface);
@@ -122,10 +128,11 @@ builder.Services
             foreach (Tool tool in result.Tools)
             {
                 tool.InputSchema = NavlynToolSchemaFormatter.Compact(tool.InputSchema, includeFramework: true);
-                tool.InputSchema = NavlynMcpResponsePolicy.InputSchema(tool.Name, tool.InputSchema);
+                tool.InputSchema = NavlynMcpResponsePolicy.InputSchema(tool.Name, tool.InputSchema, serverOptions.EffectiveResultProfile);
                 if (tool.OutputSchema is JsonElement outputSchema)
                 {
-                    tool.OutputSchema = NavlynMcpResponsePolicy.OutputSchema(NavlynToolSchemaFormatter.Compact(outputSchema, output: true));
+                    tool.OutputSchema = NavlynMcpResponsePolicy.OutputSchema(NavlynToolSchemaFormatter.Compact(outputSchema, output: true),
+                        focusedCompact: serverOptions.Surface == "focused" && serverOptions.EffectiveResultProfile == "compact");
                 }
             }
             return result;

@@ -30,6 +30,14 @@ internal sealed class NavlynMcpToolService(
         }
         if (Navlyn.Workspaces.WorkspaceSelectionScope.CurrentTypeKind is string typeKind && command.Arguments.Contains("--query"))
             command = CommandBuildResult.Valid(command.Command!, [.. command.Arguments, "--type-kind", typeKind], command.StandardInput);
+        if (command.Command == "outline" && NavlynMcpResponseScope.CurrentOutlinePage is { } page)
+        {
+            List<string> boundedArguments = [.. command.Arguments];
+            if (page.Limit != int.MaxValue)
+                boundedArguments.AddRange(["--entry-limit", page.Limit.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
+            boundedArguments.AddRange(["--entry-offset", page.Offset.ToString(System.Globalization.CultureInfo.InvariantCulture)]);
+            command = CommandBuildResult.Valid(command.Command, boundedArguments, command.StandardInput);
+        }
         using CancellationTokenSource deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(options.TimeoutMilliseconds);
         long started = Stopwatch.GetTimestamp();

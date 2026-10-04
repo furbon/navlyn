@@ -2,6 +2,16 @@
 
 All notable public release changes for Navlyn are tracked here.
 
+## 0.9.2 - Unreleased
+
+- Apply outline page bounds before detailed facts, candidate registration and JSON generation. Keep exact semantic order/totals and unpaged CLI/full contracts; add optional CLI `--entry-limit`/`--entry-offset` and forward MCP bounds to a matching external CLI.
+- Describe bound referenced-DLL bodies as one call from a known source position; document occasional CLI integration without an always-running MCP server. Keep ordinary reading/search and clear local edits on ordinary tools.
+- Reduce the focused compact discovery envelope while retaining detailed schemas on the full surface. Advertise the effective result-profile default and complete bounded bodies in compact results.
+- Serialize external CLI invocations within one MCP server to prevent observed MSBuild generated-file races; include queue waits in cancellation and deadlines.
+- Add opt-in MCP stage timing on stderr with request-local collectors, including discovery, workspace, inventory/hash, resolution and response stages. Keep profiling independent of in-process console capture.
+- Add a reproducible local adoption comparison with unforced tool choice, exact task oracles, timestamped client events and server diagnostics. Preserve prior unfavorable results and distinguish total/cached input from attributable tool use.
+- Verify paged identity/order in C# and Visual Basic, concurrent request bounds and oversized-result behavior. Include compact paging and diagnostic isolation in portable CI; support managed routing-skill upgrades from 0.9.1.
+
 ## 0.9.1 - 2026-10-04
 
 - Change MCP defaults to four focused tools and compact evidence. Use `--surface full` for the previous 25-tool inventory and full results; CLI contracts stay complete. Support per-call `resultProfile` and paged file outlines.

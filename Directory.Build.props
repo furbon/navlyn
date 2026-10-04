@@ -1,10 +1,10 @@
 <Project>
   <PropertyGroup>
-    <Version>0.9.1</Version>
+    <Version>0.9.2</Version>
     <PackageVersion>$(Version)</PackageVersion>
     <AssemblyVersion>$(Version.Split('-')[0]).0</AssemblyVersion>
     <FileVersion>$(AssemblyVersion)</FileVersion>
     <InformationalVersion>$(Version)</InformationalVersion>
-    <PackageReleaseNotes>0.9.1 adds a focused four-tool MCP surface, compact paged responses with per-call full detail, qualified symbol queries and independent type-kind filtering, smaller hybrid routing guidance, recent-release skill upgrades, and shorter bounded publication indexing waits.</PackageReleaseNotes>
+    <PackageReleaseNotes>0.9.2 applies MCP outline bounds before fact and JSON construction, clarifies direct bound-DLL reading and on-demand CLI integration, adds opt-in MCP stage diagnostics and a reproducible unforced adoption comparison, and checks paging and diagnostics on every CI platform.</PackageReleaseNotes>
   </PropertyGroup>
 </Project>

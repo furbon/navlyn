@@ -4,14 +4,16 @@
 
 The server is intentionally facts-only:
 
-- no file edits;
+- no source edits;
 - no arbitrary shell execution;
 - no network access;
 - no arbitrary raw file server;
-- no workspace mutation;
+- no source or workspace-configuration edits;
 - no hidden review-comment publishing.
 
 Successful tool calls return a Navlyn MCP result envelope with the Navlyn command JSON under `result`; the full inner result shapes remain documented in [`navlyn-cli-commands.md`](navlyn-cli-commands.md).
+
+Loading a workspace can run MSBuild and generate intermediate files in `obj`; see the [execution and workspace limits](navlyn-limitations.md). Concurrent external CLI calls within one server are queued, while independent processes can still contend on those generated files.
 
 For an explicit workspace path, initial cache discovery checks the selected workspace and ancestor configuration before inventorying the loaded project roots. Unrelated artifact-directory links do not block startup. Loaded source, project, configuration, and dependency changes still trigger freshness checks; links inside an inventoried project remain an inspection error.
 
@@ -24,6 +26,16 @@ Startup now defaults to `--surface focused`: `navlyn_target`, `navlyn_read`, `na
 `--result-profile compact|full` independently selects the server response default; each tool accepts `resultProfile` to override it. Compact preserves identity/signature, location, project/TFM, source and relationship evidence, warnings, scope, and freshness. It omits redundant next-action objects, sourceCommand, repeated display names, false convenience flags (except source/metadata identity flags), and parameter/return-type trees when a signature is present. Missing convenience fields are omitted, not positive assertions. Request `resultProfile: "full"` for complete automation facts. Error envelopes retain their error facts. Text fallback and structured content contain the same JSON.
 
 Compact file outlines default to 100 entries. `entryLimit` (1–1000) and `entryOffset` (nonnegative) control a page. Read `entriesTotal`, `entriesTruncated`, and `nextEntryOffset`; continue only when the source snapshot has not changed. Full responses are unpaged unless paging is explicitly requested. Existing relationship tools retain their own documented limits and scope. Hidden tool calls return `NAVLYN_MCP_TOOL_UNAVAILABLE`; advanced work remains available through the CLI or `--surface full`.
+
+In 0.9.2, outline bounds reach the resolver before detailed facts, candidate registration and command JSON construction. Declarations are still inspected to preserve exact totals/order. This also prevents an otherwise small requested page from failing because the entire file's JSON exceeded `--max-json-chars`. Both direct execution and a matching 0.9.2 external CLI support these bounds; the latter uses the new CLI `--entry-limit`/`--entry-offset` options. Unpaged CLI/full results retain their existing fields. Match CLI/server versions when using the legacy external adapter.
+
+At an existing call position, `navlyn_read` with `externalSource: "decompiled"` and `view: "body"` selects the bound referenced overload and returns its static implementation in one call. A target/outline preamble is unnecessary. For occasional semantic investigations, an installed CLI can supply the same fact without MCP startup/discovery; see [routing and CLI integration](navlyn-codex-routing-skill.md).
+
+Set `NAVLYN_PROFILE_TIMINGS=1` only for diagnostics. MCP writes `NAVLYN_MCP_TIMING` JSON lines on stderr (`navlyn.mcp.timing.v1`), including inclusive stages for discovery, workspace loading, input inventory/hash, resolution and response generation. Parent stages include their children and must not be summed together. Normal stdout/result JSON is unchanged; profiling is disabled by default. These server timings exclude some transport and all model/client work.
+
+Focused compact discovery describes a small stable result envelope instead of repeating the full next-action/error/metadata tree for every tool. Actual result fields and per-call full overrides remain available; `--surface full` or a full default profile retains detailed discovery. The schema advertises the configured response default. Compact preserves the complete bounded signature/body, so full detail is unnecessary solely to read that source.
+
+The legacy external adapter serializes subprocess calls within a server to avoid concurrent MSBuild generation in the same workspace. Queue time counts toward deadlines; canceled waiters do not release another call's slot. Independently launched CLI processes can still collide during cold design-time generation; prepare once or serialize those loads when investigating that configuration.
 
 Non-regex symbol queries accept containing-type/member and namespace-qualified names such as `Client.Number` or `Sample.Formatter.Format`. Qualifiers constrain semantic containers and preserve overload ambiguity; an absent container does not fall back to an unrelated symbol. This is declaration discovery, not arbitrary C# expression binding. Use a source position for constructed-generic or explicit-interface syntax requiring exact binding. `typeKind` filters query candidates by class/interface/struct/enum/delegate/record/record-class/record-struct; `assumeKind` remains a ranking hint. A returned type's `facts.typeKind` and `facts.isRecord` describe its actual Roslyn category.
 
@@ -124,7 +136,7 @@ Equivalent MCP client configuration for local development:
 }
 ```
 
-For the 0.9.1 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
+For the 0.9.2 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
 
 ## Server Options
 

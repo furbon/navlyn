@@ -44,6 +44,7 @@ internal static class NavlynMcpResponsePolicy
 
     public static CallToolResult Project(CallToolResult response, string profile, int? entryLimit, int entryOffset)
     {
+        using IDisposable? timing = Navlyn.Mcp.Execution.NavlynMcpTimingScope.Measure("response.projection");
         if (response.StructuredContent is not JsonElement data || (profile == "full" && entryLimit is null && entryOffset == 0))
             return response;
         JsonObject root = JsonNode.Parse(data.GetRawText())!.AsObject();
@@ -55,7 +56,8 @@ internal static class NavlynMcpResponsePolicy
             root.Remove("optionalFollowUps");
             Compact(root["result"]);
         }
-        if (root["result"] is JsonObject result && result["entries"] is JsonArray entries && (entryLimit is not null || entryOffset != 0))
+        if (root["result"] is JsonObject result && !result.ContainsKey("entriesTotal") &&
+            result["entries"] is JsonArray entries && (entryLimit is not null || entryOffset != 0))
         {
             int total = entries.Count;
             int count = entryLimit ?? total;
@@ -98,11 +100,12 @@ internal static class NavlynMcpResponsePolicy
         }
     }
 
-    public static JsonElement InputSchema(string tool, JsonElement schema)
+    public static JsonElement InputSchema(string tool, JsonElement schema, string defaultProfile = "compact")
     {
         JsonObject root = JsonNode.Parse(schema.GetRawText())!.AsObject();
         JsonObject properties = root["properties"]!.AsObject();
-        properties["resultProfile"] = JsonNode.Parse("""{"type":["string","null"],"enum":["compact","full",null],"description":"Override response detail for this call. Full preserves all CLI facts; compact keeps identity, source, bounds and warnings."}""");
+        properties["resultProfile"] = JsonNode.Parse("""{"type":["string","null"],"enum":["compact","full",null],"description":"Compact includes the selected signature, complete bounded source/body, context and warnings. Use full only for a specific omitted structured field; source bounds are the same in both profiles."}""");
+        properties["resultProfile"]!["default"] = defaultProfile;
         if (tool == NavlynMcpTools.FileOutlineTool)
         {
             properties["entryLimit"] = JsonNode.Parse("""{"type":["integer","null"],"minimum":1,"maximum":1000,"description":"Page size; compact defaults to 100. Full is unpaged unless supplied."}""");
@@ -130,8 +133,23 @@ internal static class NavlynMcpResponsePolicy
         return JsonSerializer.SerializeToElement(root);
     }
 
-    public static JsonElement OutputSchema(JsonElement schema)
+    public static JsonElement OutputSchema(JsonElement schema, bool focusedCompact = false)
     {
+        if (focusedCompact)
+        {
+            // The canonical envelope schema remains available in full discovery/docs.
+            // Extra fields permit per-call full results without repeating their tree per tool.
+            using JsonDocument compact = JsonDocument.Parse("""
+                {"type":"object","additionalProperties":true,"required":["ok","tool","sourceCommand","workspace"],"properties":{
+                  "ok":{"type":"boolean"},"tool":{"type":"string"},"workspace":{"type":"string"},
+                  "sourceCommand":{"type":["object","null"],"additionalProperties":true},
+                  "result":{"type":"object","additionalProperties":true},
+                  "error":{"type":"object","required":["code","message"],"additionalProperties":true,"properties":{"code":{"type":"string"},"message":{"type":"string"}}},
+                  "metadata":{"type":"object","additionalProperties":true,"description":"Execution context and freshness; inspect result scope, bounds and warnings."},
+                  "resultProfile":{"type":"string","enum":["compact"]}}}
+                """);
+            return compact.RootElement.Clone();
+        }
         JsonObject root = JsonNode.Parse(schema.GetRawText())!.AsObject();
         root["properties"]!["resultProfile"] = JsonNode.Parse("""{"type":"string","enum":["compact"]}""");
         return JsonSerializer.SerializeToElement(root);

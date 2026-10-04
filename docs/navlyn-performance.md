@@ -70,6 +70,8 @@ Reports are structured JSON with:
 
 Timings are environment-dependent. Treat local reports as release and investigation evidence, not a universal service-level objective.
 
+For complete-task adoption evidence, use the optional [adoption comparison](navlyn-development-workflow.md#versions-and-environment-failures). It records monotonic client-event arrival times and actual Navlyn calls; a faster no-call trial is not a Navlyn gain. `NAVLYN_PROFILE_TIMINGS=1` also emits `NAVLYN_MCP_TIMING` lines for actual MCP requests. Those stages are inclusive, so parents and children cannot be added as independent costs. Discovery characters, backend milliseconds and document-index estimates are separate from model tokens, whole-task time and total process memory. See [0.9.2 verification](evals/v0.9.2-verification.md).
+
 ## Historical v0.8.6 MCP smoke
 
 On 2026-10-04, the v0.8.6 release candidate was measured on Windows 10.0.26200 with SDK 10.0.401, workspace `navlyn.slnx`, scenario `mcp`, profile `compact`, one iteration, and no warmup or build. Local release CLI validation ran concurrently, so these are functional smoke observations rather than a comparison benchmark. All four calls returned valid JSON and success; no sample was truncated.
@@ -228,3 +230,7 @@ When repeated measurements show that workspace load dominates real agent workflo
 ## v0.9.0
 
 See [measured product evidence](evals/v0.9.0-product-evidence.md) for the same-workspace warm comparison, discovery size, fixed live tasks, and classified public-package corpus results. Measurements are product experiments, not additional CI gates.
+
+## v0.9.2
+
+See [verification and product evidence](evals/v0.9.2-verification.md) for whole-task CLI/MCP/ordinary comparisons, failures and no-call cases, inclusive stage diagnostics, and identical-output Release outline comparisons. Optional CLI investigation wins the measured bound-DLL tasks; MCP selection and readable-source skill overhead remain limitations. Reproduce the backend comparison with `node scripts/measure-navlyn-outline.mjs --baseline <released-0.9.1-navlyn-mcp> --server-dll navlyn.Mcp/bin/Release/net10.0/navlyn.Mcp.dll --output artifacts/performance/<fresh-report>.json` after a Release build. Do not run it alongside timed model trials.

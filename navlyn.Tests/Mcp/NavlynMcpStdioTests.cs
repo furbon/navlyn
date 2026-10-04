@@ -986,6 +986,7 @@ public sealed class NavlynMcpStdioTests
         IList<McpClientTool> tools = await client.ListToolsAsync(cancellationToken: timeout.Token);
         Assert.Equal(new[] { NavlynMcpTools.TargetTool, NavlynMcpTools.ReadTool, NavlynMcpTools.FileOutlineTool, NavlynMcpTools.NavigateTool }, tools.Select(tool => tool.Name));
         Assert.True(tools[0].JsonSchema.TryGetProperty("allOf", out _));
+        Assert.Equal("compact", tools[1].JsonSchema.GetProperty("properties").GetProperty("resultProfile").GetProperty("default").GetString());
         CallToolResult target = await client.CallToolAsync(NavlynMcpTools.TargetTool,
             new Dictionary<string, object?> { ["query"] = "Alpha.EnemyManagerTools", ["match"] = "exact" }, cancellationToken: timeout.Token);
         Assert.False(target.IsError, target.StructuredContent?.ToString());
@@ -1013,6 +1014,13 @@ public sealed class NavlynMcpStdioTests
         JsonElement fullRoot = full.StructuredContent!.Value;
         Assert.False(fullRoot.TryGetProperty("resultProfile", out _));
         Assert.Equal(page.GetProperty("entriesTotal").GetInt32(), fullRoot.GetProperty("result").GetProperty("entries").GetArrayLength());
+        JsonElement fullEntries = fullRoot.GetProperty("result").GetProperty("entries");
+        JsonElement secondEntries = second.StructuredContent!.Value.GetProperty("result").GetProperty("entries");
+        Assert.Equal(fullEntries[next].GetProperty("candidateId").GetString(), secondEntries[0].GetProperty("candidateId").GetString());
+        CallToolResult pastEnd = await client.CallToolAsync(NavlynMcpTools.FileOutlineTool,
+            new Dictionary<string, object?> { ["file"] = "FixtureCode.cs", ["entryOffset"] = int.MaxValue }, cancellationToken: timeout.Token);
+        Assert.Empty(pastEnd.StructuredContent!.Value.GetProperty("result").GetProperty("entries").EnumerateArray());
+        Assert.Equal(fullEntries.GetArrayLength(), pastEnd.StructuredContent.Value.GetProperty("result").GetProperty("entriesTotal").GetInt32());
         Assert.NotEqual(JsonValueKind.Null, fullRoot.GetProperty("sourceCommand").ValueKind);
         Assert.Equal(fullRoot.GetRawText(), Assert.IsType<TextContentBlock>(Assert.Single(full.Content)).Text);
         CallToolResult invalid = await client.CallToolAsync(NavlynMcpTools.FileOutlineTool,

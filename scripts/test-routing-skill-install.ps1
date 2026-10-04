@@ -8,7 +8,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'lib/navlyn-release-version.ps1')
 $ReleaseVersion = Get-NavlynReleaseVersion
-$upgradeVersions = @('0.8.0', '0.8.1', '0.8.5', '0.8.6', '0.8.7', '0.9.0') | Where-Object { $_ -cne $ReleaseVersion }
+$upgradeVersions = @('0.8.0', '0.8.1', '0.8.5', '0.8.6', '0.8.7', '0.9.0', '0.9.1') | Where-Object { $_ -cne $ReleaseVersion }
 
 $repo = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $installer = Join-Path $PSScriptRoot 'install-routing-skill.ps1'
@@ -65,6 +65,8 @@ function Get-Inventory([string] $Destination) {
 }
 
 function Invoke-Installer([string] $Verb, [string] $Root) {
+    # Expected rejection cases are asserted below, even when the caller enables native errors.
+    $PSNativeCommandUseErrorActionPreference = $false
     $output = @(& pwsh -NoLogo -NoProfile -File $installer -Action $Verb -DestinationRoot $Root 2>&1)
     $code = $LASTEXITCODE
     return [ordered]@{ exitCode = $code; output = (@($output | ForEach-Object { [string]$_ }) -join "`n") }

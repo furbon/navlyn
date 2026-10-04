@@ -67,9 +67,11 @@ internal sealed class NavlynMcpDirectToolRunner(
 
             for (int attempt = 0; attempt < 2; attempt++)
             {
-                NavlynMcpWorkspaceCacheResult cacheResult = command.Command == "workspace-refresh" && attempt == 0
-                    ? await workspaceCache.RefreshAsync(cancellationToken)
-                    : await workspaceCache.GetAsync(cancellationToken);
+                NavlynMcpWorkspaceCacheResult cacheResult;
+                using (NavlynMcpTimingScope.Measure("cache.acquire"))
+                    cacheResult = command.Command == "workspace-refresh" && attempt == 0
+                        ? await workspaceCache.RefreshAsync(cancellationToken)
+                        : await workspaceCache.GetAsync(cancellationToken);
                 if (cacheResult.Error is not null)
                 {
                     return Failed(
@@ -84,24 +86,26 @@ internal sealed class NavlynMcpDirectToolRunner(
                 NavlynMcpWorkspaceCache.CachedWorkspace cachedWorkspace = lease.CachedWorkspace;
                 ExternalMemberSnapshot? externalSnapshot = null;
                 NavlynToolResult result;
-                if (command.Command is "read" or "symbol-source")
+                using (NavlynMcpTimingScope.Measure("command.resolve-and-build"))
                 {
-                    (result, externalSnapshot) = await RunSymbolSourceAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken);
-                }
-                else
-                {
-                    result = command.Command switch
+                    if (command.Command is "read" or "symbol-source")
                     {
-                    "workspace-status" => await RunWorkspaceStatusAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
-                    "workspace-refresh" => await RunWorkspaceRefreshAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
-                    "repo-graph" => RunRepoGraph(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments),
-                    "outline" => await RunOutlineAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
-                    "target" or "find" or "definition" or "references" or "implementations" or "callers" or "calls" or "type-hierarchy" or "symbol-info"
-                        => await RunCachedCommandAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command, cancellationToken),
-                        _ => Failed(toolName, sourceCommand, "NAVLYN_MCP_DIRECT_UNSUPPORTED", $"Direct MCP execution is not available for {command.Command}.")
-                    };
+                        (result, externalSnapshot) = await RunSymbolSourceAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken);
+                    }
+                    else
+                    {
+                        result = command.Command switch
+                        {
+                            "workspace-status" => await RunWorkspaceStatusAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
+                            "workspace-refresh" => await RunWorkspaceRefreshAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
+                            "repo-graph" => RunRepoGraph(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments),
+                            "outline" => await RunOutlineAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command.Arguments, cancellationToken),
+                            "target" or "find" or "definition" or "references" or "implementations" or "callers" or "calls" or "type-hierarchy" or "symbol-info"
+                                => await RunCachedCommandAsync(toolName, sourceCommand, cachedWorkspace, lease.CacheHit, command, cancellationToken),
+                                _ => Failed(toolName, sourceCommand, "NAVLYN_MCP_DIRECT_UNSUPPORTED", $"Direct MCP execution is not available for {command.Command}.")
+                        };
+                    }
                 }
-
                 beforeValidation?.Invoke(attempt);
                 if (!await workspaceCache.ValidateAsync(lease, cancellationToken))
                 {
@@ -295,7 +299,8 @@ internal sealed class NavlynMcpDirectToolRunner(
             CreateFileInfo(file, cachedWorkspace, project),
             project,
             excludeGenerated,
-            cancellationToken);
+            cancellationToken,
+            NavlynMcpResponseScope.CurrentOutlinePage);
 
         if (result.Error is not null)
         {
@@ -303,6 +308,7 @@ internal sealed class NavlynMcpDirectToolRunner(
         }
 
         OutlineResolution resolution = result.Resolution!;
+        OutlinePage? page = NavlynMcpResponseScope.CurrentOutlinePage;
         foreach (OutlineEntry entry in resolution.Entries)
         {
             cachedWorkspace.RecordCandidateTarget(entry);
@@ -322,7 +328,12 @@ internal sealed class NavlynMcpDirectToolRunner(
                 Line: entry.Line,
                 Column: entry.Column,
                 EndLine: entry.EndLine,
-                EndColumn: entry.EndColumn))]);
+                EndColumn: entry.EndColumn))],
+            EntriesTotal: page is null ? null : resolution.EntriesTotal,
+            EntryOffset: page?.Offset,
+            EntriesTruncated: page is null ? null : page.Offset > 0 || resolution.Entries.Count < resolution.EntriesTotal,
+            NextEntryOffset: page is not null && (long)page.Offset + page.Limit < resolution.EntriesTotal
+                ? page.Offset + page.Limit : null);
 
         return Succeeded(toolName, sourceCommand, output, CreateMetadata(cachedWorkspace, cacheHit, "cheap-file-first"));
     }
@@ -491,6 +502,7 @@ internal sealed class NavlynMcpDirectToolRunner(
         T result,
         NavlynToolMetadata metadata)
     {
+        using IDisposable? timing = NavlynMcpTimingScope.Measure("response.command-json");
         string json = JsonSerializer.Serialize(result, JsonOptions);
         if (json.Length > options.MaxJsonChars)
         {
@@ -681,7 +693,11 @@ internal sealed class NavlynMcpDirectToolRunner(
         ProjectFilterOutput? Project,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         bool ExcludeGenerated,
-        IReadOnlyList<McpOutlineEntryResult> Entries);
+        IReadOnlyList<McpOutlineEntryResult> Entries,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? EntriesTotal,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? EntryOffset,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? EntriesTruncated,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? NextEntryOffset);
 
     private sealed record McpOutlineEntryResult(
         string Name,

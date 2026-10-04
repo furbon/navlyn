@@ -2,7 +2,9 @@
 
 [日本語](navlyn-codex-routing-skill_ja.md)
 
-The `navlyn-semantic-routing` skill gives Codex guidance on when to use Navlyn for C# and Visual Basic symbols. To let Codex actually call Navlyn tools, first complete the [Codex MCP setup](navlyn-client-setup.md#codex).
+The optional `navlyn-semantic-routing` skill gives Codex guidance when C# or Visual Basic binding needs semantic evidence. An installed `navlyn` CLI is sufficient for occasional use; a running MCP server is not required. For repeated semantic calls in one session, [Codex MCP setup](navlyn-client-setup.md#codex) offers a shared workspace. Ordinary reads, search and clear local edits use normal tools.
+
+For a light CLI integration, a repository instruction can state: "Navlyn CLI is available for uncertain binding or relationships; ordinary reads/search remain normal. At a known call position, `navlyn read --workspace <project> --file <source> --line <line> --column <column> --view body --external-source decompiled` returns the bound referenced-member body." The skill below is optional additional guidance, not a required file-reading preamble.
 
 ## 1. Get the Navlyn source
 
@@ -27,7 +29,7 @@ New-Item -ItemType Directory -Force $skillRoot | Out-Null
 Get-ChildItem (Join-Path $skillRoot 'navlyn-semantic-routing')
 ```
 
-If you see `SKILL.md` and `references`, start a new Codex session. Ask it to find references to a C# type or method and check whether it chooses a Navlyn tool when appropriate. Installing the skill alone does not confirm an MCP connection; also perform the [MCP connection check](navlyn-client-setup.md#codex).
+If you see `SKILL.md` and `references`, start a new Codex session. Ask it for a fact with uncertain symbol binding and check its actual tool choice. Installing the skill does not install either runtime. Verify the CLI with `navlyn --version`, or perform the [MCP connection check](navlyn-client-setup.md#codex) if you chose MCP.
 
 ## Update or remove
 

@@ -1,5 +1,4 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Text;
 using Navlyn.Languages;
 using Navlyn.Paths;
 using Navlyn.Workspaces;
@@ -13,7 +12,8 @@ internal sealed class OutlineResolver
         FileInfo file,
         Project? project,
         bool excludeGenerated,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        OutlinePage? page = null)
     {
         SourceDocumentResolutionResult documentResult =
             await new SourceDocumentResolver().ResolveAsync(solution, file, project, excludeGenerated, cancellationToken);
@@ -30,45 +30,46 @@ internal sealed class OutlineResolver
         {
             return OutlineResolutionResult.Succeeded(new OutlineResolution(
                 File: sourceDocument.DisplayPath,
-                Entries: []));
+                Entries: [],
+                EntriesTotal: 0));
         }
 
-        IReadOnlyList<OutlineEntry> entries = [.. root
-            .DescendantNodes()
-            .Where(SourceLanguageFacts.IsOutlineNode)
-            .Select(node => CreateEntry(sourceDocument, semanticModel, node, cancellationToken))
-            .OfType<OutlineEntry>()
-            .OrderBy(entry => entry.Line)
-            .ThenBy(entry => entry.Column)
-            .ThenBy(entry => entry.EndLine)
-            .ThenBy(entry => entry.EndColumn)
-            .ThenBy(entry => entry.Name, StringComparer.Ordinal)
-            .ThenBy(entry => entry.Kind, StringComparer.Ordinal)];
+        // Resolve lightweight declaration headers to keep the exact semantic count/order.
+        // Enrich only the requested page with facts, selectors and candidate identities.
+        List<OutlineHeader> headers = [];
+        foreach (SyntaxNode node in root.DescendantNodes().Where(SourceLanguageFacts.IsOutlineNode))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ISymbol? symbol = semanticModel.GetDeclaredSymbol(node, cancellationToken);
+            FileLinePositionSpan lineSpan = node.SyntaxTree.GetLineSpan(node.Span, cancellationToken);
+            if (symbol is not null && lineSpan.IsValid)
+                headers.Add(new OutlineHeader(symbol, lineSpan));
+        }
+
+        IEnumerable<OutlineHeader> selected = headers
+            .OrderBy(header => header.Span.StartLinePosition.Line)
+            .ThenBy(header => header.Span.StartLinePosition.Character)
+            .ThenBy(header => header.Span.EndLinePosition.Line)
+            .ThenBy(header => header.Span.EndLinePosition.Character)
+            .ThenBy(header => header.Symbol.Name, StringComparer.Ordinal)
+            .ThenBy(header => header.Symbol.Kind.ToString(), StringComparer.Ordinal);
+        if (page is not null) selected = selected.Skip(page.Offset).Take(page.Limit);
+        IReadOnlyList<OutlineEntry> entries = [.. selected.Select(header =>
+            CreateEntry(sourceDocument, header.Symbol, header.Span, cancellationToken))];
 
         return OutlineResolutionResult.Succeeded(new OutlineResolution(
             File: sourceDocument.DisplayPath,
-            Entries: entries));
+            Entries: entries,
+            EntriesTotal: headers.Count));
     }
 
-    private static OutlineEntry? CreateEntry(
+    private static OutlineEntry CreateEntry(
         SourceDocumentResolution sourceDocument,
-        SemanticModel semanticModel,
-        SyntaxNode node,
+        ISymbol symbol,
+        FileLinePositionSpan lineSpan,
         CancellationToken cancellationToken)
     {
-        ISymbol? symbol = semanticModel.GetDeclaredSymbol(node, cancellationToken);
-        if (symbol is null)
-        {
-            return null;
-        }
-
-        TextSpan span = node.Span;
-        FileLinePositionSpan lineSpan = node.SyntaxTree.GetLineSpan(span, cancellationToken);
-        if (!lineSpan.IsValid)
-        {
-            return null;
-        }
-
+        cancellationToken.ThrowIfCancellationRequested();
         Project project = sourceDocument.Document.Project;
         SymbolFacts facts = SymbolFactsBuilder.Create(symbol, project.Name);
 
@@ -121,6 +122,8 @@ internal sealed class OutlineResolver
             Line: line,
             Column: column);
     }
+
+    private sealed record OutlineHeader(ISymbol Symbol, FileLinePositionSpan Span);
 }
 
 internal sealed record OutlineResolutionResult(OutlineResolution? Resolution, OutlineResolutionError? Error)
@@ -143,7 +146,9 @@ internal sealed record OutlineResolutionResult(OutlineResolution? Resolution, Ou
     }
 }
 
-internal sealed record OutlineResolution(string File, IReadOnlyList<OutlineEntry> Entries);
+internal sealed record OutlineResolution(string File, IReadOnlyList<OutlineEntry> Entries, int EntriesTotal);
+
+internal sealed record OutlinePage(int Offset, int Limit);
 
 internal sealed record OutlineEntry(
     string Name,

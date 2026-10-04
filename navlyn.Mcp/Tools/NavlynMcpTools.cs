@@ -39,7 +39,7 @@ internal static class NavlynMcpTools
         "Canonical first tool when approximate C# or Visual Basic symbol identity could change the answer. Use mode select normally; use mode list only for explicit broader candidate discovery. Select needs a query, candidateId, or exact source position; list needs a query. Do not use for comments, strings, docs, or text search. Stop at a selected target, candidate list, or unresolved ambiguity; results are static symbol evidence, not runtime behavior.";
 
     private const string ReadDescription =
-        "Use after a target is known when its bounded C# or Visual Basic declaration or source is needed. Requires candidateId or an exact file/line/column. Do not use for broad file reading, repository search, diff review, or generated/non-Roslyn text. Returns static source, not runtime behavior.";
+        "Read bounded C# or Visual Basic source at a known candidateId or exact file/line/column. To inspect a referenced DLL implementation, use the existing call position with externalSource decompiled and view body: resolves the bound overload and returns its decompiled body in one call. No target or outline preamble is needed for a known position. Use ordinary tools for broad file reading and directly readable text. Returns static source, not runtime behavior.";
 
     private const string PrepareEditDescription =
         "Use immediately before editing one intended C# or Visual Basic target when bounded preparation evidence is needed. Provide candidateId, query, or exact source position. It resolves the target and gathers bounded source, context, and test evidence; do not use for edits or broad exploration. Confidence and known unknowns are static evidence, not a correctness guarantee.";

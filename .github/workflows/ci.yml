@@ -43,7 +43,7 @@ jobs:
           BEFORE_SHA: ${{ github.event.before }}
           EVENT_ACTION: ${{ github.event.action }}
         run: |
-          $filter = if ('${{ matrix.os }}' -eq 'windows-latest') { '' } else { 'FullyQualifiedName~NavlynCliRunnerTests|FullyQualifiedName~NavlynMcpServerOptionsTests|FullyQualifiedName~PathDisplayTests|FullyQualifiedName~StdioServer_ListsToolsAndMapsSuccessAndCliErrors' }
+          $filter = if ('${{ matrix.os }}' -eq 'windows-latest') { '' } else { 'FullyQualifiedName~NavlynCliRunnerTests|FullyQualifiedName~NavlynMcpServerOptionsTests|FullyQualifiedName~PathDisplayTests|FullyQualifiedName~StdioServer_ListsToolsAndMapsSuccessAndCliErrors|FullyQualifiedName~FocusedSurface_PreservesIdentityBoundsAndFullOverride|FullyQualifiedName~OutlineResolverComponentTests|FullyQualifiedName~NavlynMcpTimingScopeTests' }
           if ($env:EVENT_ACTION -eq 'synchronize' -and $env:BEFORE_SHA -match '^[a-f0-9]{40}$') {
             $changed = @(git diff --name-only $env:BEFORE_SHA $env:GITHUB_SHA)
             $product = @($changed | Where-Object { $_ -match '^(Navlyn.Core|Navlyn.CommandLine|navlyn|navlyn.Mcp)/|^Directory\.|^global.json|^NuGet\.[Cc]onfig|^tests/fixtures/|^navlyn.slnx|^navlyn.Tests/(TestSupport|Contracts/GoldenSnapshots|.*\.csproj)|^navlyn.Tests/(?!.*Tests\.cs$).*\.cs$|^docs/schemas/' })
