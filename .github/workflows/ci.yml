@@ -27,6 +27,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
@@ -36,18 +38,38 @@ jobs:
       - name: Build once
         shell: pwsh
         run: ./scripts/invoke-ci-step.ps1 -Name build -FilePath dotnet -Arguments @('build','navlyn.slnx','-c','Release')
+      - name: Select affected tests for a PR follow-up
+        id: tests
+        shell: pwsh
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          EVENT_ACTION: ${{ github.event.action }}
+        run: |
+          $filter = if ('${{ matrix.os }}' -eq 'windows-latest') { '' } else { 'FullyQualifiedName~NavlynCliRunnerTests|FullyQualifiedName~NavlynMcpServerOptionsTests|FullyQualifiedName~PathDisplayTests|FullyQualifiedName~StdioServer_ListsToolsAndMapsSuccessAndCliErrors' }
+          if ($env:EVENT_ACTION -eq 'synchronize' -and $env:BEFORE_SHA -match '^[a-f0-9]{40}$') {
+            $changed = @(git diff --name-only $env:BEFORE_SHA $env:GITHUB_SHA)
+            $product = @($changed | Where-Object { $_ -match '^(Navlyn.Core|Navlyn.CommandLine|navlyn|navlyn.Mcp)/|^Directory\.|^global.json|^tests/fixtures/|^navlyn.slnx|^navlyn.Tests/(TestSupport|.*\.csproj)' })
+            if ($product.Count -eq 0) {
+              $classes = @($changed | Where-Object { $_ -match '^navlyn.Tests/.+Tests\.cs$' } | ForEach-Object { 'FullyQualifiedName~' + [IO.Path]::GetFileNameWithoutExtension($_) })
+              $filter = if ($classes.Count) { $classes -join '|' } else { 'FullyQualifiedName~NavlynMcpServerOptionsTests' }
+            }
+          }
+          "filter=$filter" | Add-Content $env:GITHUB_OUTPUT
       - name: Product tests
         if: matrix.os == 'windows-latest'
         shell: pwsh
         env:
           TMPDIR: ${{ runner.temp }}
-        run: ./scripts/invoke-ci-step.ps1 -Name product-tests -FilePath dotnet -Arguments @('test','navlyn.Tests/navlyn.Tests.csproj','--no-build','-c','Release','--framework','net10.0','--logger','trx;LogFileName=product.trx','--results-directory','artifacts/ci-diagnostics/tests')
+        run: |
+          $arguments = @('test','navlyn.Tests/navlyn.Tests.csproj','--no-build','-c','Release','--framework','net10.0','--logger','trx;LogFileName=product.trx','--results-directory','artifacts/ci-diagnostics/tests')
+          if ('${{ steps.tests.outputs.filter }}') { $arguments += @('--filter','${{ steps.tests.outputs.filter }}') }
+          ./scripts/invoke-ci-step.ps1 -Name product-tests -FilePath dotnet -Arguments $arguments
       - name: Portable transport tests
         if: matrix.os != 'windows-latest'
         shell: pwsh
         env:
           TMPDIR: ${{ runner.temp }}
-        run: ./scripts/invoke-ci-step.ps1 -Name transport-tests -FilePath dotnet -Arguments @('test','navlyn.Tests/navlyn.Tests.csproj','--no-build','-c','Release','--framework','net10.0','--filter','FullyQualifiedName~NavlynCliRunnerTests|FullyQualifiedName~NavlynMcpServerOptionsTests|FullyQualifiedName~PathDisplayTests|FullyQualifiedName~StdioServer_ListsToolsAndMapsSuccessAndCliErrors','--logger','trx;LogFileName=transport.trx','--results-directory','artifacts/ci-diagnostics/tests')
+        run: ./scripts/invoke-ci-step.ps1 -Name transport-tests -FilePath dotnet -Arguments @('test','navlyn.Tests/navlyn.Tests.csproj','--no-build','-c','Release','--framework','net10.0','--filter','${{ steps.tests.outputs.filter }}','--logger','trx;LogFileName=transport.trx','--results-directory','artifacts/ci-diagnostics/tests')
       - name: Portable CLI smoke
         shell: pwsh
         run: ./scripts/invoke-ci-step.ps1 -Name portable-cli -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-portable-smoke.ps1','-Configuration','Release')
