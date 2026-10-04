@@ -2,6 +2,17 @@
 
 All notable public release changes for Navlyn are tracked here.
 
+## 0.8.6
+
+- Enforce configured MCP deadlines across direct tools, adapters, and queue waits; distinguish caller cancellation and wait for resource cleanup.
+- Preserve complete workflow reproduction arguments, working directory, and batch stdin; verify deterministic replay.
+- Propagate schema-wrapper build/test failures and protect historical documentation during patch changes and preview promotion.
+- Extend natural-kind parity coverage across CLI, MCP, and batch, with canonical kinds and invalid-input checks.
+- Repair MCP performance smoke to use current tool names and a method source position; save failed measurements and propagate failure instead of reporting a successful run.
+- Retain CI TRX, command logs, and stage timings; expose per-package publication progress and exact retained-artifact recovery inputs in Actions summaries.
+- Clarify trusted MSBuild loading, root-policy boundaries, automatic freshness, historical evidence, and .NET 8/10 runtime support.
+- Update System.CommandLine, Microsoft.NET.Test.Sdk, Microsoft.Extensions.Hosting, .NET 10 StringTools, and setup-dotnet while retaining .NET 8 MSBuild compatibility and MCP SDK 1.x.
+
 ## 0.8.5
 
 - Accept case-insensitive symbol kinds and natural type aliases such as `class`, `interface`, and `record`, with canonical JSON kinds across CLI, MCP, and batch operations.

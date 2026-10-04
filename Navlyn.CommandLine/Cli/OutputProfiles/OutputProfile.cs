@@ -211,12 +211,30 @@ internal static class OutputProfile
             ["command"] = command,
             ["profile"] = profile,
             ["configuration"] = configuration is null ? new JsonObject() : ToNode(configuration),
-            ["reproCommand"] = new JsonObject
-            {
-                ["executable"] = "navlyn",
-                ["arguments"] = new JsonArray(command, "--workspace", workspace.DisplayPath, "--profile", profile)
-            }
+            ["reproCommand"] = CreateReproCommand(workspace, command, profile)
         };
+    }
+
+    private static JsonObject CreateReproCommand(LoadedWorkspace workspace, string command, string profile)
+    {
+        CliInvocationContext? invocation = CliInvocationContext.Current;
+        IReadOnlyList<string> arguments = invocation?.Arguments ??
+            [command, "--workspace", workspace.DisplayPath, "--profile", profile];
+        JsonObject result = new()
+        {
+            ["executable"] = "navlyn",
+            ["arguments"] = new JsonArray(arguments.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray())
+        };
+        if (invocation is not null)
+        {
+            result["workingDirectory"] = invocation.WorkingDirectory;
+            if (invocation.StandardInput is not null)
+            {
+                result["standardInput"] = invocation.StandardInput;
+            }
+        }
+
+        return result;
     }
 
     private static void CopyIdentityFields(

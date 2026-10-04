@@ -15,6 +15,25 @@ public sealed class InProcessCliTestCollection
 public sealed class NavlynInProcessCommandAdapterTests
 {
     [Fact]
+    public async Task RunAsync_DeadlineIncludesConsoleQueueAndReleasesNothingItDoesNotOwn()
+    {
+        SemaphoreSlim gate = (SemaphoreSlim)typeof(NavlynInProcessCommandAdapter)
+            .GetField("ConsoleLock", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.GetValue(null)!;
+        await gate.WaitAsync();
+        try
+        {
+            NavlynInProcessCommandAdapter adapter = new(CreateOptions(4000000) with { TimeoutMilliseconds = 20 });
+            NavlynToolResult result = await adapter.RunAsync("test", "check", [], null, CancellationToken.None);
+            Assert.Equal("NAVLYN_MCP_TIMEOUT", result.Error?.Code);
+            Assert.Equal(0, gate.CurrentCount);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    [Fact]
     public void BuildArguments_AddsLogicalWorkspaceCommand()
     {
         NavlynInProcessCommandAdapter adapter = new(CreateOptions(maxJsonChars: NavlynMcpServerOptions.DefaultMaxJsonChars));

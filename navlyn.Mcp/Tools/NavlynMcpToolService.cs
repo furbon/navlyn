@@ -1,5 +1,6 @@
 ﻿using Navlyn.Mcp.Execution;
 using Navlyn.Mcp.Configuration;
+using System.Diagnostics;
 
 namespace Navlyn.Mcp.Tools;
 
@@ -22,17 +23,36 @@ internal sealed class NavlynMcpToolService(
                 new NavlynToolError("NAVLYN_MCP_INVALID_ARGUMENT", command.Error ?? "Invalid tool arguments."));
         }
 
-        if (!options.UseExternalCli && directToolRunner.CanRun(command))
+        using CancellationTokenSource deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(options.TimeoutMilliseconds);
+        long started = Stopwatch.GetTimestamp();
+        NavlynToolResult? result = null;
+        try
         {
-            return await directToolRunner.RunAsync(toolName, command, cancellationToken);
+            deadline.Token.ThrowIfCancellationRequested();
+            result = !options.UseExternalCli && directToolRunner.CanRun(command)
+                ? await directToolRunner.RunAsync(toolName, command, deadline.Token)
+                : await commandAdapter.RunAsync(toolName, command.Command!, command.Arguments,
+                    command.StandardInput, deadline.Token);
+        }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested)
+        {
+            // Await completion so canceled calls release workspace leases and console state.
         }
 
-        return await commandAdapter.RunAsync(
-            toolName,
-            command.Command!,
-            command.Arguments,
-            command.StandardInput,
-            cancellationToken);
+        bool canceled = cancellationToken.IsCancellationRequested;
+        bool timedOut = deadline.IsCancellationRequested ||
+            Stopwatch.GetElapsedTime(started).TotalMilliseconds >= options.TimeoutMilliseconds;
+        if (canceled || timedOut)
+        {
+            NavlynSourceCommand source = result?.SourceCommand ?? directToolRunner.CreateSourceCommand(command);
+            return NavlynToolResult.Failed(toolName, source, options.WorkspaceArgument,
+                new NavlynToolError(canceled ? "NAVLYN_MCP_CANCELED" : "NAVLYN_MCP_TIMEOUT",
+                    canceled ? "Tool call was canceled." : $"Tool call timed out after {options.TimeoutMilliseconds} ms.",
+                    result?.Error?.ExitCode, result?.Error?.Stderr));
+        }
+
+        return result!;
     }
 
     public NavlynToolResult CreateInvalidArgumentResult(

@@ -56,6 +56,11 @@ internal static partial class BatchCommand
         }
 
         JsonDocument parsedDocument;
+        if (input is null && CliInvocationContext.Current is { } invocation)
+        {
+            invocation.StandardInput = inputJson;
+        }
+
         try
         {
             parsedDocument = JsonDocument.Parse(inputJson);

@@ -546,6 +546,63 @@ public sealed class NavlynMcpStdioTests
     }
 
     [Fact]
+    public async Task StdioServer_NaturalKindAliasesMatchAcrossSingleAndBatchCalls()
+    {
+        string workspace = Path.Combine(FindRepositoryRoot(), "tests", "fixtures", "FuzzyDiscoveryFixture", "FuzzyDiscoveryFixture.csproj");
+        await using McpClient client = await CreateClientAsync(profile: null, workspace);
+        foreach (KeyValuePair<string, object?> hint in new Dictionary<string, object?>
+        {
+            ["assumeKind"] = " InTeRfAcE ",
+            ["assumeKinds"] = new[] { " class ", "RECORD", "NamedType", "class" }
+        })
+        {
+            CallToolResult response = await client.CallToolAsync(NavlynMcpTools.TargetTool,
+                new Dictionary<string, object?> { ["query"] = "EnemyManagerTools", [hint.Key] = hint.Value });
+            Assert.False(response.IsError, response.StructuredContent?.ToString());
+            JsonElement payload = response.StructuredContent!.Value.GetProperty("result");
+            Assert.Contains("NamedType", payload.ToString(), StringComparison.Ordinal);
+            Assert.Contains("Alpha.EnemyManagerTools", payload.ToString(), StringComparison.Ordinal);
+        }
+
+        foreach (KeyValuePair<string, object?> filter in new Dictionary<string, object?>
+        {
+            ["resultKind"] = " mEtHoD ",
+            ["resultKinds"] = new[] { "Method", " method " }
+        })
+        {
+            CallToolResult response = await client.CallToolAsync(NavlynMcpTools.NavigateTool,
+                new Dictionary<string, object?> { ["operation"] = "calls", ["file"] = "FixtureCode.cs", ["line"] = 27, ["column"] = 9, [filter.Key] = filter.Value });
+            Assert.False(response.IsError, response.StructuredContent?.ToString());
+            JsonElement payload = response.StructuredContent!.Value.GetProperty("result");
+            Assert.Contains("Alpha.EnemyManager.Spawn()", payload.ToString(), StringComparison.Ordinal);
+            Assert.Equal("Method", Assert.Single(payload.GetProperty("resultKinds").EnumerateArray()).GetString());
+        }
+
+        CallToolResult batch = await client.CallToolAsync(NavlynMcpTools.BatchTool,
+            new Dictionary<string, object?>
+            {
+                ["requests"] = new object[]
+                {
+                    new { id = "kinds", command = "symbols", query = "EnemyManagerTools", kinds = new[] { "interface", " CLASS " } },
+                    new { id = "target", command = "resolve-target", query = "EnemyManagerTools", assumeKinds = new[] { "RECORD", "class" } },
+                    new { id = "calls", command = "calls", file = "FixtureCode.cs", line = 27, column = 9, resultKinds = new[] { "METHOD", " method " } }
+                }
+            });
+        Assert.False(batch.IsError, batch.StructuredContent?.ToString());
+        JsonElement batchPayload = batch.StructuredContent!.Value.GetProperty("result");
+        Assert.Equal(3, batchPayload.GetProperty("succeededRequests").GetInt32());
+        Assert.Equal("NamedType", Assert.Single(batchPayload.GetProperty("results")[0].GetProperty("result").GetProperty("kinds").EnumerateArray()).GetString());
+
+        foreach (string invalid in new[] { "1", "not-a-kind" })
+        {
+            CallToolResult response = await client.CallToolAsync(NavlynMcpTools.TargetTool,
+                new Dictionary<string, object?> { ["query"] = "EnemyManagerTools", ["assumeKind"] = invalid });
+            Assert.True(response.IsError, response.StructuredContent?.ToString());
+            Assert.Contains("Unknown symbol kind", response.StructuredContent!.Value.ToString(), StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public async Task StdioServer_VerifyEditExposesModesAndRejectsMixedIntentsBeforeExecution()
     {
         await using McpClient client = await CreateClientAsync(profile: null);

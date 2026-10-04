@@ -1,4 +1,4 @@
-# Navlyn v0.7.0 External Review Packet
+# Navlyn v0.8.6 External Review Packet
 
 Navlyn is a local read-only C#/.NET semantic evidence tool for coding agents. It turns an edit intent into a selected symbol target, bounded source/context/test evidence, and a post-edit guard that checks whether the actual diff stayed on target.
 
@@ -27,7 +27,15 @@ navlyn_verify_edit
 navlyn_review
 ```
 
-## Evidence
+## Current scope and evidence
+
+The current public surface contains 25 read-only MCP tools and .NET 8/10 tool assets. v0.8.6 fixes common MCP deadlines, executable workflow reproduction, schema-wrapper failure propagation, and historical-version preservation. CLI/MCP/batch tests cover natural kind aliases, whitespace, casing, duplicates, and invalid inputs. Type aliases such as `interface` all mean `NamedType`; they do not exclude classes.
+
+Release evidence comes from the exact merged-main three-OS CI run and its retained packages, setup bundle, manifests, TRX, logs, and stage timings. Protected publication verifies those immutable inputs; annotated-tag verification reuses their evidence and independently checks the public packages. Consult the v0.8.6 release links for the completed run rather than treating old fixture counts as current results.
+
+The evaluation scripts include recorded baseline traces and synthetic scenario checks. They establish regression coverage, not a demonstrated improvement in live-agent outcomes. Broader real-task comparisons and MCP SDK 2.0 migration belong in the next minor-release evaluation.
+
+## Historical v0.7.0 evidence (2026-07-12)
 
 - Canonical CLI/MCP surface implemented and tested.
 - Tool-selection eval: 21 scenarios, score 1.0.
@@ -39,11 +47,11 @@ navlyn_review
 
 ## Limitations
 
-- Navlyn does not edit files, run tests, call the network, or prove runtime behavior.
+- Navlyn's tool surface does not edit files or run tests, and static facts do not prove runtime behavior. Load trusted repositories: MSBuild evaluation and repository-supplied tasks, analyzers, and generators are not sandboxed. See [SECURITY.md](../SECURITY.md).
 - Candidate IDs are opaque and not guaranteed stable across edits or workspace changes.
 - External validation is still local-clone evidence, not a clean-room third-party adoption corpus.
 - The public packet does not yet include fresh live-agent MCP traces.
-- Full performance `Scenario all` must be rerun for any new 9.7+ release claim; do not infer that result from this packet alone.
+- Performance claims require a dated report identifying version, commit, SDK, OS, workspace, scenario, profile, and warmup. Historical numbers do not establish current latency.
 
 ## Breaking / Migration
 

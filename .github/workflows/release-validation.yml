@@ -23,7 +23,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
             8.0.x
@@ -34,7 +34,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if ($env:GITHUB_REF -notlike 'refs/tags/v*') { throw 'Dispatch this workflow on an annotated release tag.' }
-          ./scripts/test-published-release.ps1 -SourceSha $env:GITHUB_SHA -Tag $env:GITHUB_REF_NAME
+          ./scripts/invoke-ci-step.ps1 -Name published-release -FilePath pwsh -Arguments @('-NoProfile','-File','./scripts/test-published-release.ps1','-SourceSha',$env:GITHUB_SHA,'-Tag',$env:GITHUB_REF_NAME)
       - name: Retain tag verification
         if: always()
         uses: actions/upload-artifact@v7
@@ -44,5 +44,6 @@ jobs:
             artifacts/tag-provenance
             artifacts/validated-release-provenance
             artifacts/tag-public-verification
+            artifacts/ci-diagnostics
           if-no-files-found: warn
           retention-days: 90

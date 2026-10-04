@@ -219,6 +219,20 @@ The focused fixture scripts cover these areas:
 
 ## Operational Pitfalls
 
+### CI diagnostics and publication summaries
+
+CI executes validation stages through `scripts/invoke-ci-step.ps1`, retains combined command logs and `timings.jsonl`, and uploads `navlyn-ci-diagnostics-<os>-<run>-<attempt>` on every outcome. xUnit writes separate net8.0/net10.0 TRX files under that artifact. Actions summaries show exit status and elapsed seconds. Inspect the failed stage's log before rerunning; successful source checks on the exact merged-main commit remain reusable by publication and tag verification.
+
+Publication summaries show each package's observation, retained intent, submission, indexing wait, and verified state. The final summary uses the original immutable input identity and latest uploaded journal artifact to provide exact resume fields. If retention failed, it omits an executable recovery command. The durable journal, not summary text, authorizes recovery.
+
+### Maintenance dependency decisions
+
+For v0.8.6, System.CommandLine 2.0.10, Test SDK 18.8.1, Hosting 10.0.10, and setup-dotnet v6 are covered by normal contract tests and three-OS CI. StringTools 18.8.2 is used for net10.0 only; net8.0 retains the 17.14.28 MSBuild pair. Moving that compile dependency to a package whose preferred runtime asset is net10.0 is not an automatic update for the .NET 8 lane. Reassess the pair together when changing the SDK/runtime baseline.
+
+ModelContextProtocol 2.0 is a separate minor-release migration: inspect protocol/API differences, rebuild, and run stdio schema, cancellation, and client-consumer checks before adoption. The current 25-tool surface stays on SDK 1.x. See [.NET runtime support](navlyn-runtime-support.md) for the .NET 8 support boundary.
+
+`scripts/update-release-version.ps1 -Version <version>` updates current installation examples and tool manifests. It preserves CHANGELOG and sections explicitly headed Historical, History, Recorded, or Observed, as well as dated evidence lines. Keep current instructions outside historical sections; do not use this updater to rewrite recorded measurements or client evidence. The isolated integration test covers patch changes, preview promotion, and idempotence.
+
 Avoid repeating known local-environment failures. If a check fails due to timeout, file locks, or another active process, diagnose that condition before rerunning the same command.
 
 ### Command Timeouts
@@ -298,7 +312,7 @@ When adding a command, keep the change narrow and follow the established shape:
 - Keep command classes thin: define options, call a resolver or service, translate errors, and write JSON.
 - Reuse `WorkspaceCommand` for workspace-loading commands.
 - Reuse `SourcePositionCommand` for commands that take `--file`, `--line`, and `--column`.
-- Keep Roslyn and semantic behavior in `navlyn/Symbols`, not in CLI command classes.
+- Keep Roslyn and semantic behavior in `Navlyn.Core/Symbols`; CLI adapters belong in `Navlyn.CommandLine/Cli`.
 - Use stable diagnostic IDs and preserve stdout for successful JSON result data only.
 - Prefer repository-relative paths through the existing path display helpers.
 - Add CLI contract coverage for public command wiring and output shape.
@@ -348,11 +362,11 @@ dotnet run --framework net10.0 --no-launch-profile --project navlyn -- context-p
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- public-api-diff --workspace navlyn.slnx --base HEAD --project "navlyn(net10.0)" --change-limit 5
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- tests-for-symbol --workspace navlyn.slnx --query RepoGraphResolver --assume-kind NamedType --project "Navlyn.Core(net10.0)" --test-project "navlyn.Tests(net10.0)" --test-limit 5
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols --workspace navlyn.slnx --query Check
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbols-in --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- symbol-at --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- definition --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- references --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- definition --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --column 37
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- references --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --column 37
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- implementations --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 6 --column 23
 dotnet run --framework net10.0 --no-launch-profile --project navlyn -- callers --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/Commands/CheckCommand.cs --line 8 --column 27
-dotnet run --framework net10.0 --no-launch-profile --project navlyn -- calls --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 53 --column 37
+dotnet run --framework net10.0 --no-launch-profile --project navlyn -- calls --workspace navlyn.slnx --file Navlyn.CommandLine/Cli/NavlynCli.cs --line 60 --column 37
 ```

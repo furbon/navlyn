@@ -2,6 +2,7 @@
 using System.Text.Json.Serialization;
 using Microsoft.CodeAnalysis;
 using Navlyn.Cli.Commands;
+using Navlyn.Cli;
 using Navlyn.Cli.OutputProfiles;
 using Navlyn.Diagnostics;
 using Navlyn.Mcp.Configuration;
@@ -50,6 +51,7 @@ internal sealed class NavlynMcpDirectToolRunner(
         CancellationToken cancellationToken)
     {
         NavlynSourceCommand sourceCommand = CreateSourceCommand(command);
+        using CliInvocationContext invocation = CliInvocationContext.Begin(sourceCommand.Arguments, options.WorkingDirectory);
         try
         {
             if (command.Command == "workspace-status" && !string.IsNullOrWhiteSpace(options.DaemonPipe))
@@ -604,7 +606,7 @@ internal sealed class NavlynMcpDirectToolRunner(
             new NavlynToolError(code, message, exitCode));
     }
 
-    private NavlynSourceCommand CreateSourceCommand(CommandBuildResult command)
+    internal NavlynSourceCommand CreateSourceCommand(CommandBuildResult command)
     {
         return new NavlynSourceCommand(
             command.Command!,

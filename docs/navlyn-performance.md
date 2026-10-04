@@ -66,7 +66,20 @@ Reports are structured JSON with:
 
 Timings are environment-dependent. Treat local reports as release and investigation evidence, not a universal service-level objective.
 
-## Current Local Case Study
+## Current v0.8.6 MCP smoke
+
+On 2026-10-04, the v0.8.6 release candidate was measured on Windows 10.0.26200 with SDK 10.0.401, workspace `navlyn.slnx`, scenario `mcp`, profile `compact`, one iteration, and no warmup or build. Local release CLI validation ran concurrently, so these are functional smoke observations rather than a comparison benchmark. All four calls returned valid JSON and success; no sample was truncated.
+
+| Tool | Path | Elapsed ms | Response chars |
+| --- | --- | ---: | ---: |
+| `navlyn_workspace_summary` | Direct, cold workspace load | 13732 | 4729 |
+| `navlyn_file_outline` | Direct, warm snapshot | 2005 | 19868 |
+| `navlyn_read` | Direct, warm snapshot | 112 | 7363 |
+| `navlyn_navigate` (`calls`) | CLI adapter | 2378 | 22045 |
+
+The first call includes workspace loading; only outline and read reuse its warm direct snapshot. Adapter-backed navigation has a separate load cost. The measurement script now uses current tool names and a method declaration as its default source position. It saves reports before failing on nonzero commands, invalid JSON, unexpected CLI diagnostics, or skipped prerequisites, and supports absolute output paths. CI release validation runs quick CLI and MCP smoke; historical results below are preserved as dated evidence.
+
+## Historical 0.7.0 Local Case Study
 
 The following smoke evidence was recorded on 2026-07-05 from the 0.7.0 release branch, on Windows 10.0.26200 with .NET SDK 10.0.301. The report was produced with `navlyn.slnx`, `-Scenario all`, `-Profile compact`, `-Iterations 1`, `-Warmup 0`, and `-NoBuild`; all measured commands returned JSON-valid stdout, exit code 0, and stderr size 0.
 
@@ -84,7 +97,7 @@ The following smoke evidence was recorded on 2026-07-05 from the 0.7.0 release b
 
 These numbers are a reproducibility snapshot for release review, not a claim that other repositories or machines will match them. For 0.6.x work, consider a performance smoke healthy only when commands succeed, stdout is valid JSON, successful stderr is empty, truncation is expected and documented, and expected files are present in related/context/review outputs.
 
-## 0.6.x Targets
+## Workflow Targets
 
 Targets are local guardrails, not hosted-service SLOs:
 
