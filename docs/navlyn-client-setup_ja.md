@@ -8,17 +8,17 @@ MCP は、AI ツールが外部のコマンドを呼び出すための仕組み�
 
 VS Code では、設定バンドルを使って計画の確認、インストール、接続確認、取り消しを行えます。ほかのクライアントでは、後述の手動インストールを使います。
 
-0.9.1の既定値はtarget・read・file outline・navigateの4ツールです。局所的な文字列や設定の確認には通常の読取りや`rg`を使います。従来の25ツールと完全な応答が必要な場合は、サーバー引数に`--surface full`を追加してください。[移行と応答設定](navlyn-mcp-server.md#v091-defaults-and-migration)を参照してください。
+0.9.2の既定値はtarget・read・file outline・navigateの4ツールです。局所的な文字列や設定の確認には通常の読取りや`rg`を使います。従来の25ツールと完全な応答が必要な場合は、サーバー引数に`--surface full`を追加してください。[移行と応答設定](navlyn-mcp-server.md#v091-defaults-and-migration)を参照してください。
 
 公開済みの版がNuGetで確認できるのにインストール時に見つからない場合、同じコマンドに`--no-http-cache`を追加して再試行します。全体のキャッシュ削除は不要です。
 
 ## VS Code の設定バンドル
 
-リリースの添付ファイル `navlyn-setup-0.9.1.zip` を専用ディレクトリへ展開します。`integrity.json` にはソースのコミットと各ファイルのハッシュがあります。展開先で、次の二つのパスを実際のものに置き換えて実行します。
+リリースの添付ファイル `navlyn-setup-0.9.2.zip` を専用ディレクトリへ展開します。`integrity.json` にはソースのコミットと各ファイルのハッシュがあります。展開先で、次の二つのパスを実際のものに置き換えて実行します。
 
 ```powershell
-./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.9.1
-./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.9.1 -Apply
+./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.9.2
+./setup-navlyn.ps1 -Workspace 'C:/src/my project' -WorkspaceFile 'C:/src/my project/MyApp.slnx' -Version 0.9.2 -Apply
 ```
 
 最初のコマンドは計画を表示します。ファイルの書き込み、パッケージのダウンロード、クライアントの起動は行いません。パス、バージョン、取得元、変更内容を確認してから適用してください。自動選択で対象が決まらない場合は、`-WorkspaceFile` に使いたい `.slnx`、`.sln`、`.csproj`、`.vbproj` を明示します。
@@ -33,17 +33,17 @@ VS Code では、設定バンドルを使って計画の確認、インストー
 
 ## MCP の手動インストール
 
-`dotnet tool list --global` で `navlyn-mcp` が導入済みか確認してください。未導入なら以下を実行します。同じ版があればインストールを省略し、古い版なら `dotnet tool update --global navlyn-mcp --version 0.9.1` を実行します。
+`dotnet tool list --global` で `navlyn-mcp` が導入済みか確認してください。未導入なら以下を実行します。同じ版があればインストールを省略し、古い版なら `dotnet tool update --global navlyn-mcp --version 0.9.2` を実行します。
 
 ```powershell
-dotnet tool install --global navlyn-mcp --version 0.9.1
+dotnet tool install --global navlyn-mcp --version 0.9.2
 $toolHome = if ($env:DOTNET_CLI_HOME) { $env:DOTNET_CLI_HOME } else { $HOME }
 $mcpExe = Join-Path $toolHome '.dotnet/tools/navlyn-mcp.exe'
 Test-Path $mcpExe
 $mcpExe --version
 ```
 
-導入済みの場合も、上の `$mcpExe` 以降を実行します。表示された版が 0.9.1 であることを確認し、以下の `C:\path\to\navlyn-mcp.exe` を `$mcpExe` のパスで置き換えます。調べたいリポジトリを開いてから設定してください。
+導入済みの場合も、上の `$mcpExe` 以降を実行します。表示された版が 0.9.2 であることを確認し、以下の `C:\path\to\navlyn-mcp.exe` を `$mcpExe` のパスで置き換えます。調べたいリポジトリを開いてから設定してください。
 
 ## VS Code と GitHub Copilot
 
@@ -91,6 +91,8 @@ $mcpExe --version
 `.vscode/mcp.json` は Copilot CLI の設定ファイルではありません。設定を外すには `.mcp.json` の項目を削除します。
 
 ## Codex
+
+必要時だけ意味的な証拠を得る場合は、`navlyn` CLI と軽量な [CLI 導線](navlyn-codex-routing-skill_ja.md)を使えます。MCP とスキルは任意であり、通常の読取り・検索に意味解析の前置きは不要です。以下は継続的な MCP 接続を使う場合の設定です。
 
 [Codex の導入ページ](https://developers.openai.com/codex/quickstart)に従って Codex を使える状態にします。PowerShell で次を実行し、`$mcpExe` を実際の `navlyn-mcp.exe` の絶対パスに置き換えます。
 

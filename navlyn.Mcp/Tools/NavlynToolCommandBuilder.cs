@@ -267,9 +267,10 @@ internal static class NavlynToolCommandBuilder
         string? view,
         int? maxLines,
         int? budgetTokens,
-        string? externalSource = null)
+        string? externalSource = null,
+        string? externalMember = null)
     {
-        CommandBuildResult result = SymbolSource(candidateId, file, line, column, project, excludeGenerated, view, maxLines, budgetTokens, externalSource);
+        CommandBuildResult result = SymbolSource(candidateId, file, line, column, project, excludeGenerated, view, maxLines, budgetTokens, externalSource, externalMember);
         return result.IsValid ? result with { Command = "read" } : result;
     }
 
@@ -871,7 +872,8 @@ internal static class NavlynToolCommandBuilder
         string? view,
         int? maxLines,
         int? budgetTokens,
-        string? externalSource = null)
+        string? externalSource = null,
+        string? externalMember = null)
     {
         List<string> args = [];
         if (!TryAddExactNavigationTarget(args, candidateId, file, line, column, out string? error) ||
@@ -885,6 +887,7 @@ internal static class NavlynToolCommandBuilder
 
         AddOptionalValue(args, "--project", project);
         AddOptionalFlag(args, "--exclude-generated", excludeGenerated);
+        AddOptionalValue(args, "--external-member", externalMember);
         return CommandBuildResult.Valid("symbol-source", args);
     }
 

@@ -29,6 +29,8 @@ internal sealed class ExternalLibrarySourceFixture
 
     public string ConsumerProject => Path.Combine(fixtureRoot, "Consumer", "Consumer.csproj");
     public string ConsumerSource => Path.Combine(fixtureRoot, "Consumer", "Program.cs");
+    public string ArtifactsProject => Path.Combine(fixtureRoot, "RedirectedOutput", "RedirectedOutput.csproj");
+    public string ArtifactsSource => Path.Combine(fixtureRoot, "RedirectedOutput", "Program.cs");
     public string DirectProject => Path.Combine(fixtureRoot, "Direct", "Direct.csproj");
     public string DirectSource => Path.Combine(fixtureRoot, "Direct", "Program.cs");
     public string VisualBasicProject => Path.Combine(fixtureRoot, "VisualBasic", "VisualBasic.vbproj");
@@ -76,7 +78,8 @@ internal sealed class ExternalLibrarySourceFixture
         string view = "body",
         string? projectName = null,
         int? maxLines = null,
-        int? budgetTokens = null)
+        int? budgetTokens = null,
+        string? externalMember = null)
     {
         bool sharedProject = project.StartsWith(fixtureRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
         McpClient client = sharedProject ? await readers.GetOrAdd(project, CreateReaderAsync) : await CreateReaderAsync(project);
@@ -87,7 +90,7 @@ internal sealed class ExternalLibrarySourceFixture
             {
                 ["file"] = source, ["line"] = line, ["column"] = column, ["view"] = view,
                 ["project"] = projectName, ["maxLines"] = maxLines, ["budgetTokens"] = budgetTokens,
-                ["externalSource"] = externalSource
+                ["externalSource"] = externalSource, ["externalMember"] = externalMember
             }, cancellationToken: deadline.Token);
             JsonElement result = response.StructuredContent!.Value;
             return result.GetProperty("ok").GetBoolean()
@@ -99,6 +102,10 @@ internal sealed class ExternalLibrarySourceFixture
             if (!sharedProject) { await client.DisposeAsync(); }
         }
     }
+
+    public Task<CliResult> RunBatchAsync(object payload) => RunProcessAsync("dotnet",
+        [CliAssembly, "batch", "--workspace", ConsumerProject], root, TimeSpan.FromSeconds(60),
+        JsonSerializer.Serialize(payload));
 
     private async Task<McpClient> CreateReaderAsync(string project)
     {
@@ -147,7 +154,7 @@ internal sealed class ExternalLibrarySourceFixture
         {
             "Library/bin", "Library/obj", "Consumer/bin", "Consumer/obj", "Direct/bin", "Direct/obj",
             "VisualBasic/bin", "VisualBasic/obj", "ReferenceOnly/bin", "ReferenceOnly/obj",
-            "ReferenceOnlyPackage/bin", "ReferenceOnlyPackage/obj", "packages", ".nuget-home/packages"
+            "ReferenceOnlyPackage/bin", "ReferenceOnlyPackage/obj", "RedirectedOutput/obj", "out", "packages", ".nuget-home/packages"
         })
         {
             string path = Path.GetFullPath(Path.Combine(fixtureRoot, relative));
@@ -175,6 +182,7 @@ internal sealed class ExternalLibrarySourceFixture
         ValidatePackages(packageFeed);
 
         await RestoreAndBuildAsync(ConsumerProject, packageFeed);
+        await RestoreAndBuildAsync(ArtifactsProject, packageFeed);
         await RestoreAndBuildAsync(DirectProject, packageFeed);
         await RestoreAndBuildAsync(VisualBasicProject, packageFeed);
         await RestoreAndBuildAsync(ReferenceOnlyProject, packageFeed);
@@ -372,7 +380,7 @@ internal sealed class ExternalLibrarySourceFixture
         return false;
     }
 
-    private static async Task<CliResult> RunProcessAsync(string executable, IReadOnlyList<string> arguments, string workingDirectory, TimeSpan timeout)
+    private static async Task<CliResult> RunProcessAsync(string executable, IReadOnlyList<string> arguments, string workingDirectory, TimeSpan timeout, string? standardInput = null)
     {
         using Process process = new();
         process.StartInfo = new ProcessStartInfo(executable)
@@ -380,6 +388,7 @@ internal sealed class ExternalLibrarySourceFixture
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            RedirectStandardInput = standardInput is not null,
             UseShellExecute = false
         };
         string fixturesDirectory = Path.Combine(FindRepositoryRoot(), "tests", "fixtures", "ExternalLibrarySourceFixture");
@@ -407,6 +416,11 @@ internal sealed class ExternalLibrarySourceFixture
         using CancellationTokenSource timeoutSource = new(timeout);
         try
         {
+            if (standardInput is not null)
+            {
+                await process.StandardInput.WriteAsync(standardInput.AsMemory(), timeoutSource.Token);
+                process.StandardInput.Close();
+            }
             await process.WaitForExitAsync(timeoutSource.Token);
         }
         catch (OperationCanceledException)

@@ -4,14 +4,16 @@
 
 The server is intentionally facts-only:
 
-- no file edits;
+- no source edits;
 - no arbitrary shell execution;
 - no network access;
 - no arbitrary raw file server;
-- no workspace mutation;
+- no source or workspace-configuration edits;
 - no hidden review-comment publishing.
 
 Successful tool calls return a Navlyn MCP result envelope with the Navlyn command JSON under `result`; the full inner result shapes remain documented in [`navlyn-cli-commands.md`](navlyn-cli-commands.md).
+
+Loading a workspace can run MSBuild and generate intermediate files in `obj`; see the [execution and workspace limits](navlyn-limitations.md). Concurrent external CLI calls within one server are queued, while independent processes can still contend on those generated files.
 
 For an explicit workspace path, initial cache discovery checks the selected workspace and ancestor configuration before inventorying the loaded project roots. Unrelated artifact-directory links do not block startup. Loaded source, project, configuration, and dependency changes still trigger freshness checks; links inside an inventoried project remain an inspection error.
 
@@ -24,6 +26,18 @@ Startup now defaults to `--surface focused`: `navlyn_target`, `navlyn_read`, `na
 `--result-profile compact|full` independently selects the server response default; each tool accepts `resultProfile` to override it. Compact preserves identity/signature, location, project/TFM, source and relationship evidence, warnings, scope, and freshness. It omits redundant next-action objects, sourceCommand, repeated display names, false convenience flags (except source/metadata identity flags), and parameter/return-type trees when a signature is present. Missing convenience fields are omitted, not positive assertions. Request `resultProfile: "full"` for complete automation facts. Error envelopes retain their error facts. Text fallback and structured content contain the same JSON.
 
 Compact file outlines default to 100 entries. `entryLimit` (1–1000) and `entryOffset` (nonnegative) control a page. Read `entriesTotal`, `entriesTruncated`, and `nextEntryOffset`; continue only when the source snapshot has not changed. Full responses are unpaged unless paging is explicitly requested. Existing relationship tools retain their own documented limits and scope. Hidden tool calls return `NAVLYN_MCP_TOOL_UNAVAILABLE`; advanced work remains available through the CLI or `--surface full`.
+
+In 0.9.2, outline bounds reach the resolver before detailed facts, candidate registration and command JSON construction. Declarations are still inspected to preserve exact totals/order. This also prevents an otherwise small requested page from failing because the entire file's JSON exceeded `--max-json-chars`. Both direct execution and a matching 0.9.2 external CLI support these bounds; the latter uses the new CLI `--entry-limit`/`--entry-offset` options. Unpaged CLI/full results retain their existing fields. Match CLI/server versions when using the legacy external adapter.
+
+At an existing call position, `navlyn_read` with `externalSource: "decompiled"` and `view: "body"` selects the bound referenced overload and returns its static implementation in one call. A target/outline preamble is unnecessary. For occasional semantic investigations, an installed CLI can supply the same fact without MCP startup/discovery; see [routing and CLI integration](navlyn-codex-routing-skill.md).
+
+Set `NAVLYN_PROFILE_TIMINGS=1` only for diagnostics. MCP writes `NAVLYN_MCP_TIMING` JSON lines on stderr (`navlyn.mcp.timing.v1`), including inclusive stages for discovery, workspace loading, input inventory/hash, resolution and response generation. Parent stages include their children and must not be summed together. Normal stdout/result JSON is unchanged; profiling is disabled by default. These server timings exclude some transport and all model/client work.
+
+Focused compact discovery describes a small stable result envelope instead of repeating the full next-action/error/metadata tree for every tool. Actual result fields and per-call full overrides remain available; `--surface full` or a full default profile retains detailed discovery. The schema advertises the configured response default. Compact preserves the complete bounded signature/body, so full detail is unnecessary solely to read that source.
+
+Initialization also supplies a short routing hint through MCP `instructions`: use ordinary reads/search for directly readable facts, and read a bound DLL body directly from a known call position. Clients decide whether to expose these instructions to the model; receiving the field does not guarantee tool selection. A surface without `navlyn_read` receives generic guidance instead of advertising an unavailable tool.
+
+The legacy external adapter serializes subprocess calls within a server to avoid concurrent MSBuild generation in the same workspace. Queue time counts toward deadlines; canceled waiters do not release another call's slot. Independently launched CLI processes can still collide during cold design-time generation; prepare once or serialize those loads when investigating that configuration.
 
 Non-regex symbol queries accept containing-type/member and namespace-qualified names such as `Client.Number` or `Sample.Formatter.Format`. Qualifiers constrain semantic containers and preserve overload ambiguity; an absent container does not fall back to an unrelated symbol. This is declaration discovery, not arbitrary C# expression binding. Use a source position for constructed-generic or explicit-interface syntax requiring exact binding. `typeKind` filters query candidates by class/interface/struct/enum/delegate/record/record-class/record-struct; `assumeKind` remains a ranking hint. A returned type's `facts.typeKind` and `facts.isRecord` describe its actual Roslyn category.
 
@@ -124,7 +138,7 @@ Equivalent MCP client configuration for local development:
 }
 ```
 
-For the 0.9.1 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
+For the 0.9.2 candidate, use the unique-output pack, package-contract, and isolated consumer-install commands in [distribution guidance](navlyn-distribution.md#current-release-state).
 
 ## Server Options
 
@@ -245,13 +259,19 @@ The MCP surface is deliberately need-triggered. Prefer the specific high-level t
 
 `navlyn_read` accepts `externalSource: "none" | "metadata" | "decompiled"`. It defaults to `none`, which keeps the existing source-only behavior. For a metadata-only symbol selected at an exact C# or Visual Basic call site, `metadata` returns a Roslyn declaration and `decompiled` can return reconstructed C# for one exact member from a matching local implementation PE. Existing workspace source always takes priority; this option is available on the focused read tool as well as the full surface.
 
-Use `view: "signature"`, `"declaration"`, or `"body"`. The result keeps the call-site `file`, `line`, and `column`. External slices carry `origin` and `editable: false`, plus a `navlyn-metadata://<reference-sha256>/<member-id-sha256>` or `navlyn-decompiled://<implementation-sha256>/<member-id-sha256>` virtual path. Slice coordinates start at line 1 in the returned text; the URI is not a file path and cannot be reused as a source position or candidate ID. `externalAssembly` reports the assembly identity, selected target framework, reference-versus-implementation provenance, and PE content hashes. Reconstructed C# is not original library source and does not establish runtime dispatch.
+Use `view: "signature"`, `"declaration"`, or `"body"`; decompiled also supports `"members"` for a type. The result keeps the call-site `file`, `line`, and `column`. External slices carry `origin` and `editable: false`, plus a `navlyn-metadata://<reference-sha256>/<member-id-sha256>` or `navlyn-decompiled://<implementation-sha256>/<member-id-sha256>` virtual path. Slice coordinates start at line 1 in the returned text; the URI is not a file path and cannot be reused as a source position or candidate ID. `externalAssembly` reports the assembly identity, selected target framework, reference-versus-implementation provenance, and PE content hashes. Reconstructed C# is not original library source and does not establish runtime dispatch.
 
 For `body`, Navlyn requires the exact bound member to have an implementation body in the exact local implementation PE. A reference-only NuGet package, abstract member, unresolved framework implementation or runtime variant, missing PE, malformed image, ambiguity, stale binary, unsupported view, or exceeded safety limit returns a deterministic error without a body. Framework reference metadata may still be returned in `metadata` mode. Navlyn does not restore/fetch packages, execute referenced assemblies, or write source files. The default `none` mode does not inspect dependency PEs.
 
 External reads limit each reference or implementation PE to 64 MiB, `project.assets.json` to 16 MiB, and the selected method IL to 1 MiB. Implementation selection and decompilation run in a disposable worker with a 10-second deadline.
 
-External diagnostics use the CLI IDs in the MCP error result: `NAVLYN1401` unsupported view, `NAVLYN1402` matching implementation unavailable, `NAVLYN1403` exact member has no body, `NAVLYN1404` ambiguous member or implementation, `NAVLYN1405` selected reference/assets/implementation changed during the read, `NAVLYN1406` a configured size/decompilation limit was exceeded, and `NAVLYN1407` malformed or undecompilable PE.
+External diagnostics use the CLI IDs in the MCP error result: `NAVLYN1401` unsupported view, `NAVLYN1402` matching implementation unavailable, `NAVLYN1403` exact member is absent or has no body (distinguished in the message), `NAVLYN1404` ambiguous member or implementation, `NAVLYN1405` selected reference/assets/implementation changed during the read, `NAVLYN1406` a configured size/decompilation limit was exceeded, and `NAVLYN1407` malformed PE or selected-member reconstruction failure.
+
+At a constructed C#/VB type token, a decompiled body read selects the exact bound constructor. For enum/constant values use metadata declaration; a field/type has no method body. External provenance includes `memberDocumentationCommentId` for the normalized library definition, separately from call-site reduced/constructed facts. `navlyn_target` searches workspace source declarations, and `navlyn_navigate` calls inspect source bodies; neither searches arbitrary DLL internals.
+
+To follow DLL internals, retain the existing external source anchor and set `externalSource: "decompiled"`. `view: "members"` lists its type's immediate methods, fields and nested types, including private definitions and constant values, in ordinal ID order. Supply `externalMember: "T:Namespace.Type"` with members view for another type, `"M:Namespace.Type.Method(System.Int16)"` with body view for an exact overload, or `"F:Namespace.Type.Constant"` with declaration view for a constant. All selections stay within the compiler-bound implementation assembly and retain its identity/freshness checks; malformed, absent or cross-assembly IDs fail without broadening. Root symbol remains the source anchor; additive `externalAssembly.anchorDocumentationCommentId` and `memberSignature` distinguish it from the selected member. Lists honor maxLines/budgetTokens and report exact membersTotal and truncation, excluding inherited members. CLI uses `--external-member` for the same route. Without an external anchor, use ordinary dependency inspection.
+
+Copy returned IDs unchanged, including parameter types. Use a source anchor in the intended assembly; another dependency needs its own bound anchor. In PowerShell, single-quote IDs to preserve generic backticks, or use JSON batch input. Explicit accessor method IDs also support typed signatures/declarations. Constructor body view contains its brace body; declaration/signature retain base/this initializers, which matter when tracing initialization. Focused MCP read already shares its workspace; for several independently needed CLI facts, existing batch symbol-source accepts externalSource/externalMember and retains per-request provenance/errors. The full MCP surface exposes the corresponding batch route.
 
 Profiled tools accept the values documented by their logical CLI commands. Use `compact` for small workflow scans, `evidence` for review and CI facts, and `full` only when the richest result is required. `navlyn_workspace_status` and `navlyn_workspace_refresh` accept cache modes `auto`, `on`, or `off`; refresh also accepts `clearCache` and `writeCache`. `navlyn_impact` accepts `light` or `full`. `navlyn_context_pack` accepts edit-oriented `changeKind` hints. `navlyn_batch` accepts request-level profiles and `candidateIdFrom` dependencies when a later request should reuse an earlier result's `candidateId`.
 

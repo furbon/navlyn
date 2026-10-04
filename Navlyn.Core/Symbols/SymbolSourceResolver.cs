@@ -21,6 +21,11 @@ internal sealed class SymbolSourceResolver
         SymbolSourceOptions options,
         CancellationToken cancellationToken)
     {
+        if (options.ExternalMember is not null &&
+            (options.ExternalSource != "decompiled" || options.ExternalMember.Length > 2048 ||
+             options.ExternalMember.Length < 3 || options.ExternalMember[1] != ':' || options.ExternalMember[0] is not ('M' or 'T' or 'F')))
+            return SymbolSourceResolutionResult.Failed(new SymbolNavigationError(DiagnosticIds.InvalidExternalSourceView,
+                "external-member requires external-source decompiled and one exact M:, T:, or F: documentation ID.", ExitCodes.UsageError));
         SourceSymbolResolutionResult result = await new SourceSymbolResolver().ResolveAsync(
             solution,
             file,
@@ -37,6 +42,15 @@ internal sealed class SymbolSourceResolver
         }
 
         SourceSymbolResolution source = result.Resolution!;
+        if (options.ExternalMember is null && options.ExternalSource == "decompiled" && options.View == "body" &&
+            source.Symbol is INamedTypeSymbol && source.Symbol.Locations.Any(location => location.IsInMetadata))
+        {
+            // At `new LibraryType(...)`, a type token normally selects the type. A body
+            // request needs the uniquely bound constructor, not a guess from its arguments.
+            SourceSymbolResolutionResult constructor = await ResolveExternalConstructorAsync(solution, source, cancellationToken);
+            if (constructor.Error is not null) return SymbolSourceResolutionResult.Failed(constructor.Error);
+            source = constructor.Resolution!;
+        }
         SymbolSourceSymbol symbol = CreateSymbol(source.Symbol, source.ProjectName);
         IReadOnlyList<Location> locations = [.. source.Symbol.Locations
             .Where(location => location.IsInSource && location.GetLineSpan().IsValid)
@@ -68,7 +82,8 @@ internal sealed class SymbolSourceResolver
 
                 ISymbol externalSymbol = source.Symbol;
                 string externalMode = options.ExternalSource;
-                if (source.Symbol is IPropertySymbol property && options.ExternalSource == "decompiled")
+                if (source.Symbol is IPropertySymbol property && options.ExternalSource == "decompiled" &&
+                    options.ExternalMember is null && options.View != "members")
                 {
                     if (options.View != "body")
                     {
@@ -100,12 +115,15 @@ internal sealed class SymbolSourceResolver
                     externalMode,
                     options.MaxLines,
                     options.BudgetTokens,
-                    cancellationToken);
+                    cancellationToken,
+                    options.ExternalMember);
                 if (external.DiagnosticId is int diagnosticId)
                 {
                     return SymbolSourceResolutionResult.Failed(new SymbolNavigationError(
                         diagnosticId,
-                        ExternalMemberDiagnosticMessage(diagnosticId),
+                        external.MemberNotFound ? $"Exact external member '{options.ExternalMember ?? externalSymbol.GetDocumentationCommentId()}' was not found in the bound implementation assembly '{externalSymbol.ContainingAssembly?.Identity.Name}'. Use an anchor in the intended assembly and copy the exact ID returned by members view, including parameter types; do not guess a namespace or overload."
+                            : options.ExternalMember is null ? ExternalMemberDiagnosticMessage(diagnosticId, externalSymbol)
+                            : $"External member '{options.ExternalMember}' in the bound assembly: {ExternalMemberDiagnosticMessage(diagnosticId)}",
                         ExitCodes.UsageError));
                 }
 
@@ -139,6 +157,10 @@ internal sealed class SymbolSourceResolver
                 Truncated: false,
                 Warnings: warnings));
         }
+
+        if (options.ExternalMember is not null)
+            return SymbolSourceResolutionResult.Failed(new SymbolNavigationError(DiagnosticIds.InvalidExternalSourceView,
+                "external-member requires a compiler-bound external assembly anchor, not a workspace source declaration.", ExitCodes.UsageError));
 
         IReadOnlyList<SymbolSourceSlice> slices = [.. locations
             .SelectMany(location => CreateSlices(source.Symbol, location, options, cancellationToken))
@@ -243,15 +265,47 @@ internal sealed class SymbolSourceResolver
 
     private enum PropertyAccessKind { Read, Write, Ambiguous }
 
-    private static string ExternalMemberDiagnosticMessage(int diagnosticId) => diagnosticId switch
+    private static async Task<SourceSymbolResolutionResult> ResolveExternalConstructorAsync(
+        Solution solution, SourceSymbolResolution source, CancellationToken cancellationToken)
     {
-        DiagnosticIds.InvalidExternalSourceView => "External source supports only signature, declaration, or body views.",
+        Document? document = solution.GetDocument(source.DocumentId);
+        SemanticModel? model = document is null ? null : await document.GetSemanticModelAsync(cancellationToken);
+        if (model is null) return SourceSymbolResolutionResult.Succeeded(source);
+        SyntaxToken token = source.SyntaxTree.GetRoot(cancellationToken).FindToken(source.Position);
+        foreach (SyntaxNode node in token.Parent?.AncestorsAndSelf() ?? [])
+        {
+            SyntaxNode? constructedType = node switch
+            {
+                ObjectCreationExpressionSyntax creation when creation.Type.Span.Contains(source.Position) => creation.Type,
+                Microsoft.CodeAnalysis.VisualBasic.Syntax.ObjectCreationExpressionSyntax creation when creation.Type.Span.Contains(source.Position) => creation.Type,
+                _ => null
+            };
+            if (constructedType is null) continue;
+            // A generic argument or qualified containing type is a separate selected symbol.
+            if (!SymbolEqualityComparer.Default.Equals(model.GetTypeInfo(constructedType, cancellationToken).Type, source.Symbol))
+                return SourceSymbolResolutionResult.Succeeded(source);
+            SymbolInfo info = model.GetSymbolInfo(node, cancellationToken);
+            if (info.Symbol is IMethodSymbol { MethodKind: MethodKind.Constructor } constructor)
+                return SourceSymbolResolutionResult.Succeeded(source with { Symbol = constructor, HasExactBinding = true });
+            if (info.CandidateReason != CandidateReason.None)
+                return SourceSymbolResolutionResult.Failed(DiagnosticIds.ExternalMemberAmbiguous,
+                    "The object creation has no unique constructor binding.", ExitCodes.UsageError);
+            break;
+        }
+        return SourceSymbolResolutionResult.Succeeded(source);
+    }
+
+    private static string ExternalMemberDiagnosticMessage(int diagnosticId, ISymbol? selected = null) => diagnosticId switch
+    {
+        DiagnosticIds.InvalidExternalSourceView => "External metadata supports signature/declaration/body; decompiled types support members/signature and methods support signature/declaration/body.",
         DiagnosticIds.ExternalImplementationUnavailable => "A matching local implementation assembly is unavailable.",
-        DiagnosticIds.ExternalMemberBodyUnavailable => "The exact external member has no implementation body.",
+        DiagnosticIds.ExternalMemberBodyUnavailable => selected is null
+            ? "The exact external member has no implementation body."
+            : $"The selected {selected.Kind} '{selected.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)}' has no implementation body. Use external-source metadata with signature or declaration for metadata facts. To follow another implementation member, keep a bound external anchor and copy an exact ID from members view.",
         DiagnosticIds.ExternalMemberAmbiguous => "The exact external member or implementation assembly is ambiguous.",
         DiagnosticIds.ExternalMemberStale => "The external assembly changed while the member was being read.",
         DiagnosticIds.ExternalMemberLimitExceeded => "The external assembly or decompilation exceeded the configured safety limits.",
-        DiagnosticIds.ExternalMemberMalformedImage => "The external assembly is malformed or cannot be decompiled.",
+        DiagnosticIds.ExternalMemberMalformedImage => "The external assembly is malformed or the selected member cannot be reconstructed.",
         _ => "The external member could not be read."
     };
 
@@ -341,7 +395,7 @@ internal sealed class SymbolSourceResolver
             .Take(effectiveLineCount)
             .Select(line => line.ToString())];
 
-        int charLimit = options.BudgetTokens * 4;
+        int charLimit = (int)Math.Min(int.MaxValue, (long)options.BudgetTokens * 4);
         bool budgetTruncated = false;
         int used = 0;
         List<string> boundedLines = [];
@@ -390,7 +444,7 @@ internal sealed class SymbolSourceResolver
     }
 }
 
-internal sealed record SymbolSourceOptions(string View, int MaxLines, int BudgetTokens, string ExternalSource = "none");
+internal sealed record SymbolSourceOptions(string View, int MaxLines, int BudgetTokens, string ExternalSource = "none", string? ExternalMember = null);
 
 internal sealed record SymbolSourceResolutionResult(SymbolSourceResolution? Resolution, SymbolNavigationError? Error)
 {

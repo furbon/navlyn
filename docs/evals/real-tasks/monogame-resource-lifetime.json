@@ -1,0 +1,15 @@
+{
+  "id": "monogame-resource-disposal-investigation",
+  "sourceCommit": "bcc73c68a2d3b8b30e11989072dedad2b7d9b953",
+  "sourceUrl": "https://github.com/MonoGame/MonoGame/pull/9027",
+  "workspace": "MonoGame.Framework/MonoGame.Framework.DesktopGL.csproj",
+  "submodules": ["ThirdParty/StbImageSharp", "ThirdParty/StbImageWriteSharp"],
+  "turnTimeoutMs": 360000,
+  "validationKind": "evidence-artifact-integrity",
+  "prompts": [
+    "A game using this MonoGame version stutters while clearing roughly 4,000 cached graphics resources out of about 30,000 live resources. Investigate the CPU-side registration/removal path and propose a focused performance repair. Trace resource assignment, reassignment to another GraphicsDevice, explicit disposal, finalization, device disposal and resetting across the relevant classes and platform partials. Determine whether collection order or weak-reference identity is part of the behavior that a replacement must preserve. Do not inspect upstream fixes or launch graphics windows; this task is a source-based performance and lifetime investigation, not a rendering benchmark.",
+    "Review the proposed repair for mutation during traversal, locking, stale weak references, duplicate registration and device ownership. Specify meaningful regression and performance checks and distinguish CPU-side evidence from GPU/runtime behavior that has not been tested. Save REPORT.json with findings [{id,statement,evidence:[{path,line}],certainty}] and testPlan. Use ids complexity, registration, reassignment, disposal, finalization, traversal, resetting and platform-scope. The final recommendation must cover correctness and practical verification, not only replace a collection type. Do not change production source."
+  ],
+  "prepare": [["dotnet", "restore", "MonoGame.Framework/MonoGame.Framework.DesktopGL.csproj", "--verbosity", "quiet"]],
+  "validate": [["node", "{runnerRoot}/scripts/validate-navlyn-task-report.mjs", "REPORT.json"]]
+}

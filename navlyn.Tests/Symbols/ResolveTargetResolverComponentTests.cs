@@ -62,6 +62,7 @@ public sealed class ResolveTargetResolverComponentTests(ResolverComponentTestFix
             fixture.FuzzyDiscoveryWorkspace.Solution.Projects.ToArray(), null, CancellationToken.None);
         Assert.Null(result.SelectedTarget);
         Assert.Equal(0, result.TotalCandidates);
+        Assert.Contains("External DLL declarations are not searched", Assert.Single(result.Warnings), StringComparison.Ordinal);
     }
 
     [Fact]

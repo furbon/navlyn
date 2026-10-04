@@ -24,15 +24,19 @@ internal sealed class ExternalMemberSourceResolver
         string mode,
         int maxLines,
         int budgetTokens,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? externalMember = null)
     {
-        if (view is not ("signature" or "declaration" or "body"))
+        if (view is not ("signature" or "declaration" or "body") && !(mode == "decompiled" && view == "members"))
         {
             return ExternalMemberResolutionResult.Failed(DiagnosticIds.InvalidExternalSourceView);
         }
 
         ISymbol member = Normalize(boundSymbol);
         string? documentationId = member.GetDocumentationCommentId();
+        string? anchorId = documentationId;
+        if (externalMember is not null) documentationId = externalMember;
+        else if (view == "members") documentationId = (member as INamedTypeSymbol ?? member.ContainingType)?.OriginalDefinition.GetDocumentationCommentId();
         string? framework = ProjectContextFacts.GetTargetFramework(project);
         if (string.IsNullOrWhiteSpace(documentationId) || member.ContainingAssembly is null || string.IsNullOrWhiteSpace(framework))
         {
@@ -85,8 +89,7 @@ internal sealed class ExternalMemberSourceResolver
             return ExternalMemberResolutionResult.Failed(DiagnosticIds.ExternalMemberMalformedImage);
         }
 
-        string? projectPath = project.FilePath;
-        string? assetsPath = projectPath is null ? null : Path.Combine(Path.GetDirectoryName(projectPath)!, "obj", "project.assets.json");
+        string? assetsPath = ProjectAssetsLocator.Find(project);
         string? assetsHash = null;
         if (assetsPath is not null && File.Exists(assetsPath))
         {
@@ -108,12 +111,12 @@ internal sealed class ExternalMemberSourceResolver
         }
 
         ExternalMemberWorker.WorkerRequest request = new(referencePath, referenceHash, loadedMetadataHash,
-            referenceSnapshot.AssetsPath, assetsHash, framework, identity, documentationId, view);
+            referenceSnapshot.AssetsPath, assetsHash, framework, identity, documentationId, view, maxLines, budgetTokens);
         ExternalMemberWorker.WorkerResponse worker = await ExternalMemberWorker.DecompileAsync(request, cancellationToken);
         int? workerDiagnostic = MapWorkerError(worker.Error, view);
         if (workerDiagnostic is not null)
         {
-            return ExternalMemberResolutionResult.Failed(workerDiagnostic.Value);
+            return ExternalMemberResolutionResult.Failed(workerDiagnostic.Value, worker.Error == "member-not-found");
         }
 
         if (worker.Text is null || worker.ImplementationPath is null || worker.ImplementationSha256 is null || worker.ImplementationMvid is null)
@@ -135,10 +138,12 @@ internal sealed class ExternalMemberSourceResolver
         string memberHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(documentationId)));
         string virtualPath = $"navlyn-decompiled://{worker.ImplementationSha256.ToLowerInvariant()}/{memberHash.ToLowerInvariant()}";
         IReadOnlyList<string> lines = BoundLines(worker.Text, maxLines, budgetTokens, out bool truncated);
-        SymbolSourceSlice slice = new(view, virtualPath, 1, 1, Math.Max(1, lines.Count), 1, lines, truncated,
+        SymbolSourceSlice slice = new(view, virtualPath, 1, 1, Math.Max(1, lines.Count), 1, lines, truncated || worker.Truncated,
             Origin: "decompiled", Editable: false);
         return ExternalMemberResolutionResult.Succeeded(new ExternalMemberResolution(
-            "decompiled", new ExternalAssemblyProvenance(identity, framework, "implementation", referenceHash, worker.ImplementationSha256),
+            "decompiled", new ExternalAssemblyProvenance(identity, framework, "implementation", referenceHash, worker.ImplementationSha256, documentationId,
+                externalMember is not null || view == "members" ? anchorId : null,
+                externalMember is not null || view == "members" ? worker.Signature : null, worker.MembersTotal),
             [slice], snapshot));
     }
 
@@ -183,6 +188,7 @@ internal sealed class ExternalMemberSourceResolver
         "stale" => DiagnosticIds.ExternalMemberStale,
         "limit" => DiagnosticIds.ExternalMemberLimitExceeded,
         "unavailable" => DiagnosticIds.ExternalImplementationUnavailable,
+        "invalid-view" => DiagnosticIds.InvalidExternalSourceView,
         _ => DiagnosticIds.ExternalMemberMalformedImage
     };
 
@@ -199,7 +205,7 @@ internal sealed class ExternalMemberSourceResolver
         ISymbol member, string documentationId, string identity, string framework,
         string referenceHash, string view, int maxLines, int budgetTokens, ExternalMemberSnapshot snapshot)
     {
-        string declaration = SymbolFactsBuilder.Create(member).Signature ?? member.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
+        string declaration = SymbolFactsBuilder.CreateMetadataSignature(member);
         if (view == "body")
         {
             return ExternalMemberResolutionResult.Failed(DiagnosticIds.ExternalMemberBodyUnavailable);
@@ -210,7 +216,7 @@ internal sealed class ExternalMemberSourceResolver
         string uri = $"navlyn-metadata://{referenceHash.ToLowerInvariant()}/{memberHash.ToLowerInvariant()}";
         IReadOnlyList<string> lines = BoundLines(text, maxLines, budgetTokens, out bool truncated);
         return ExternalMemberResolutionResult.Succeeded(new ExternalMemberResolution(
-            "metadata", new ExternalAssemblyProvenance(identity, framework, "reference", referenceHash, null),
+            "metadata", new ExternalAssemblyProvenance(identity, framework, "reference", referenceHash, null, documentationId),
             [new SymbolSourceSlice(view, uri, 1, 1, Math.Max(1, lines.Count), 1, lines, truncated, "metadata", false)], snapshot));
     }
 
@@ -303,10 +309,13 @@ internal sealed class ExternalMemberSourceResolver
 }
 
 internal sealed record ExternalMemberSnapshot(string ReferencePath, string ReferenceSha256, Guid ReferenceMvid, string? AssetsPath, string? AssetsSha256, string? ImplementationPath, string? ImplementationSha256, Guid? ImplementationMvid, string TargetFramework, string Identity);
-internal sealed record ExternalAssemblyProvenance(string Identity, string TargetFramework, string SelectedAssembly, string ReferenceSha256, string? ImplementationSha256);
+internal sealed record ExternalAssemblyProvenance(string Identity, string TargetFramework, string SelectedAssembly, string ReferenceSha256, string? ImplementationSha256, string MemberDocumentationCommentId,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? AnchorDocumentationCommentId = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? MemberSignature = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? MembersTotal = null);
 internal sealed record ExternalMemberResolution(string SourceOrigin, ExternalAssemblyProvenance ExternalAssembly, IReadOnlyList<SymbolSourceSlice> Slices, ExternalMemberSnapshot? Snapshot);
-internal sealed record ExternalMemberResolutionResult(ExternalMemberResolution? Resolution, int? DiagnosticId)
+internal sealed record ExternalMemberResolutionResult(ExternalMemberResolution? Resolution, int? DiagnosticId, bool MemberNotFound = false)
 {
     public static ExternalMemberResolutionResult Succeeded(ExternalMemberResolution resolution) => new(resolution, null);
-    public static ExternalMemberResolutionResult Failed(int diagnosticId) => new(null, diagnosticId);
+    public static ExternalMemberResolutionResult Failed(int diagnosticId, bool memberNotFound = false) => new(null, diagnosticId, memberNotFound);
 }

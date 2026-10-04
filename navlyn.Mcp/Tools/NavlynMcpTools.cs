@@ -36,10 +36,10 @@ internal static class NavlynMcpTools
     public const string BatchTool = "navlyn_batch";
 
     private const string TargetDescription =
-        "Canonical first tool when approximate C# or Visual Basic symbol identity could change the answer. Use mode select normally; use mode list only for explicit broader candidate discovery. Select needs a query, candidateId, or exact source position; list needs a query. Do not use for comments, strings, docs, or text search. Stop at a selected target, candidate list, or unresolved ambiguity; results are static symbol evidence, not runtime behavior.";
+        "Select a workspace source declaration when approximate C# or Visual Basic identity matters. Use select normally; list only for requested candidate discovery. Accepts query, candidateId or exact position; list requires query. Does not search DLL internals, strings or docs. For a referenced member, read its call position. Stop on unresolved ambiguity; static evidence does not prove runtime behavior.";
 
     private const string ReadDescription =
-        "Use after a target is known when its bounded C# or Visual Basic declaration or source is needed. Requires candidateId or an exact file/line/column. Do not use for broad file reading, repository search, diff review, or generated/non-Roslyn text. Returns static source, not runtime behavior.";
+        "Read one bounded C# or Visual Basic fact from candidateId or exact file/line/column. For DLL bodies use externalSource decompiled. Keep that anchor to follow DLL internals: view members lists its type; externalMember T: selects another type, M: its exact body, F: a constant. No target/outline preamble. Use ordinary tools for broad reading. Static evidence is not runtime proof.";
 
     private const string PrepareEditDescription =
         "Use immediately before editing one intended C# or Visual Basic target when bounded preparation evidence is needed. Provide candidateId, query, or exact source position. It resolves the target and gathers bounded source, context, and test evidence; do not use for edits or broad exploration. Confidence and known unknowns are static evidence, not a correctness guarantee.";
@@ -72,7 +72,7 @@ internal static class NavlynMcpTools
         "Use first to ask how a selected symbol is reached by callers, or to inspect framework-discovered entrypoints. Symbol mode accepts query or candidateId; framework mode uses framework discovery inputs. Do not use for full impact; use navlyn_impact. Results are bounded static/heuristic evidence, not proof of runtime reachability.";
 
     private const string NavigateDescription =
-        "Use first for one precise definition, references, callers, calls, implementations, type hierarchy, or symbol-info fact about a known C# or Visual Basic target. Requires candidateId or exact source position plus an operation. Do not use for broad repository search or diff review. References and callers are expensive and may be partial; results are static relationships, not runtime call proof.";
+        "Get one definition, references, callers, calls, implementations, type-hierarchy or symbol-info fact from candidateId or exact position plus operation. References/callers may be partial. Calls scans source bodies; includeMetadata includes their external callees, not traversal through DLL internals. Use ordinary tools for text/diffs and unanchored library exploration. Static relationships do not prove runtime dispatch.";
 
     private const string TestsForSymbolDescription =
         "Use when planning or reviewing an edit and test candidates for one C# or Visual Basic symbol could change the decision. Requires candidateId, query, or exact source position. Do not use for first-pass comprehension or as a test runner; it returns candidates only and never executes tests. Matches are static and may be incomplete.";
@@ -216,16 +216,17 @@ internal static class NavlynMcpTools
         [Description("1-based source column.")] int? column = null,
         [Description("Optional project context for candidate/source-position resolution.")] string? project = null,
         [Description("Exclude generated source locations.")] bool? excludeGenerated = null,
-        [Description("Source view: signature, declaration, body, members, xml-doc, or attributes.")] string? view = null,
+        [Description("Source view: signature, declaration, body, members, xml-doc, attributes. Decompiled members lists a type's canonical IDs; metadata allows signature/declaration/body.")] string? view = null,
         [Description("Maximum source lines per slice. Must be 1 or greater.")] int? maxLines = null,
         [Description("Approximate token budget per slice. Must be 1 or greater.")] int? budgetTokens = null,
-        [Description("External member source: none (default), metadata, or decompiled.")] string? externalSource = null,
+        [Description("External member source: none (default), metadata, or decompiled. Read at the member token; enum values need the field token, not the containing type.")] string? externalSource = null,
+        [Description("Copy an exact returned M:, T:, or F: ID unchanged, including parameter types. Same bound assembly; requires decompiled. Use T: with members, M: with body.")] string? externalMember = null,
         CancellationToken cancellationToken = default)
     {
         return RunAsync(
             services,
             ReadTool,
-            NavlynToolCommandBuilder.Read(candidateId, file, line, column, project, excludeGenerated, view, maxLines, budgetTokens, externalSource),
+            NavlynToolCommandBuilder.Read(candidateId, file, line, column, project, excludeGenerated, view, maxLines, budgetTokens, externalSource, externalMember),
             cancellationToken);
     }
 

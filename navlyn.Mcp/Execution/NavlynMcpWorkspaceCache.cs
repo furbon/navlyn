@@ -26,7 +26,8 @@ internal sealed class NavlynMcpWorkspaceCache(NavlynMcpServerOptions options) : 
 
     public async Task<NavlynMcpWorkspaceCacheResult> GetAsync(CancellationToken cancellationToken)
     {
-        await gate.WaitAsync(cancellationToken);
+        using (NavlynMcpTimingScope.Measure("cache.queue"))
+            await gate.WaitAsync(cancellationToken);
         try
         {
             ThrowIfDisposed();
@@ -58,7 +59,8 @@ internal sealed class NavlynMcpWorkspaceCache(NavlynMcpServerOptions options) : 
 
     public async Task<NavlynMcpWorkspaceCacheResult> RefreshAsync(CancellationToken cancellationToken)
     {
-        await gate.WaitAsync(cancellationToken);
+        using (NavlynMcpTimingScope.Measure("cache.queue"))
+            await gate.WaitAsync(cancellationToken);
         try
         {
             ThrowIfDisposed();
@@ -74,7 +76,8 @@ internal sealed class NavlynMcpWorkspaceCache(NavlynMcpServerOptions options) : 
 
     public async Task InvalidateAsync(CancellationToken cancellationToken)
     {
-        await gate.WaitAsync(cancellationToken);
+        using (NavlynMcpTimingScope.Measure("cache.queue"))
+            await gate.WaitAsync(cancellationToken);
         try
         {
             ThrowIfDisposed();
@@ -88,7 +91,8 @@ internal sealed class NavlynMcpWorkspaceCache(NavlynMcpServerOptions options) : 
 
     public async Task<bool> ValidateAsync(WorkspaceLease lease, CancellationToken cancellationToken)
     {
-        await gate.WaitAsync(cancellationToken);
+        using (NavlynMcpTimingScope.Measure("cache.queue"))
+            await gate.WaitAsync(cancellationToken);
         try
         {
             ThrowIfDisposed();
@@ -148,7 +152,7 @@ internal sealed class NavlynMcpWorkspaceCache(NavlynMcpServerOptions options) : 
 
             WorkspaceLoadResult loaded = await loader.LoadAsync(
                 new FileInfo(options.Workspace),
-                new WorkspaceLoadOptions(options.WorkspaceRootPolicy),
+                new WorkspaceLoadOptions(options.WorkspaceRootPolicy, NavlynMcpTimingScope.CurrentCollector),
                 cancellationToken);
             if (loaded.Error is not null)
             {
@@ -250,6 +254,7 @@ internal sealed class NavlynMcpWorkspaceCache(NavlynMcpServerOptions options) : 
 
     private static WorkspaceInputState Capture(WorkspaceInputSpec spec, CancellationToken cancellationToken)
     {
+        using IDisposable? timing = NavlynMcpTimingScope.Measure("input.capture");
         return WorkspaceInputState.Capture(
             spec.Root, spec.SelectedInputs, spec.LoadedInputs, spec.AdditionalRoots, cancellationToken,
             spec.ProjectDirectories,

@@ -2,6 +2,17 @@
 
 All notable public release changes for Navlyn are tracked here.
 
+## 0.9.2 - 2026-10-05
+
+- Apply C#/VB outline page bounds before detailed facts, candidate registration and JSON generation. Preserve exact semantic order/totals and unpaged contracts; add optional CLI --entry-limit/--entry-offset and matching MCP forwarding.
+- Follow DLL internals from a compiler-bound source anchor with bounded members and exact method/type/field IDs, including private methods and constants. Preserve selected PE identity, freshness, overload identity and distinct anchor/member provenance without another MCP tool.
+- Repair exact C#/VB constructed-token selection, base/this constructor reconstruction with decompiler imports, typed accessor signatures and redirected NuGet assets. Distinguish absent IDs, genuinely bodyless members and reconstruction failures; clarify source-only query scope.
+- Share one CLI workspace load for independently needed external reads through batch symbol-source, retaining provenance and per-request failures. Document exact ID reuse, assembly anchors, PowerShell quoting and on-demand CLI versus persistent MCP.
+- Shorten focused compact discovery while preserving every input and conditional constraint. Keep full schemas available, tighten optional skill routing and initialization guidance, and retain ordinary reading/search for sufficient source evidence.
+- Serialize external CLI calls within one MCP server after observed MSBuild generated-file races; include queue waits in cancellation/deadlines. Add request-local opt-in MCP stage timing on stderr with no stdout/profiling cross-talk.
+- Add pinned realistic game/library/Web/application tasks, complete one-shot and two/three-prompt evaluation, independent behavioral/evidence review and bounded capture-failure recovery. Preserve unfavorable results and distinguish cumulative/cached input, backend measurements and actual tool use; keep live evaluations outside CI gates.
+- Cover paging identities, concurrency/oversized responses, constructor chains, exact private overloads, constant values, stale/redirected assets and trusted decompiled arithmetic. Retain portable CLI/transport checks, three-platform CI and managed routing-skill upgrades from 0.9.1.
+
 ## 0.9.1 - 2026-10-04
 
 - Change MCP defaults to four focused tools and compact evidence. Use `--surface full` for the previous 25-tool inventory and full results; CLI contracts stay complete. Support per-call `resultProfile` and paged file outlines.

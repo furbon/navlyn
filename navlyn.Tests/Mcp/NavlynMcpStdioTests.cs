@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using System.Reflection;
+using System.Text.Json.Nodes;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
@@ -729,8 +730,9 @@ public sealed class NavlynMcpStdioTests
         McpClientTool fileOutline = Assert.Single(tools, tool => tool.Name == NavlynMcpTools.FileOutlineTool);
         Assert.Contains("ordinary reading", fileOutline.Description, StringComparison.Ordinal);
         McpClientTool target = Assert.Single(tools, tool => tool.Name == NavlynMcpTools.TargetTool);
-        Assert.Contains("Use mode select normally", target.Description, StringComparison.Ordinal);
-        Assert.Contains("mode list only for explicit broader candidate discovery", target.Description, StringComparison.Ordinal);
+        Assert.Contains("Use select normally", target.Description, StringComparison.Ordinal);
+        Assert.Contains("list only for requested candidate discovery", target.Description, StringComparison.Ordinal);
+        Assert.Contains("Does not search DLL internals", target.Description, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -983,9 +985,11 @@ public sealed class NavlynMcpStdioTests
         string workspace = Path.Combine(FindRepositoryRoot(), "tests", "fixtures", "FuzzyDiscoveryFixture", "FuzzyDiscoveryFixture.csproj");
         using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(60));
         await using McpClient client = await CreateClientAsync(null, workspace, surface: null);
+        Assert.Contains("externalSource:decompiled", client.ServerInstructions);
         IList<McpClientTool> tools = await client.ListToolsAsync(cancellationToken: timeout.Token);
         Assert.Equal(new[] { NavlynMcpTools.TargetTool, NavlynMcpTools.ReadTool, NavlynMcpTools.FileOutlineTool, NavlynMcpTools.NavigateTool }, tools.Select(tool => tool.Name));
         Assert.True(tools[0].JsonSchema.TryGetProperty("allOf", out _));
+        Assert.Equal("compact", tools[1].JsonSchema.GetProperty("properties").GetProperty("resultProfile").GetProperty("default").GetString());
         CallToolResult target = await client.CallToolAsync(NavlynMcpTools.TargetTool,
             new Dictionary<string, object?> { ["query"] = "Alpha.EnemyManagerTools", ["match"] = "exact" }, cancellationToken: timeout.Token);
         Assert.False(target.IsError, target.StructuredContent?.ToString());
@@ -1013,6 +1017,13 @@ public sealed class NavlynMcpStdioTests
         JsonElement fullRoot = full.StructuredContent!.Value;
         Assert.False(fullRoot.TryGetProperty("resultProfile", out _));
         Assert.Equal(page.GetProperty("entriesTotal").GetInt32(), fullRoot.GetProperty("result").GetProperty("entries").GetArrayLength());
+        JsonElement fullEntries = fullRoot.GetProperty("result").GetProperty("entries");
+        JsonElement secondEntries = second.StructuredContent!.Value.GetProperty("result").GetProperty("entries");
+        Assert.Equal(fullEntries[next].GetProperty("candidateId").GetString(), secondEntries[0].GetProperty("candidateId").GetString());
+        CallToolResult pastEnd = await client.CallToolAsync(NavlynMcpTools.FileOutlineTool,
+            new Dictionary<string, object?> { ["file"] = "FixtureCode.cs", ["entryOffset"] = int.MaxValue }, cancellationToken: timeout.Token);
+        Assert.Empty(pastEnd.StructuredContent!.Value.GetProperty("result").GetProperty("entries").EnumerateArray());
+        Assert.Equal(fullEntries.GetArrayLength(), pastEnd.StructuredContent.Value.GetProperty("result").GetProperty("entriesTotal").GetInt32());
         Assert.NotEqual(JsonValueKind.Null, fullRoot.GetProperty("sourceCommand").ValueKind);
         Assert.Equal(fullRoot.GetRawText(), Assert.IsType<TextContentBlock>(Assert.Single(full.Content)).Text);
         CallToolResult invalid = await client.CallToolAsync(NavlynMcpTools.FileOutlineTool,
@@ -1024,13 +1035,47 @@ public sealed class NavlynMcpStdioTests
         Assert.Equal("NAVLYN_MCP_TOOL_UNAVAILABLE", hidden.StructuredContent!.Value.GetProperty("error").GetProperty("code").GetString());
     }
 
+    [Fact]
+    public async Task FocusedDiscovery_PreservesEveryFullSurfaceInputConstraint()
+    {
+        string workspace = Path.Combine(FindRepositoryRoot(), "navlyn.slnx");
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(30));
+        await using McpClient full = await CreateClientAsync(null, workspace, resultProfile: "compact");
+        await using McpClient focused = await CreateClientAsync(null, workspace, surface: null);
+        IList<McpClientTool> fullTools = await full.ListToolsAsync(cancellationToken: timeout.Token);
+        IList<McpClientTool> focusedTools = await focused.ListToolsAsync(cancellationToken: timeout.Token);
+        Assert.Equal(4, focusedTools.Count);
+        foreach (McpClientTool tool in focusedTools)
+        {
+            McpClientTool original = Assert.Single(fullTools, item => item.Name == tool.Name);
+            JsonNode originalSchema = JsonNode.Parse(original.JsonSchema.GetRawText())!;
+            JsonNode focusedSchema = JsonNode.Parse(tool.JsonSchema.GetRawText())!;
+            RemoveDescriptions(originalSchema);
+            RemoveDescriptions(focusedSchema);
+            Assert.True(JsonNode.DeepEquals(originalSchema, focusedSchema), tool.Name);
+        }
+
+        static void RemoveDescriptions(JsonNode? node)
+        {
+            if (node is JsonObject obj)
+            {
+                obj.Remove("description");
+                foreach (JsonNode? child in obj.Select(pair => pair.Value)) RemoveDescriptions(child);
+            }
+            else if (node is JsonArray array)
+            {
+                foreach (JsonNode? child in array) RemoveDescriptions(child);
+            }
+        }
+    }
+
     private static async Task<McpClient> CreateClientAsync(string? profile)
     {
         string repoRoot = FindRepositoryRoot();
         return await CreateClientAsync(profile, Path.Combine(repoRoot, "navlyn.slnx"));
     }
 
-    private static async Task<McpClient> CreateClientAsync(string? profile, string workspacePath, string? surface = "full")
+    private static async Task<McpClient> CreateClientAsync(string? profile, string workspacePath, string? surface = "full", string? resultProfile = null)
     {
         string repoRoot = FindRepositoryRoot();
         string serverDll = Path.Combine(repoRoot, "navlyn.Mcp", "bin", Directory.GetParent(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory))!.Name, GetCurrentTargetFramework(), "navlyn.Mcp.dll");
@@ -1051,6 +1096,7 @@ public sealed class NavlynMcpStdioTests
         }
 
         if (surface is not null) arguments.AddRange(["--surface", surface]);
+        if (resultProfile is not null) arguments.AddRange(["--result-profile", resultProfile]);
 
         StdioClientTransport transport = new(
             new StdioClientTransportOptions

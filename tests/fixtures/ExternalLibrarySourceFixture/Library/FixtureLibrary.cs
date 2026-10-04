@@ -6,13 +6,25 @@ public sealed class Probe
     private int counterValue;
     public Probe() { }
     public Probe(int value) { ConstructorMarker = "FIXTURE_CONSTRUCTOR_BODY"; }
+    public Probe(string value) { ConstructorMarker = "FIXTURE_STRING_CONSTRUCTOR_BODY"; }
+    public Probe(System.Uri value) { ConstructorMarker = "FIXTURE_URI_CONSTRUCTOR_BODY"; }
+    public enum BrokerPlatforms { None = 0, Windows = 1, Linux = 2 }
     public string Pick(int value) => RuntimeMarker;
     public string Pick(string value) => "FIXTURE_STRING_OVERLOAD_BODY";
+    public int Normalize(short value) => checked((value < 0 ? -value : value) * 37 + 211);
+    public long Normalize(long value) => value % 17 + 911;
+    public int NormalizeWide(short value) => checked((value < 0 ? -value : value) * 100000 + 211);
+    public int NormalizeNegative(short value) => checked((value < 0 ? -value : value) * -37 + 211);
+    private static int HiddenNormalize(short value) => checked((value < 0 ? -value : value) * 41 + 19);
+    private static long HiddenNormalize(long value) => value % 19;
     public string Adjust(ref int value, out int copy) { copy = value; return "FIXTURE_BYREF_BODY"; }
     public string Adjust(string value) => "FIXTURE_BYREF_STRING_OVERLOAD_BODY";
     public string Optional(int value = 7) => "FIXTURE_OPTIONAL_INT_BODY";
     public string Optional(string value) => "FIXTURE_OPTIONAL_STRING_BODY";
     public string Accessed => "FIXTURE_PROPERTY_GETTER_BODY";
+    private int referenceCounter = 7;
+    public ref int CounterReference => ref referenceCounter;
+    public ref readonly int CounterReadOnlyReference => ref referenceCounter;
     public string Mutable
     {
         get => "FIXTURE_MUTABLE_GETTER_BODY";
@@ -39,6 +51,27 @@ public sealed class Probe
 #endif
 }
 
+public abstract class InitializedProbe
+{
+    protected InitializedProbe(int value) { BaseValue = value; }
+    protected InitializedProbe(System.Uri value) { BaseValue = value.OriginalString.Length; }
+    public int BaseValue { get; }
+}
+
+public sealed class ChainedProbe : InitializedProbe
+{
+    public ChainedProbe(int value) : this(value, true) { }
+    public ChainedProbe(int value, bool selected) : base(value)
+    {
+        Marker = "FIXTURE_CHAINED_CONSTRUCTOR_BODY";
+    }
+    public ChainedProbe(System.Uri value) : base(value)
+    {
+        Marker = "FIXTURE_CHAINED_CONSTRUCTOR_BODY";
+    }
+    public string Marker { get; }
+}
+
 public static class ProbeExtensions
 {
     public static string Extend(this Probe probe, int value) => "FIXTURE_EXTENSION_INT_BODY";
@@ -47,6 +80,8 @@ public static class ProbeExtensions
 
 public sealed class GenericProbe<T>
 {
+    public GenericProbe() { ConstructorMarker = "FIXTURE_GENERIC_CONSTRUCTOR_BODY"; }
+    public string ConstructorMarker { get; }
     public T Echo(T value) => value;
     public string Select<TValue>(int value) => "FIXTURE_GENERIC_INT_OVERLOAD_BODY";
     public string Select<TValue>(string value) => "FIXTURE_GENERIC_STRING_OVERLOAD_BODY";

@@ -1,31 +1,29 @@
 ---
 name: navlyn-semantic-routing
-description: Use Navlyn when C# or Visual Basic symbol identity, binding, relationships, compilation context, or workspace diagnostics need semantic evidence. Ordinary file reading, literal search, and locally clear edits use normal tools; honor the user's tool choice.
+description: Use for referenced DLL bodies, unresolved C#/VB compiler binding or project/framework context, and relationships whose completeness is unclear from readable source. Skip routine reading, search and clear local edits.
 ---
 
-## Choose What Resolves The Uncertainty
+Use Navlyn when compiler binding, project/framework context or relationship completeness could change the answer. Honor the user's tool choice. For readable source, settings and clear local edits, use ordinary reads, scoped `rg` and edit tools, including across many files. Codebase size alone does not require semantic tools. Reuse a known position; no inventory, summary, outline or target preamble is needed.
 
-Use ordinary reads and `rg` for supplied paths, strings, comments, configuration values, and source that directly answers the question. A C# file, an overload, or an edit does not by itself require Navlyn. Use semantic evidence when binding, project/target-framework context, partial/linked source, or relationships remain uncertain or the user requests compiler-resolved facts. Text can locate an anchor; it does not establish unresolved binding or complete callers.
+## Choose One Missing Fact
 
-For an exact search, pass the supplied pattern and path to `rg`; for a requested file read, read that file. Do not load workspace summaries or preparation evidence as a preamble. Prefer the smallest sufficient inspection, including a bounded text read before semantic investigation when it supplies a missing location.
+- Known candidate or position: `navlyn_read` for bounded source; `navlyn_navigate` for one relationship. Retain candidateId and project/framework context.
+- DLL implementation: `navlyn_read` at the source call with `externalSource: "decompiled", view: "body"` selects its bound overload, including constructors at constructed type tokens. For internal follow-through, retain that anchor: `view: "members"` lists the containing type's exact IDs; `externalMember: "T:..."` lists another type, `"M:..."` reads its exact body, `"F:..."` reads a constant with declaration view. Returned `externalAssembly` identifies the selected member and PE; root symbol remains the source anchor. No reflection/IL script is a prerequisite.
+- Approximate source intent: `navlyn_target`, normally select mode. It does not search DLL internals. Qualified names constrain containers; resolve overload ambiguity from evidence. `typeKind` filters actual types; `assumeKind` ranks them.
+- Requested file structure: `navlyn_file_outline`. Respect page bounds; retrieve only missing evidence.
 
-## Focused Semantic Calls
+When using an installed CLI instead of MCP, the same referenced-member shortcut is:
 
-- Approximate symbol intent: `navlyn_target` in default select mode. Use list mode for an actual candidate-discovery task, not a prerequisite to selection. Reuse returned `candidateId` values with their project/framework context.
-- Known candidate or source position plus a relationship: call `navlyn_navigate` directly with the requested operation. Source/signature missing: `navlyn_read`. For a referenced-library body, use `navlyn_read` at the known call position with `externalSource: "decompiled"` and `view: "body"` when static implementation evidence is needed; it selects the bound overload without writing an IL inspector. Do not resolve or reread an already known target.
-- Requested semantic outline of one file: `navlyn_file_outline`. Use its entries when sufficient; if output is clipped or the missing fact is source text, obtain only the needed text rather than stopping an unfinished task or repeating a large outline.
-- Workspace structure or load/freshness failure: summary, doctor, status, or refresh only when that is the missing fact. Refresh requires a reason.
+```text
+navlyn read --workspace <project> --file <source> --line <line> --column <column> --view body --external-source decompiled
+```
 
-The focused surface and compact results are the default. Request `resultProfile: "full"` only when an omitted structured field is needed; signatures and selectors are retained. Advanced tools require a full surface or the CLI.
+CLI needs no MCP server. Use `--view members` and `--external-member <ID>` for the same DLL follow-through. Copy returned IDs unchanged, including parameter types; retain an anchor in the intended assembly. In PowerShell, single-quote IDs to preserve generic backticks. Several known CLI facts share one load via batch stdin: `{"requests":[{"id":"body","command":"symbol-source","file":"Caller.cs","line":42,"column":27,"view":"body","externalSource":"decompiled"}]}`. Add requests with unique IDs and actual externalMember IDs as needed. Ordinary work needs neither a Navlyn call nor loading these references.
 
-Queries accept simple or qualified declaration names, such as `Formatter.Format`; material overload ambiguity remains explicit. Use `typeKind` to filter class/interface/struct/record candidates independently of ranking hints. Do not discard qualifiers or choose an overload from rank alone. Fuzzy query options such as `assumeKind` and `explainSelection` do not belong in source-position target mode. Navigate `scope` and `maxDocuments` apply only to references/callers.
+## Evidence And Edits
 
-## Edits, Limits, And Stopping
+Use compact normally; bounded signature/body text is retained. Request full for a needed omitted field. Keep relevant project/targetFramework. Query controls do not belong in position mode; scope/maxDocuments apply only to references/callers.
 
-For an unambiguous local literal or body edit, inspect the source, edit with normal tools, and check the actual diff. Use `navlyn_prepare_edit` when target identity or semantic consequences need preparation, and `navlyn_verify_edit` when a diff-to-intent guard answers a real risk. Impact, tests, review, and context packs are optional investigations, not an edit checklist. Batch only already chosen supported facts.
+Inspect scope, warnings, ambiguity, freshness and truncation. Reselect rejected stale candidates. Static facts do not prove execution; use normal builds/tests. Edit clear local bodies directly and inspect the diff. Advanced preparation/impact/test tools answer specific uncertainties, not a mandatory checklist. Stop when the requested evidence is complete.
 
-Stop when the question is answered. Inspect warnings, confidence, scope, and partial/truncated flags that affect the conclusion; do not chase optional next actions. Resolve material ambiguity using available source and project context before asking the user. A rejected stale candidate must be reselected from current source before continued semantic work; do not substitute another symbol silently.
-
-When MCP or a relevant tool is unavailable, use an available Navlyn CLI for the needed semantic fact, or perform useful ordinary inspection and state the remaining uncertainty. Do not repeatedly retry a failed route or require extra installation for a text task. Navlyn supplies static facts; use normal build/test/runtime tools for execution evidence. User instructions take precedence.
-
-Read [advanced routing](references/routing-matrix.md) only for the relevant advanced task, or [evidence boundaries](references/evidence-boundaries.md) when a returned limit needs interpretation. Do not read both references routinely.
+Read [advanced routing](references/routing-matrix.md) only for a needed advanced capability, or [evidence boundaries](references/evidence-boundaries.md) when interpreting a returned limit.

@@ -12,7 +12,7 @@ Use ordinary tools when a local read or search answers the question. Having Navl
 | `compact` profile | First scans and LLM context. | Smaller JSON and less downstream token pressure. |
 | `evidence` profile | Review/CI facts. | Enough detail for inspection without full output size. |
 
-The 0.9.1 default exposes four tools and compact results; `--surface full` restores the full inventory. See [measured task evidence and limits](evals/v0.9.1-product-evidence.md). Smaller discovery bytes do not establish task-time or monetary savings.
+The default exposes four tools and compact results; `--surface full` restores the full inventory. See [0.9.2 real-task evidence and limits](evals/v0.9.2-verification.md). Smaller discovery bytes do not establish task-time or monetary savings. Repeated CLI dependency reads can share one workspace load through batch symbol-source requests with externalSource/externalMember; copying exact returned IDs in JSON also avoids shell escaping mistakes.
 
 ## Execution Model
 
@@ -69,6 +69,8 @@ Reports are structured JSON with:
 `-IncludeStageTimings` sets `NAVLYN_PROFILE_TIMINGS=1` for CLI child processes and parses `NAVLYN_TIMING` lines from stderr into `stageTimings`, `stageBreakdown`, and `summary.topStageBottlenecks`. Those diagnostic lines are opt-in and are not part of normal command stdout. The `cache` scenario writes its manifest under ignored `artifacts/performance-cache`. The `daemon` scenario uses local stdio JSON-lines requests so it does not leave a background server running. The `parallel` scenario starts same-workspace CLI processes concurrently, and `multi-workspace` compares the primary workspace with a fixture workspace.
 
 Timings are environment-dependent. Treat local reports as release and investigation evidence, not a universal service-level objective.
+
+For complete-task adoption evidence, use the optional [adoption comparison](navlyn-development-workflow.md#versions-and-environment-failures). It records monotonic client-event arrival times and actual Navlyn calls; a faster no-call trial is not a Navlyn gain. `NAVLYN_PROFILE_TIMINGS=1` also emits `NAVLYN_MCP_TIMING` lines for actual MCP requests. Those stages are inclusive, so parents and children cannot be added as independent costs. Discovery characters, backend milliseconds and document-index estimates are separate from model tokens, whole-task time and total process memory. See [0.9.2 verification](evals/v0.9.2-verification.md).
 
 ## Historical v0.8.6 MCP smoke
 
@@ -228,3 +230,7 @@ When repeated measurements show that workspace load dominates real agent workflo
 ## v0.9.0
 
 See [measured product evidence](evals/v0.9.0-product-evidence.md) for the same-workspace warm comparison, discovery size, fixed live tasks, and classified public-package corpus results. Measurements are product experiments, not additional CI gates.
+
+## v0.9.2
+
+See [verification and product evidence](evals/v0.9.2-verification.md) for whole-task CLI/MCP/ordinary comparisons, failures and no-call cases, inclusive stage diagnostics, and identical-output Release outline comparisons. Optional CLI investigation wins the measured bound-DLL tasks; MCP selection and readable-source skill overhead remain limitations. Reproduce the backend comparison with `node scripts/measure-navlyn-outline.mjs --baseline <released-0.9.1-navlyn-mcp> --server-dll navlyn.Mcp/bin/Release/net10.0/navlyn.Mcp.dll --output artifacts/performance/<fresh-report>.json` after a Release build. Do not run it alongside timed model trials.

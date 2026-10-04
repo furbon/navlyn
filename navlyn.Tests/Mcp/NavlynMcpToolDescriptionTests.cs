@@ -1,11 +1,39 @@
 ﻿using System.ComponentModel;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Navlyn.Mcp.Tools;
 
 namespace Navlyn.Tests.Mcp;
 
 public sealed class NavlynMcpToolDescriptionTests
 {
+    [Fact]
+    public void FocusedDiscoveryShortensProseWithoutChangingInputsOrConstraints()
+    {
+        using JsonDocument original = JsonDocument.Parse("""
+            {"type":"object","required":["operation"],"properties":{
+              "operation":{"type":"string","description":"Relationship operation"},
+              "file":{"type":["string","null"],"description":"Source path"},
+              "scope":{"type":["string","null"],"enum":["workspace","project","file",null]},
+              "maxDocuments":{"type":["integer","null"],"minimum":1}}}
+            """);
+        JsonNode full = JsonNode.Parse(NavlynMcpResponsePolicy.InputSchema(NavlynMcpTools.NavigateTool, original.RootElement).GetRawText())!;
+        JsonNode focused = JsonNode.Parse(NavlynMcpResponsePolicy.InputSchema(NavlynMcpTools.NavigateTool, original.RootElement, focusedCompact: true).GetRawText())!;
+        RemoveDescriptions(full);
+        RemoveDescriptions(focused);
+        Assert.True(JsonNode.DeepEquals(full, focused));
+
+        static void RemoveDescriptions(JsonNode? node)
+        {
+            if (node is JsonObject value)
+            {
+                value.Remove("description");
+                foreach (JsonNode? child in value.Select(property => property.Value)) RemoveDescriptions(child);
+            }
+            else if (node is JsonArray array) foreach (JsonNode? child in array) RemoveDescriptions(child);
+        }
+    }
     private static readonly string[] ExpectedToolNames =
     [
         "navlyn_target",
@@ -128,10 +156,10 @@ public sealed class NavlynMcpToolDescriptionTests
     [Fact]
     public void ToolDescriptionsStateRoutingInputsAndEvidenceBoundaries()
     {
-        AssertDescriptionContains("navlyn_target", "canonical first", "mode select", "mode list", "text search", "ambiguity");
-        AssertDescriptionContains("navlyn_read", "bounded C#", "candidateId", "exact file/line/column", "broad file reading");
+        AssertDescriptionContains("navlyn_target", "workspace source declaration", "select normally", "list only", "DLL internals", "ambiguity");
+        AssertDescriptionContains("navlyn_read", "bounded C#", "candidateId", "exact file/line/column", "broad reading");
         AssertDescriptionContains("navlyn_file_outline", "one known", "semantic", "ordinary reading");
-        AssertDescriptionContains("navlyn_navigate", "one precise", "candidateId", "references", "callers", "partial");
+        AssertDescriptionContains("navlyn_navigate", "one definition", "candidateId", "references", "callers", "partial", "DLL internals");
         AssertDescriptionContains("navlyn_prepare_edit", "immediately before editing", "source", "context", "test evidence");
         AssertDescriptionContains("navlyn_verify_edit", "post-edit", "diff-to-intent", "mismatch", "not proof");
         AssertDescriptionContains("navlyn_review", "actual Git diff", "not", "static");

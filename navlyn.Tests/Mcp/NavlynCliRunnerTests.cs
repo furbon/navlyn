@@ -9,6 +9,30 @@ namespace Navlyn.Tests.Mcp;
 public sealed class NavlynCliRunnerTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task QueueWait_RespectsDeadlineAndCancellationWithoutReleasingAnotherCall(bool callerCancellation)
+    {
+        NavlynMcpServerOptions options = new("unused", "unused", "does-not-exist", [],
+            Directory.GetCurrentDirectory(), callerCancellation ? 10000 : 20, 1000, null,
+            NavlynMcpToolProfile.Full, NavlynMcpServerOptions.DefaultWorkspaceRootPolicy);
+        NavlynCliRunner runner = new(options);
+        SemaphoreSlim gate = (SemaphoreSlim)typeof(NavlynCliRunner)
+            .GetField("invocationGate", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(runner)!;
+        await gate.WaitAsync();
+        using CancellationTokenSource caller = new();
+        try
+        {
+            if (callerCancellation) caller.CancelAfter(20);
+            NavlynToolResult result = await runner.RunAsync("test", "check", [], null, caller.Token);
+            Assert.Equal(callerCancellation ? "NAVLYN_MCP_CANCELED" : "NAVLYN_MCP_TIMEOUT", result.Error?.Code);
+            Assert.Equal(0, gate.CurrentCount);
+        }
+        finally { gate.Release(); }
+        Assert.Equal("NAVLYN_MCP_CLI_NOT_FOUND", (await runner.RunAsync("test", "check", [], null, CancellationToken.None)).Error?.Code);
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]

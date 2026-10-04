@@ -1,0 +1,14 @@
+{
+  "id": "navlyn-outline-paging-impact",
+  "sourceCommit": "b6e7ba85b35d5cd201f1d853ed294be258dbaf45",
+  "sourceUrl": "https://github.com/furbon/navlyn/tree/b6e7ba85b35d5cd201f1d853ed294be258dbaf45",
+  "workspace": "navlyn.slnx",
+  "turnTimeoutMs": 360000,
+  "validationKind": "evidence-artifact-integrity",
+  "prompts": [
+    "We need to reduce semantic outline cost in this library/CLI/MCP product: MCP currently pages a result only after complete semantic entries have been constructed. Investigate moving page selection before expensive fact/selector/candidate construction, without weakening C#/VB semantics or existing public contracts. Find every production caller of OutlineResolver.ResolveAsync and trace what each caller expects; do not assume the CLI and MCP are the only callers. Investigate the actual MCP paging/projection path and default CLI output. This task is an implementation impact review; do not change production code.",
+    "Complete a concrete implementation and regression-test plan covering C#/VB ordering, exact totals, candidate identities and follow-up navigation, optional CLI bounds, unchanged unpaged callers, both direct and external MCP adapters, concurrency/request isolation, output size limits, offsets beyond the end, and cancellation. Recheck any completeness claims against source and project scope. Save REPORT.json with findings [{id, statement, evidence:[{path,line}], certainty}] and testPlan. Use finding ids callers, paging-placement, cli-compatibility, mcp-adapters, identity, concurrency and limits. Include evidence for the actual affected symbols and classify measured versus unverified behavior."
+  ],
+  "prepare": [["dotnet", "restore", "navlyn.slnx", "--verbosity", "quiet"]],
+  "validate": [["node", "{runnerRoot}/scripts/validate-navlyn-task-report.mjs", "REPORT.json"]]
+}

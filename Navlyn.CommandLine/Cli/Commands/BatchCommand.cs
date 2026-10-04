@@ -986,12 +986,19 @@ internal static partial class BatchCommand
         SourcePositionBatchOptions options = positionResult.Options!;
         if (!TryGetOptionalString(request.Payload, "view", out string? viewValue, out BatchError? error) ||
             !TryGetOptionalInt(request.Payload, "maxLines", out int? maxLines, out error) ||
-            !TryGetOptionalInt(request.Payload, "budgetTokens", out int? budgetTokens, out error))
+            !TryGetOptionalInt(request.Payload, "budgetTokens", out int? budgetTokens, out error) ||
+            !TryGetOptionalString(request.Payload, "externalSource", out string? externalSourceValue, out error) ||
+            !TryGetOptionalString(request.Payload, "externalMember", out string? externalMember, out error))
         {
             return request.Failed(error!);
         }
 
         string view = viewValue ?? "declaration";
+        string externalSource = externalSourceValue ?? "none";
+        if (externalSource is not ("none" or "metadata" or "decompiled"))
+        {
+            return request.Failed(DiagnosticIds.ParseError, "externalSource must be none, metadata, or decompiled.");
+        }
         if (view is not ("signature" or "declaration" or "body" or "members" or "xml-doc" or "attributes"))
         {
             return request.Failed(DiagnosticIds.ParseError, "view must be signature, declaration, body, members, xml-doc, or attributes.");
@@ -1014,7 +1021,7 @@ internal static partial class BatchCommand
             options.Column,
             options.Project,
             options.ExcludeGenerated,
-            new SymbolSourceOptions(view, effectiveMaxLines, effectiveBudgetTokens),
+            new SymbolSourceOptions(view, effectiveMaxLines, effectiveBudgetTokens, externalSource, externalMember),
             cancellationToken);
         if (result.Error is not null)
         {
@@ -1022,21 +1029,24 @@ internal static partial class BatchCommand
         }
 
         SymbolSourceResolution resolution = result.Resolution!;
-        return request.Success(new
+        Dictionary<string, object?> response = new(StringComparer.Ordinal)
         {
-            file = resolution.File,
-            line = resolution.Line,
-            column = resolution.Column,
-            project = options.ProjectFilter,
-            selectionInput = options.SelectionInput,
-            excludeGenerated = options.ExcludeGenerated,
-            view = resolution.View,
-            limits = resolution.Limits,
-            symbol = resolution.Symbol,
-            slices = resolution.Slices,
-            truncated = resolution.Truncated,
-            warnings = resolution.Warnings
-        });
+            ["file"] = resolution.File,
+            ["line"] = resolution.Line,
+            ["column"] = resolution.Column,
+            ["project"] = options.ProjectFilter,
+            ["selectionInput"] = options.SelectionInput,
+            ["excludeGenerated"] = options.ExcludeGenerated,
+            ["view"] = resolution.View,
+            ["limits"] = resolution.Limits,
+            ["symbol"] = resolution.Symbol,
+            ["slices"] = resolution.Slices,
+            ["truncated"] = resolution.Truncated,
+            ["warnings"] = resolution.Warnings
+        };
+        if (resolution.SourceOrigin is not null) response["sourceOrigin"] = resolution.SourceOrigin;
+        if (resolution.ExternalAssembly is not null) response["externalAssembly"] = resolution.ExternalAssembly;
+        return request.Success(response);
     }
 
     private static async Task<BatchRequestResult> ExecuteReferencesAsync(

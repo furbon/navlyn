@@ -12,6 +12,8 @@ internal sealed class NavlynCliRunner(NavlynMcpServerOptions options) : INavlynC
 {
     internal const int StderrLimit = 16384;
     private static readonly Regex DiagnosticCodeRegex = new(@"\bNAVLYN\d{4}\b", RegexOptions.CultureInvariant);
+    // Separate CLI processes otherwise race on MSBuild design-time generated files.
+    private readonly SemaphoreSlim invocationGate = new(1, 1);
 
     public async Task<NavlynToolResult> RunAsync(
         string toolName,
@@ -24,13 +26,21 @@ internal sealed class NavlynCliRunner(NavlynMcpServerOptions options) : INavlynC
         NavlynSourceCommand sourceCommand = new(cliCommand, fullArguments);
 
         NavlynCliResult processResult;
+        using CancellationTokenSource deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(options.TimeoutMilliseconds);
+        bool gateHeld = false;
         try
         {
-            processResult = await RunProcessAsync(fullArguments, standardInput, cancellationToken);
+            using (NavlynMcpTimingScope.Measure("adapter.queue"))
+                await invocationGate.WaitAsync(deadline.Token);
+            gateHeld = true;
+            processResult = await RunProcessAsync(fullArguments, standardInput, deadline.Token);
         }
         catch (OperationCanceledException)
         {
-            return Failed(toolName, sourceCommand, "NAVLYN_MCP_CANCELED", "Tool call was canceled.");
+            return cancellationToken.IsCancellationRequested
+                ? Failed(toolName, sourceCommand, "NAVLYN_MCP_CANCELED", "Tool call was canceled.")
+                : Failed(toolName, sourceCommand, "NAVLYN_MCP_TIMEOUT", $"Tool call timed out after {options.TimeoutMilliseconds} ms.");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {
@@ -39,6 +49,10 @@ internal sealed class NavlynCliRunner(NavlynMcpServerOptions options) : INavlynC
         catch (Exception ex)
         {
             return Failed(toolName, sourceCommand, "NAVLYN_MCP_SERVER_ERROR", $"Unexpected MCP wrapper error: {ex.Message}");
+        }
+        finally
+        {
+            if (gateHeld) invocationGate.Release();
         }
 
         if (processResult.TimedOut)

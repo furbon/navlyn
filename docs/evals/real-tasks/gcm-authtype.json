@@ -1,0 +1,15 @@
+{
+  "id": "gcm-authtype-protocol",
+  "sourceCommit": "53447486474f4cab68355cdc82660aafa07912f0",
+  "sourceUrl": "https://github.com/git-ecosystem/git-credential-manager/pull/2457",
+  "workspace": "src/Core.Tests/Core.Tests.csproj",
+  "turnTimeoutMs": 600000,
+  "prompts": [
+    "We are adding the Git credential protocol's negotiated authtype capability to Git Credential Manager. Investigate the current request parsing, supported-capability negotiation, host-provider response API, get/store commands and secret tracing. Identify the affected production code and compatibility risks, including existing provider implementations and tests. Work from this repository's current source; do not use upstream patches. This is a protocol-layer change: do not implement new network authentication providers or contact credential services.",
+    "Implement the feature. Add GitCapabilities.AuthType, parse/render authtype case-insensitively and advertise State | AuthType. GitRequest must expose AuthType, Credential and IsEphemeral (true only for ephemeral=1). Preserve existing GitResponse calls; add optional string authType=null and bool isEphemeral=false parameters to its public credential constructor and Ok/Continue factories, exposing AuthType/IsEphemeral. For get responses, when authtype is negotiated and a response has a nonempty AuthType, emit authtype and credential (using ICredential.Password), omit username/password, and emit ephemeral=1 only if requested by that response. Otherwise preserve legacy username/password output and omit ephemeral. Continue/state negotiation and cancel/yield behavior must still work. In store validation, authtype requests require credential rather than username/password, accepting an empty supplied credential; preserve old validation for ordinary requests. Redact incoming and outgoing credential values in normal trace output, just like passwords.",
+    "Add meaningful offline regression tests and run the affected Core.Tests suite. Cover negotiated typed output, no-capability and no-response-authtype fallbacks, ephemeral absent/false/true, typed request parsing, typed store validation, continuation/state, cancel/yield and redaction. Update old tests whose unsupported-authtype assumption changes, while preserving their original intent for genuinely unknown capabilities. Report the actual tests run, compatibility impact and any unresolved limitations. Complete the implementation and verification rather than only describing a plan."
+  ],
+  "prepare": [["dotnet", "restore", "src/Core.Tests/Core.Tests.csproj", "--verbosity", "quiet"]],
+  "validationFiles": [{ "source": "gcm-authtype-acceptance.cs", "destination": "src/Core.Tests/NavlynEvaluationAcceptanceTests.cs" }],
+  "validate": [["dotnet", "test", "src/Core.Tests/Core.Tests.csproj", "--verbosity", "quiet", "--filter", "FullyQualifiedName~GetCommandTests|FullyQualifiedName~StoreCommandTests|FullyQualifiedName~GitRequestTests|FullyQualifiedName~GitResponseTests|FullyQualifiedName~CapabilityCommandTests|FullyQualifiedName~NavlynEvaluationAcceptanceTests"]]
+}

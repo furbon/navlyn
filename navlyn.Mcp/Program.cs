@@ -45,6 +45,8 @@ if (options.DeprecatedToolProfileSpecified)
 }
 
 Directory.SetCurrentDirectory(options.WorkingDirectory);
+// Keep profiling on transport stderr even while an in-process CLI captures Console.Error.
+NavlynMcpTimingScope.ConfigureDiagnostics(Console.Error);
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder([]);
 builder.Logging.ClearProviders();
@@ -67,12 +69,16 @@ builder.Services.AddSingleton<NavlynMcpWorkspaceCache>();
 builder.Services.AddSingleton<NavlynMcpDirectToolRunner>();
 builder.Services.AddSingleton<NavlynMcpToolService>();
 builder.Services
-    .AddMcpServer()
+    .AddMcpServer(server => server.ServerInstructions =
+        NavlynMcpToolProfilePolicy.Allows(options.ToolProfile, NavlynMcpTools.ReadTool, options.Surface)
+            ? "Use ordinary reads/search for directly readable facts. For a referenced DLL body at a known call position, navlyn_read(file,line,column,view:body,externalSource:decompiled) returns the bound implementation. No file listing, SDK discovery, outline, target or skill preamble is needed."
+            : "Use ordinary reads/search for directly readable facts. Use the advertised Navlyn tools for missing compiler evidence; avoid unrelated preparation.")
     .WithStdioServerTransport()
     .WithRequestFilters(filters =>
     {
         filters.AddCallToolFilter(next => async (request, cancellationToken) =>
         {
+            using NavlynMcpTimingScope? timing = NavlynMcpTimingScope.Begin(request.Params!.Name);
             NavlynMcpServerOptions settings = request.Services!.GetRequiredService<NavlynMcpServerOptions>();
             if (!NavlynMcpToolProfilePolicy.Allows(settings.ToolProfile, request.Params!.Name, settings.Surface))
                 return NavlynToolResultFormatter.ToCallToolResult(NavlynToolResult.Failed(request.Params.Name, null, settings.WorkspaceArgument,
@@ -104,11 +110,14 @@ builder.Services
                 typeKind = kindValue.GetString();
             }
             using WorkspaceSelectionScope selection = WorkspaceSelectionScope.Begin(framework, typeKind);
+            using NavlynMcpResponseScope responseScope = NavlynMcpResponseScope.Begin(entryLimit, entryOffset);
             CallToolResult result = await next(request, cancellationToken);
             return NavlynMcpResponsePolicy.Project(result, resultProfile, entryLimit, entryOffset);
         });
         filters.AddListToolsFilter(next => async (request, cancellationToken) =>
         {
+            using NavlynMcpTimingScope? timing = NavlynMcpTimingScope.Begin("tools/list");
+            using IDisposable? discovery = NavlynMcpTimingScope.Measure("discovery.schema");
             ListToolsResult result = await next(request, cancellationToken);
             NavlynMcpServerOptions serverOptions = request.Services!.GetRequiredService<NavlynMcpServerOptions>();
             IReadOnlyList<string> allowedNames = NavlynMcpToolProfilePolicy.GetToolNames(serverOptions.ToolProfile, serverOptions.Surface);
@@ -122,10 +131,12 @@ builder.Services
             foreach (Tool tool in result.Tools)
             {
                 tool.InputSchema = NavlynToolSchemaFormatter.Compact(tool.InputSchema, includeFramework: true);
-                tool.InputSchema = NavlynMcpResponsePolicy.InputSchema(tool.Name, tool.InputSchema);
+                tool.InputSchema = NavlynMcpResponsePolicy.InputSchema(tool.Name, tool.InputSchema, serverOptions.EffectiveResultProfile,
+                    focusedCompact: serverOptions.Surface == "focused" && serverOptions.EffectiveResultProfile == "compact");
                 if (tool.OutputSchema is JsonElement outputSchema)
                 {
-                    tool.OutputSchema = NavlynMcpResponsePolicy.OutputSchema(NavlynToolSchemaFormatter.Compact(outputSchema, output: true));
+                    tool.OutputSchema = NavlynMcpResponsePolicy.OutputSchema(NavlynToolSchemaFormatter.Compact(outputSchema, output: true),
+                        focusedCompact: serverOptions.Surface == "focused" && serverOptions.EffectiveResultProfile == "compact");
                 }
             }
             return result;

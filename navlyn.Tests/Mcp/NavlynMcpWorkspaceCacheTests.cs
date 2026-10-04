@@ -13,6 +13,54 @@ namespace Navlyn.Tests.Mcp;
 
 public sealed class NavlynMcpWorkspaceCacheTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Outline_PagesBeforeJsonLimitAndKeepsConcurrentBoundsIsolated(bool externalCli)
+    {
+        using TemporaryDirectory directory = TemporaryDirectory.Create();
+        string project = CreateProject(directory.Path);
+        await File.WriteAllTextAsync(Path.Combine(directory.Path, "Fixture.cs"),
+            "namespace Fixture; public class Container { " +
+            string.Join(" ", Enumerable.Range(0, 40).Select(index => $"public int M{index:D3}() => {index};")) + " }");
+        NavlynMcpServerOptions options = CreateOptions(project) with { MaxJsonChars = 18000 };
+        if (externalCli) options = options with
+        {
+            NavlynExecutable = "dotnet",
+            NavlynArguments = [Path.Combine(AppContext.BaseDirectory, "navlyn.dll")]
+        };
+        using NavlynMcpWorkspaceCache cache = new(options);
+        NavlynMcpDirectToolRunner runner = new(options, cache);
+        NavlynMcpToolService service = new(new NavlynCliRunner(options), runner, options);
+        CommandBuildResult command = NavlynToolCommandBuilder.FileOutline("Fixture.cs", null, null);
+
+        async Task<NavlynToolResult> Page(int offset)
+        {
+            using NavlynMcpResponseScope scope = NavlynMcpResponseScope.Begin(2, offset);
+            return await service.RunAsync(NavlynMcpTools.FileOutlineTool, command, CancellationToken.None);
+        }
+
+        NavlynToolResult[] pages = await Task.WhenAll(Page(2), Page(10));
+        Assert.Null(NavlynMcpResponseScope.CurrentOutlinePage);
+        foreach (NavlynToolResult page in pages)
+        {
+            Assert.True(page.Ok, page.Error?.Message);
+            Assert.Equal(2, page.Result!.Value.GetProperty("entries").GetArrayLength());
+            Assert.Equal(42, page.Result.Value.GetProperty("entriesTotal").GetInt32());
+        }
+        Assert.Equal("M000", pages[0].Result!.Value.GetProperty("entries")[0].GetProperty("name").GetString());
+        Assert.Equal("M008", pages[1].Result!.Value.GetProperty("entries")[0].GetProperty("name").GetString());
+        string candidate = pages[1].Result!.Value.GetProperty("entries")[0].GetProperty("candidateId").GetString()!;
+        NavlynToolResult read = await service.RunAsync(NavlynMcpTools.ReadTool,
+            CommandBuildResult.Valid("read", ["--candidate-id", candidate, "--view", "signature"]), CancellationToken.None);
+        Assert.True(read.Ok, read.Error?.Message);
+        Assert.Contains("M008", read.Result!.Value.GetRawText());
+
+        NavlynToolResult unpaged = await service.RunAsync(NavlynMcpTools.FileOutlineTool, command, CancellationToken.None);
+        Assert.False(unpaged.Ok);
+        Assert.Equal("NAVLYN_MCP_OUTPUT_TOO_LARGE", unpaged.Error?.Code);
+    }
+
     [Fact]
     public async Task ServiceDeadline_DirectOutlineExpiresAndSameCacheRemainsUsable()
     {

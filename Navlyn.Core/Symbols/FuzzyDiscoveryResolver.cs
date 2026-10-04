@@ -501,7 +501,9 @@ internal sealed class FuzzyDiscoveryResolver
             Candidates: candidates,
             SelectedCandidate: selected,
             Alternatives: alternatives is { Count: > 0 } ? alternatives : null,
-            Warnings: [],
+            Warnings: candidates.Count == 0
+                ? ["No workspace source declaration matched the query and filters. External DLL declarations are not searched; read at a source call position or inspect the dependency with ordinary tools."]
+                : [],
             Error: null,
             SelectionExplanation: CreateSelectionExplanation(options, confidence, selected, selected is not null, ambiguityReasons));
     }

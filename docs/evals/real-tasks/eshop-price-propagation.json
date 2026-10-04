@@ -1,0 +1,14 @@
+{
+  "id": "eshop-price-propagation-incident",
+  "sourceCommit": "dc7ea499cd356924fb6689b3702964a5869dbae9",
+  "sourceUrl": "https://github.com/dotnet/eShop/tree/dc7ea499cd356924fb6689b3702964a5869dbae9",
+  "workspace": "src/Catalog.API/Catalog.API.csproj",
+  "turnTimeoutMs": 360000,
+  "validationKind": "evidence-artifact-integrity",
+  "prompts": [
+    "Investigate a production-style incident in this eShop source snapshot: a catalog item's price changes successfully, but a user's existing basket still displays the old price. Trace both versioned catalog update entrypoints through EF change tracking, the integration event/outbox transaction, RabbitMQ publication and dispatch, subscriber registration and consumer effects. Determine whether this repository actually implements the expected basket-price refresh, rather than assuming matching event names or interfaces prove it. Inspect the relevant services outside the Catalog project as needed using their source; do not run external databases, RabbitMQ, UI apps or deployment commands. Do not modify production code.",
+    "Produce an actionable repair and test plan. Explicitly separate local DB/outbox atomicity, publish status, message delivery/acknowledgement, deserialization/type registration, handler effects and basket/UI state. Identify failure modes that the current source handles or silently loses; avoid claiming guaranteed delivery, distributed atomicity or runtime success from static relationships. Save REPORT.json with findings [{id,statement,evidence:[{path,line}],certainty}] and testPlan. Use ids entrypoints, price-change, atomicity, routing, subscriptions, consumer-effect, basket, acknowledgement and remediation. Cite actual paths and symbols, including any project-scope limits."
+  ],
+  "prepare": [["dotnet", "restore", "src/Catalog.API/Catalog.API.csproj", "--verbosity", "quiet"]],
+  "validate": [["node", "{runnerRoot}/scripts/validate-navlyn-task-report.mjs", "REPORT.json"]]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "gcm-msal-broker-fallback-review",
+  "sourceCommit": "53447486474f4cab68355cdc82660aafa07912f0",
+  "sourceUrl": "https://github.com/git-ecosystem/git-credential-manager/tree/53447486474f4cab68355cdc82660aafa07912f0",
+  "workspace": "src/Core/Core.csproj",
+  "turnTimeoutMs": 360000,
+  "validationKind": "evidence-artifact-integrity",
+  "prompts": [
+    "Review a proposed simplification of Git Credential Manager's MSAL broker fallback: remove the second builder.WithBroker(new BrokerOptions(BrokerOptions.OperatingSystems.None)) call after an unavailable-broker check and just leave _useBroker=false. Determine whether this is behavior-preserving in the actual referenced dependency version. Investigate GetPublicAppBuilder, its cache and platform/session gates, the compiler-bound WithBroker and IsBrokerAvailable members, and the BrokerOptions constructor's operating-system state. The source entrypoint is src/Core/Authentication/Entra/EntraAuthentication.PublicClient.cs; WithBroker is called at lines 538 and 567, and IsBrokerAvailable at line 540. Use actual local dependency implementation evidence, preserving the selected assembly/version and method identity; names/comments/XML summaries alone are insufficient. Do not execute broker/authentication flows or contact credential services.",
+    "Complete a decision and regression-test plan for the proposed change, including repeated builder use, supported versus unavailable environments, why caller flags do or do not undo dependency configuration, and limitations of static evidence. Save extracted dependency evidence with identities and provenance in DEPENDENCY_EVIDENCE.md and REPORT.json with findings [{id,statement,evidence:[{path,line}],certainty}] and testPlan. Use ids binding, configuration, availability, fallback, cache, platforms and recommendation. Reference exported dependency evidence where a virtual/decompiled URI cannot be opened as a file; distinguish that evidence from original source. Do not change production code."
+  ],
+  "prepare": [["dotnet", "restore", "src/Core/Core.csproj", "--verbosity", "quiet"]],
+  "validate": [["node", "{runnerRoot}/scripts/validate-navlyn-task-report.mjs", "REPORT.json"]]
+}

@@ -24,3 +24,11 @@ Use this reference when the task requires a capability beyond focused target/rea
 | Several already selected supported facts | `navlyn_batch`: independent requests or a necessary dependent chain; report per-request failures. |
 
 Carry project and exact `targetFramework` when they change meaning. Partial declarations, linked source, and generated code may need different compilation contexts. Narrow only as far as the requested conclusion permits; a local file search cannot establish repository-wide absence. Choose one missing fact and stop when it is established.
+
+For several independently needed CLI dependency facts, pass a JSON batch through stdin to `navlyn batch --workspace <project>`. `symbol-source` requests accept externalSource and externalMember; omit unused optional fields. For example:
+
+```json
+{"requests":[{"id":"body","command":"symbol-source","file":"Caller.cs","line":42,"column":27,"view":"body","externalSource":"decompiled"},{"id":"internal","command":"symbol-source","file":"Caller.cs","line":42,"column":27,"view":"body","externalSource":"decompiled","externalMember":"M:Library.Type.InternalMethod(System.Int16)"}]}
+```
+
+Use the same known external anchor, copy an actual returned ID and inspect each request's ok/error and provenance. This avoids repeated workspace loads; it does not discover unknown IDs or establish a runtime call graph. MCP's focused read reuses its workspace already.

@@ -1,0 +1,15 @@
+{
+  "id": "monogame-desktopgl-reset-impact-review",
+  "sourceCommit": "bcc73c68a2d3b8b30e11989072dedad2b7d9b953",
+  "sourceUrl": "https://github.com/MonoGame/MonoGame/tree/bcc73c68a2d3b8b30e11989072dedad2b7d9b953",
+  "workspace": "MonoGame.Framework/MonoGame.Framework.DesktopGL.csproj",
+  "submodules": ["ThirdParty/StbImageSharp", "ThirdParty/StbImageWriteSharp"],
+  "turnTimeoutMs": 360000,
+  "validationKind": "evidence-artifact-integrity",
+  "prompts": [
+    "Review a proposed optimization for a DesktopGL game that reloads many textures, vertex/index buffers and effects while switching presentation settings. The proposal removes the registered-resource callback walk from GraphicsDevice.OnDeviceResetting because GraphicsDevice.Reset already calls PlatformReset, which allegedly resets all those resources. Determine whether this is behavior-preserving in the actual MonoGame.Framework.DesktopGL.csproj compilation. Trace both reset entrypoints and their callers, events, partial methods, resource overrides and platform-specific implementations. Separate implementations actually compiled for DesktopGL/net8.0 from similarly named DirectX/Web/native source that is present but excluded. Identify the complete in-project override set of GraphicsResource.GraphicsDeviceResetting and the relevant inheritance/ownership limitations. Do not inspect upstream fixes, launch a graphics window or execute GPU operations.",
+    "Complete a decision and focused repair/regression plan. Cover presentation-only reset versus resource invalidation, texture/buffer/shader/effect state, callback traversal mutation and locking, weak references and disposed resources, and what source/compilation evidence cannot prove about live GPU behavior. Save REPORT.json with findings [{id,statement,evidence:[{path,line}],certainty}] and testPlan. Use ids compilation, partial-reset, entrypoints, callbacks, resources, traversal and recommendation. Include reproducible evidence for active/excluded platform implementations; filenames/comments alone are insufficient. Do not change production code."
+  ],
+  "prepare": [["dotnet", "restore", "MonoGame.Framework/MonoGame.Framework.DesktopGL.csproj", "--verbosity", "quiet"]],
+  "validate": [["node", "{runnerRoot}/scripts/validate-navlyn-task-report.mjs", "REPORT.json"]]
+}
