@@ -100,7 +100,7 @@ internal static class NavlynMcpResponsePolicy
         }
     }
 
-    public static JsonElement InputSchema(string tool, JsonElement schema, string defaultProfile = "compact")
+    public static JsonElement InputSchema(string tool, JsonElement schema, string defaultProfile = "compact", bool focusedCompact = false)
     {
         JsonObject root = JsonNode.Parse(schema.GetRawText())!.AsObject();
         JsonObject properties = root["properties"]!.AsObject();
@@ -130,8 +130,45 @@ internal static class NavlynMcpResponsePolicy
             properties["operation"]!["enum"] = new JsonArray("definition", "references", "callers", "calls", "implementations", "type_hierarchy", "symbol_info");
             root["allOf"] = JsonNode.Parse("""[{"if":{"required":["operation"],"properties":{"operation":{"enum":["definition","calls","implementations","type_hierarchy","symbol_info"]}}},"then":{"properties":{"scope":{"type":"null"},"maxDocuments":{"type":"null"}}}}]""");
         }
+        if (focusedCompact)
+        {
+            // Keep every parameter, type and constraint; shorten only repetitive discovery prose.
+            foreach ((string name, JsonNode? value) in properties)
+                if (value is JsonObject property && FocusedDescriptions.TryGetValue(name, out string? description))
+                    property["description"] = description;
+        }
         return JsonSerializer.SerializeToElement(root);
     }
+
+    private static readonly IReadOnlyDictionary<string, string> FocusedDescriptions = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["candidateId"] = "Returned identity; omit file/line/column.",
+        ["file"] = "Source file.",
+        ["line"] = "1-based source line.", ["column"] = "1-based source column.",
+        ["project"] = "Anchor project.", ["projects"] = "Project filters.",
+        ["targetFramework"] = "Exact loaded framework, e.g. net10.0; omission retains all.",
+        ["excludeGenerated"] = "Exclude generated source.",
+        ["query"] = "Workspace source symbol intent; no DLL search.",
+        ["mode"] = "Select one or list source candidates.",
+        ["operation"] = "One relationship; scope/maxDocuments only for references/callers.",
+        ["assumeKind"] = "Ranking hint; choose singular or plural.", ["assumeKinds"] = "Ranking hints; omit assumeKind.",
+        ["typeKind"] = "Actual type filter, independent of ranking hints.",
+        ["caseSensitive"] = "Case-sensitive query.", ["match"] = "Name match mode.",
+        ["candidatePolicy"] = "Select, group or require one candidate.",
+        ["minConfidence"] = "Minimum selection confidence.", ["explainSelection"] = "Include selection reasons.",
+        ["limit"] = "Maximum returned matches, positive.",
+        ["maxLines"] = "Maximum lines per slice, positive.", ["budgetTokens"] = "Approximate per-slice text budget, positive.",
+        ["resultProfile"] = "Compact keeps bounded body/identity; full adds fields.",
+        ["entryLimit"] = "Page size 1..1000; compact default 100.", ["entryOffset"] = "Nonnegative page offset; reuse only unchanged context.",
+        ["resultProject"] = "Result project filter.", ["resultProjects"] = "Result project filters.",
+        ["resultPath"] = "Result path glob.", ["resultPaths"] = "Result path globs.",
+        ["resultKind"] = "Result symbol kind.", ["resultKinds"] = "Result symbol kinds.",
+        ["usageKind"] = "Usage filter: invoke/read/write/type/attribute/nameof/other.", ["usageKinds"] = "Usage filters; omit usageKind.",
+        ["groupBy"] = "Group by project, path, kind or usageKind.",
+        ["scope"] = "references/callers only: workspace, project or file.",
+        ["maxDocuments"] = "references/callers document bound, positive; inspect partial scope.",
+        ["includeMetadata"] = "Include metadata targets where supported."
+    };
 
     public static JsonElement OutputSchema(JsonElement schema, bool focusedCompact = false)
     {
@@ -140,13 +177,11 @@ internal static class NavlynMcpResponsePolicy
             // The canonical envelope schema remains available in full discovery/docs.
             // Extra fields permit per-call full results without repeating their tree per tool.
             using JsonDocument compact = JsonDocument.Parse("""
-                {"type":"object","additionalProperties":true,"required":["ok","tool","sourceCommand","workspace"],"properties":{
+                {"type":"object","required":["ok","tool","sourceCommand","workspace"],"properties":{
                   "ok":{"type":"boolean"},"tool":{"type":"string"},"workspace":{"type":"string"},
-                  "sourceCommand":{"type":["object","null"],"additionalProperties":true},
-                  "result":{"type":"object","additionalProperties":true},
-                  "error":{"type":"object","required":["code","message"],"additionalProperties":true,"properties":{"code":{"type":"string"},"message":{"type":"string"}}},
-                  "metadata":{"type":"object","additionalProperties":true,"description":"Execution context and freshness; inspect result scope, bounds and warnings."},
-                  "resultProfile":{"type":"string","enum":["compact"]}}}
+                  "sourceCommand":{"type":["object","null"]},"result":{"type":"object"},
+                  "error":{"type":"object","required":["code","message"],"properties":{"code":{"type":"string"},"message":{"type":"string"}}},
+                  "metadata":{"type":"object"},"resultProfile":{"type":"string","enum":["compact"]}}}
                 """);
             return compact.RootElement.Clone();
         }

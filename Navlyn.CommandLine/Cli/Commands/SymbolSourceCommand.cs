@@ -29,11 +29,15 @@ internal static class SymbolSourceCommand
             DefaultValueFactory = _ => "none"
         };
         externalSourceOption.AcceptOnlyFromAmong("none", "metadata", "decompiled");
+        Option<string?> externalMemberOption = new("--external-member")
+        {
+            Description = "Exact M:, T:, or F: documentation ID within the bound external assembly. Requires decompiled; T: supports members/signature."
+        };
 
         return SourcePositionCommand.Create(
             commandName,
             description ?? "Return bounded source slices for the C# or Visual Basic symbol at a source position.",
-            [viewOption, maxLinesOption, budgetTokensOption, externalSourceOption],
+            [viewOption, maxLinesOption, budgetTokensOption, externalSourceOption, externalMemberOption],
             (workspace, options, parseResult, cancellationToken) => ExecuteAsync(
                 workspace,
                 options,
@@ -41,6 +45,7 @@ internal static class SymbolSourceCommand
                 parseResult.GetValue(maxLinesOption),
                 parseResult.GetValue(budgetTokensOption),
                 parseResult.GetValue(externalSourceOption)!,
+                parseResult.GetValue(externalMemberOption),
                 cancellationToken));
     }
 
@@ -51,6 +56,7 @@ internal static class SymbolSourceCommand
         int? maxLines,
         int? budgetTokens,
         string externalSource,
+        string? externalMember,
         CancellationToken cancellationToken)
     {
         int effectiveMaxLines = maxLines ?? DefaultMaxLines;
@@ -74,7 +80,7 @@ internal static class SymbolSourceCommand
             sourceOptions.Column,
             sourceOptions.Project,
             sourceOptions.ExcludeGenerated,
-            new SymbolSourceOptions(view, effectiveMaxLines, effectiveBudgetTokens, externalSource),
+            new SymbolSourceOptions(view, effectiveMaxLines, effectiveBudgetTokens, externalSource, externalMember),
             cancellationToken);
 
         if (result.Error is not null)

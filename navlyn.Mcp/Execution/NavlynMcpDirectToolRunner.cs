@@ -361,6 +361,7 @@ internal sealed class NavlynMcpDirectToolRunner(
         int? line = GetIntValue(arguments, "--line");
         int? column = GetIntValue(arguments, "--column");
         string externalSource = GetValue(arguments, "--external-source") ?? "none";
+        string? externalMember = GetValue(arguments, "--external-member");
         string? projectFilter = GetValue(arguments, "--project");
         bool excludeGenerated = HasFlag(arguments, "--exclude-generated");
         string view = GetValue(arguments, "--view") ?? "declaration";
@@ -409,7 +410,7 @@ internal sealed class NavlynMcpDirectToolRunner(
             column!.Value,
             project,
             excludeGenerated,
-            new SymbolSourceOptions(view, maxLines, budgetTokens, externalSource),
+            new SymbolSourceOptions(view, maxLines, budgetTokens, externalSource, externalMember),
             cancellationToken);
 
         if (result.Error is not null)

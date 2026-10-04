@@ -131,7 +131,8 @@ builder.Services
             foreach (Tool tool in result.Tools)
             {
                 tool.InputSchema = NavlynToolSchemaFormatter.Compact(tool.InputSchema, includeFramework: true);
-                tool.InputSchema = NavlynMcpResponsePolicy.InputSchema(tool.Name, tool.InputSchema, serverOptions.EffectiveResultProfile);
+                tool.InputSchema = NavlynMcpResponsePolicy.InputSchema(tool.Name, tool.InputSchema, serverOptions.EffectiveResultProfile,
+                    focusedCompact: serverOptions.Surface == "focused" && serverOptions.EffectiveResultProfile == "compact");
                 if (tool.OutputSchema is JsonElement outputSchema)
                 {
                     tool.OutputSchema = NavlynMcpResponsePolicy.OutputSchema(NavlynToolSchemaFormatter.Compact(outputSchema, output: true),

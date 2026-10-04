@@ -170,33 +170,68 @@ internal static class ExternalMemberWorker
             return new WorkerResponse(null, null, null, null, "unavailable");
         }
 
-        EntityHandle[] matches = peFile.Metadata.MethodDefinitions
-            .Where(handle => IdStringProvider.GetIdString(peFile, handle) == request.DocumentationCommentId)
-            .Select(handle => (EntityHandle)handle)
-            .ToArray();
+        IEnumerable<EntityHandle> handles = request.DocumentationCommentId[0] switch
+        {
+            'T' => peFile.Metadata.TypeDefinitions.Select(handle => (EntityHandle)handle),
+            'F' => peFile.Metadata.FieldDefinitions.Select(handle => (EntityHandle)handle),
+            _ => peFile.Metadata.MethodDefinitions.Select(handle => (EntityHandle)handle)
+        };
+        EntityHandle[] matches = handles.Where(handle => IdStringProvider.GetIdString(peFile, handle) == request.DocumentationCommentId).ToArray();
         if (matches.Length != 1)
         {
             return new WorkerResponse(null, null, implementationPath, implementationHash, matches.Length == 0 ? "member-not-found" : "ambiguous");
         }
 
-        MethodDefinition selectedMethod = peFile.Metadata.GetMethodDefinition((MethodDefinitionHandle)matches[0]);
-        int rva = selectedMethod.RelativeVirtualAddress;
-        int ilLength = rva == 0 ? 0 : peFile.Reader.GetMethodBody(rva).GetILBytes()?.Length ?? 0;
-        if (ilLength > MaxIlBytes)
+        string? selectedText;
+        string? signature;
+        bool truncated = false;
+        int? membersTotal = null;
+        if (matches[0].Kind == HandleKind.TypeDefinition)
         {
-            return new WorkerResponse(null, null, implementationPath, implementationHash, "limit");
+            if (request.View == "body") return new WorkerResponse(null, null, implementationPath, implementationHash, "no-body");
+            if (request.View is not ("members" or "signature")) return new WorkerResponse(null, null, implementationPath, implementationHash, "invalid-view");
+            signature = request.DocumentationCommentId;
+            if (request.View == "signature") selectedText = signature;
+            else
+            {
+                TypeDefinition type = peFile.Metadata.GetTypeDefinition((TypeDefinitionHandle)matches[0]);
+                string[] members = type.GetMethods().Select(handle => (EntityHandle)handle)
+                    .Concat(type.GetFields().Select(handle => (EntityHandle)handle))
+                    .Concat(type.GetNestedTypes().Select(handle => (EntityHandle)handle))
+                    .Select(handle => MemberLabel(peFile, handle)).OrderBy(label => label, StringComparer.Ordinal).ToArray();
+                membersTotal = members.Length;
+                List<string> bounded = [];
+                long used = 0, budget = Math.Min((long)request.BudgetTokens * 4, MaxWorkerOutputBytes / 2);
+                foreach (string label in members)
+                {
+                    if (bounded.Count >= request.MaxLines || used + label.Length + 1 > budget) { truncated = true; break; }
+                    bounded.Add(label);
+                    used += label.Length + 1;
+                }
+                selectedText = string.Join("\n", bounded);
+            }
         }
-
-        bool hasBody = rva != 0 && ilLength > 0 && !selectedMethod.Attributes.HasFlag(MethodAttributes.Abstract) &&
-            !selectedMethod.Attributes.HasFlag(MethodAttributes.PinvokeImpl);
-        if (request.View == "body" && !hasBody)
+        else if (matches[0].Kind == HandleKind.FieldDefinition)
         {
-            return new WorkerResponse(null, null, implementationPath, implementationHash, "no-body");
+            if (request.View == "body") return new WorkerResponse(null, null, implementationPath, implementationHash, "no-body");
+            if (request.View == "members") return new WorkerResponse(null, null, implementationPath, implementationHash, "invalid-view");
+            signature = selectedText = MemberLabel(peFile, matches[0]);
         }
-
-        CSharpDecompiler decompiler = new(implementationPath, new DecompilerSettings { ThrowOnAssemblyResolveErrors = false });
-        string reconstructed = decompiler.DecompileAsString(matches[0]);
-        string? selectedText = SelectView(reconstructed, request.View, hasBody);
+        else
+        {
+            if (request.View == "members") return new WorkerResponse(null, null, implementationPath, implementationHash, "invalid-view");
+            MethodDefinition selectedMethod = peFile.Metadata.GetMethodDefinition((MethodDefinitionHandle)matches[0]);
+            int rva = selectedMethod.RelativeVirtualAddress;
+            int ilLength = rva == 0 ? 0 : peFile.Reader.GetMethodBody(rva).GetILBytes()?.Length ?? 0;
+            if (ilLength > MaxIlBytes) return new WorkerResponse(null, null, implementationPath, implementationHash, "limit");
+            bool hasBody = rva != 0 && ilLength > 0 && !selectedMethod.Attributes.HasFlag(MethodAttributes.Abstract) &&
+                !selectedMethod.Attributes.HasFlag(MethodAttributes.PinvokeImpl);
+            if (request.View == "body" && !hasBody) return new WorkerResponse(null, null, implementationPath, implementationHash, "no-body");
+            CSharpDecompiler decompiler = new(implementationPath, new DecompilerSettings { ThrowOnAssemblyResolveErrors = false });
+            string reconstructed = decompiler.DecompileAsString(matches[0]);
+            selectedText = SelectView(reconstructed, request.View, hasBody);
+            signature = SelectView(reconstructed, "signature", hasBody);
+        }
         if (selectedText is null)
         {
             return new WorkerResponse(null, null, implementationPath, implementationHash, request.View == "body" ? "no-body" : "malformed-image");
@@ -215,7 +250,19 @@ internal static class ExternalMemberWorker
             return new WorkerResponse(null, null, implementationPath, implementationHash, "stale");
         }
 
-        return new WorkerResponse(selectedText, mvid, implementationPath, implementationHash, null);
+        return new WorkerResponse(selectedText, mvid, implementationPath, implementationHash, null, signature, membersTotal, truncated);
+    }
+
+    private static string MemberLabel(PEFile peFile, EntityHandle handle)
+    {
+        string id = IdStringProvider.GetIdString(peFile, handle);
+        if (handle.Kind != HandleKind.FieldDefinition) return id;
+        ConstantHandle constant = peFile.Metadata.GetFieldDefinition((FieldDefinitionHandle)handle).GetDefaultValue();
+        if (constant.IsNil) return id;
+        Constant value = peFile.Metadata.GetConstant(constant);
+        BlobReader blob = peFile.Metadata.GetBlobReader(value.Value);
+        object? literal = blob.ReadConstant(value.TypeCode);
+        return id + " = " + (literal is string text ? JsonSerializer.Serialize(text) : Convert.ToString(literal, System.Globalization.CultureInfo.InvariantCulture) ?? "null");
     }
 
     private static string? SelectView(string text, string view, bool hasBody)
@@ -495,7 +542,8 @@ internal static class ExternalMemberWorker
     }
 
     internal sealed record WorkerRequest(string ReferencePath, string ReferenceSha256, string LoadedMetadataSha256,
-        string? AssetsPath, string? AssetsSha256, string TargetFramework, string Identity, string DocumentationCommentId, string View);
-    internal sealed record WorkerResponse(string? Text, Guid? ImplementationMvid, string? ImplementationPath, string? ImplementationSha256, string? Error);
+        string? AssetsPath, string? AssetsSha256, string TargetFramework, string Identity, string DocumentationCommentId, string View, int MaxLines = 80, int BudgetTokens = 4000);
+    internal sealed record WorkerResponse(string? Text, Guid? ImplementationMvid, string? ImplementationPath, string? ImplementationSha256, string? Error,
+        string? Signature = null, int? MembersTotal = null, bool Truncated = false);
     private sealed class LimitExceededException : Exception;
 }

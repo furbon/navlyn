@@ -78,7 +78,8 @@ internal sealed class ExternalLibrarySourceFixture
         string view = "body",
         string? projectName = null,
         int? maxLines = null,
-        int? budgetTokens = null)
+        int? budgetTokens = null,
+        string? externalMember = null)
     {
         bool sharedProject = project.StartsWith(fixtureRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
         McpClient client = sharedProject ? await readers.GetOrAdd(project, CreateReaderAsync) : await CreateReaderAsync(project);
@@ -89,7 +90,7 @@ internal sealed class ExternalLibrarySourceFixture
             {
                 ["file"] = source, ["line"] = line, ["column"] = column, ["view"] = view,
                 ["project"] = projectName, ["maxLines"] = maxLines, ["budgetTokens"] = budgetTokens,
-                ["externalSource"] = externalSource
+                ["externalSource"] = externalSource, ["externalMember"] = externalMember
             }, cancellationToken: deadline.Token);
             JsonElement result = response.StructuredContent!.Value;
             return result.GetProperty("ok").GetBoolean()

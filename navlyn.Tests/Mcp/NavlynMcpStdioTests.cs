@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using System.Reflection;
+using System.Text.Json.Nodes;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
@@ -1034,13 +1035,47 @@ public sealed class NavlynMcpStdioTests
         Assert.Equal("NAVLYN_MCP_TOOL_UNAVAILABLE", hidden.StructuredContent!.Value.GetProperty("error").GetProperty("code").GetString());
     }
 
+    [Fact]
+    public async Task FocusedDiscovery_PreservesEveryFullSurfaceInputConstraint()
+    {
+        string workspace = Path.Combine(FindRepositoryRoot(), "navlyn.slnx");
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(30));
+        await using McpClient full = await CreateClientAsync(null, workspace, resultProfile: "compact");
+        await using McpClient focused = await CreateClientAsync(null, workspace, surface: null);
+        IList<McpClientTool> fullTools = await full.ListToolsAsync(cancellationToken: timeout.Token);
+        IList<McpClientTool> focusedTools = await focused.ListToolsAsync(cancellationToken: timeout.Token);
+        Assert.Equal(4, focusedTools.Count);
+        foreach (McpClientTool tool in focusedTools)
+        {
+            McpClientTool original = Assert.Single(fullTools, item => item.Name == tool.Name);
+            JsonNode originalSchema = JsonNode.Parse(original.JsonSchema.GetRawText())!;
+            JsonNode focusedSchema = JsonNode.Parse(tool.JsonSchema.GetRawText())!;
+            RemoveDescriptions(originalSchema);
+            RemoveDescriptions(focusedSchema);
+            Assert.True(JsonNode.DeepEquals(originalSchema, focusedSchema), tool.Name);
+        }
+
+        static void RemoveDescriptions(JsonNode? node)
+        {
+            if (node is JsonObject obj)
+            {
+                obj.Remove("description");
+                foreach (JsonNode? child in obj.Select(pair => pair.Value)) RemoveDescriptions(child);
+            }
+            else if (node is JsonArray array)
+            {
+                foreach (JsonNode? child in array) RemoveDescriptions(child);
+            }
+        }
+    }
+
     private static async Task<McpClient> CreateClientAsync(string? profile)
     {
         string repoRoot = FindRepositoryRoot();
         return await CreateClientAsync(profile, Path.Combine(repoRoot, "navlyn.slnx"));
     }
 
-    private static async Task<McpClient> CreateClientAsync(string? profile, string workspacePath, string? surface = "full")
+    private static async Task<McpClient> CreateClientAsync(string? profile, string workspacePath, string? surface = "full", string? resultProfile = null)
     {
         string repoRoot = FindRepositoryRoot();
         string serverDll = Path.Combine(repoRoot, "navlyn.Mcp", "bin", Directory.GetParent(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory))!.Name, GetCurrentTargetFramework(), "navlyn.Mcp.dll");
@@ -1061,6 +1096,7 @@ public sealed class NavlynMcpStdioTests
         }
 
         if (surface is not null) arguments.AddRange(["--surface", surface]);
+        if (resultProfile is not null) arguments.AddRange(["--result-profile", resultProfile]);
 
         StdioClientTransport transport = new(
             new StdioClientTransportOptions

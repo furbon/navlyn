@@ -39,7 +39,7 @@ internal static class NavlynMcpTools
         "Select a workspace source declaration when approximate C# or Visual Basic identity matters. Use select normally; list only for requested candidate discovery. Accepts query, candidateId or exact position; list requires query. Does not search DLL internals, strings or docs. For a referenced member, read its call position. Stop on unresolved ambiguity; static evidence does not prove runtime behavior.";
 
     private const string ReadDescription =
-        "Read one bounded C# or Visual Basic fact from candidateId or exact file/line/column. At a referenced call, externalSource decompiled and view body returns the bound DLL implementation; a constructed type name selects its constructor. For constants/enum values use externalSource metadata, view declaration. No target/outline preamble for known positions. Use ordinary tools for broad reading or unanchored DLL internals; static evidence is not runtime proof.";
+        "Read one bounded C# or Visual Basic fact from candidateId or exact file/line/column. For DLL bodies use externalSource decompiled. Keep that anchor to follow DLL internals: view members lists its type; externalMember T: selects another type, M: its exact body, F: a constant. No target/outline preamble. Use ordinary tools for broad reading. Static evidence is not runtime proof.";
 
     private const string PrepareEditDescription =
         "Use immediately before editing one intended C# or Visual Basic target when bounded preparation evidence is needed. Provide candidateId, query, or exact source position. It resolves the target and gathers bounded source, context, and test evidence; do not use for edits or broad exploration. Confidence and known unknowns are static evidence, not a correctness guarantee.";
@@ -216,16 +216,17 @@ internal static class NavlynMcpTools
         [Description("1-based source column.")] int? column = null,
         [Description("Optional project context for candidate/source-position resolution.")] string? project = null,
         [Description("Exclude generated source locations.")] bool? excludeGenerated = null,
-        [Description("Source view: signature, declaration, body, members, xml-doc, or attributes. External modes allow only signature, declaration, body.")] string? view = null,
+        [Description("Source view: signature, declaration, body, members, xml-doc, attributes. Decompiled members lists a type's canonical IDs; metadata allows signature/declaration/body.")] string? view = null,
         [Description("Maximum source lines per slice. Must be 1 or greater.")] int? maxLines = null,
         [Description("Approximate token budget per slice. Must be 1 or greater.")] int? budgetTokens = null,
         [Description("External member source: none (default), metadata, or decompiled. Read at the member token; enum values need the field token, not the containing type.")] string? externalSource = null,
+        [Description("Exact M:, T:, or F: documentation ID in the same bound assembly; requires decompiled. Use T: with members to find private methods, then M: with body.")] string? externalMember = null,
         CancellationToken cancellationToken = default)
     {
         return RunAsync(
             services,
             ReadTool,
-            NavlynToolCommandBuilder.Read(candidateId, file, line, column, project, excludeGenerated, view, maxLines, budgetTokens, externalSource),
+            NavlynToolCommandBuilder.Read(candidateId, file, line, column, project, excludeGenerated, view, maxLines, budgetTokens, externalSource, externalMember),
             cancellationToken);
     }
 

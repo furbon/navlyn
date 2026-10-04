@@ -7,6 +7,21 @@ namespace Navlyn.Tests.Symbols;
 public sealed class SymbolSourceResolverComponentTests(ResolverComponentTestFixture fixture)
 {
     [Fact]
+    public async Task LargeBudget_DoesNotOverflowOrDiscardACompleteDeclaration()
+    {
+        SourcePosition position = fixture.SymbolNavigationSource.Position(
+            "public string FormatWidget(Widget widget)", "FormatWidget");
+        SymbolSourceResolutionResult result = await new SymbolSourceResolver().ResolveAsync(
+            fixture.SymbolNavigationWorkspace.Solution, fixture.SymbolNavigationSource.File,
+            position.Line, position.Column, project: null, excludeGenerated: true,
+            new SymbolSourceOptions("declaration", MaxLines: 100, BudgetTokens: int.MaxValue),
+            CancellationToken.None);
+        SymbolSourceSlice slice = Assert.Single(ResolverAssert.NoError(result.Resolution, result.Error).Slices);
+        Assert.False(slice.Truncated);
+        Assert.Contains(slice.Lines, line => line.Contains("FormatWidget", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task ResolveAsync_DeclarationView_ReturnsBoundedSourceSlice()
     {
         SourcePosition position = fixture.SymbolNavigationSource.Position(

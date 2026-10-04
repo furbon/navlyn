@@ -12,6 +12,90 @@ namespace Navlyn.Tests.Symbols;
 public sealed class ExternalLibrarySourceContractTests
 {
     [Fact]
+    public async Task AnchoredMembers_FindPrivateOverloadsAndReadTheExactImplementation()
+    {
+        ExternalLibrarySourceFixture fixture = await ExternalLibrarySourceFixture.PrepareAsync();
+        (int line, int column) = fixture.Position(fixture.ConsumerSource, "normalizedShort", "Normalize");
+        ExternalLibrarySourceFixture.CliResult list = await fixture.RunReadAsync(fixture.ConsumerProject,
+            fixture.ConsumerSource, line, column, "decompiled", "members", "Consumer(net10.0)");
+        Assert.True(list.ExitCode == 0, list.Stderr);
+        string privateId = "M:Navlyn.ExternalFixture.Probe.HiddenNormalize(System.Int16)";
+        Assert.Contains(privateId, SliceText(list.Stdout), StringComparison.Ordinal);
+        Assert.Contains("M:Navlyn.ExternalFixture.Probe.HiddenNormalize(System.Int64)", SliceText(list.Stdout), StringComparison.Ordinal);
+        using JsonDocument full = JsonDocument.Parse(list.Stdout);
+        int total = full.RootElement.GetProperty("externalAssembly").GetProperty("membersTotal").GetInt32();
+        ExternalLibrarySourceFixture.CliResult bounded = await fixture.RunReadAsync(fixture.ConsumerProject,
+            fixture.ConsumerSource, line, column, "decompiled", "members", "Consumer(net10.0)", maxLines: 2);
+        using JsonDocument page = JsonDocument.Parse(bounded.Stdout);
+        Assert.Equal(total, page.RootElement.GetProperty("externalAssembly").GetProperty("membersTotal").GetInt32());
+        Assert.True(page.RootElement.GetProperty("truncated").GetBoolean());
+        Assert.Equal(2, Assert.Single(page.RootElement.GetProperty("slices").EnumerateArray()).GetProperty("lines").GetArrayLength());
+        ExternalLibrarySourceFixture.CliResult body = await fixture.RunReadAsync(fixture.ConsumerProject,
+            fixture.ConsumerSource, line, column, "decompiled", projectName: "Consumer(net10.0)", externalMember: privateId);
+        Assert.True(body.ExitCode == 0, body.Stderr);
+        using JsonDocument selected = JsonDocument.Parse(body.Stdout);
+        JsonElement provenance = selected.RootElement.GetProperty("externalAssembly");
+        Assert.Equal(privateId, provenance.GetProperty("memberDocumentationCommentId").GetString());
+        Assert.Equal("M:Navlyn.ExternalFixture.Probe.Normalize(System.Int16)", provenance.GetProperty("anchorDocumentationCommentId").GetString());
+        Assert.Contains("HiddenNormalize(short", provenance.GetProperty("memberSignature").GetString(), StringComparison.Ordinal);
+        Assert.Contains("41", SliceText(body.Stdout), StringComparison.Ordinal);
+        Assert.DoesNotContain("% 19", SliceText(body.Stdout), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnchoredEnum_ListsAndReadsConstantValuesFromTheImplementation()
+    {
+        ExternalLibrarySourceFixture fixture = await ExternalLibrarySourceFixture.PrepareAsync();
+        (int line, int column) = fixture.Position(fixture.ConsumerSource, "normalizedShort", "Normalize");
+        ExternalLibrarySourceFixture.CliResult list = await fixture.RunReadAsync(fixture.ConsumerProject,
+            fixture.ConsumerSource, line, column, "decompiled", "members", "Consumer(net10.0)",
+            externalMember: "T:Navlyn.ExternalFixture.Probe.BrokerPlatforms");
+        Assert.True(list.ExitCode == 0, list.Stderr);
+        Assert.Contains("F:Navlyn.ExternalFixture.Probe.BrokerPlatforms.None = 0", SliceText(list.Stdout), StringComparison.Ordinal);
+        ExternalLibrarySourceFixture.CliResult field = await fixture.RunReadAsync(fixture.ConsumerProject,
+            fixture.ConsumerSource, line, column, "decompiled", "declaration", "Consumer(net10.0)",
+            externalMember: "F:Navlyn.ExternalFixture.Probe.BrokerPlatforms.Linux");
+        Assert.True(field.ExitCode == 0, field.Stderr);
+        Assert.Contains("= 2", SliceText(field.Stdout), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PropertyAnchor_PreservesImplementationSelectionForMembersAndExplicitIds()
+    {
+        ExternalLibrarySourceFixture fixture = await ExternalLibrarySourceFixture.PrepareAsync();
+        (int line, int column) = fixture.Position(fixture.ConsumerSource, "mutableRead", "Mutable");
+        ExternalLibrarySourceFixture.CliResult list = await fixture.RunReadAsync(fixture.ConsumerProject,
+            fixture.ConsumerSource, line, column, "decompiled", "members", "Consumer(net10.0)");
+        Assert.True(list.ExitCode == 0, list.Stderr);
+        Assert.Contains("M:Navlyn.ExternalFixture.Probe.HiddenNormalize(System.Int16)", SliceText(list.Stdout), StringComparison.Ordinal);
+        ExternalLibrarySourceFixture.CliResult field = await fixture.RunReadAsync(fixture.ConsumerProject,
+            fixture.ConsumerSource, line, column, "decompiled", "declaration", "Consumer(net10.0)",
+            externalMember: "F:Navlyn.ExternalFixture.Probe.BrokerPlatforms.Linux");
+        Assert.True(field.ExitCode == 0, field.Stderr);
+        using JsonDocument result = JsonDocument.Parse(field.Stdout);
+        Assert.Equal("decompiled", result.RootElement.GetProperty("sourceOrigin").GetString());
+        Assert.Equal("P:Navlyn.ExternalFixture.Probe.Mutable", result.RootElement.GetProperty("externalAssembly")
+            .GetProperty("anchorDocumentationCommentId").GetString());
+        Assert.Contains("= 2", SliceText(field.Stdout), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("none", "M:Navlyn.ExternalFixture.Probe.HiddenNormalize(System.Int16)")]
+    [InlineData("metadata", "M:Navlyn.ExternalFixture.Probe.HiddenNormalize(System.Int16)")]
+    [InlineData("decompiled", "Probe.HiddenNormalize")]
+    [InlineData("decompiled", "M:System.String.Trim")]
+    public async Task AnchoredExternalMember_RejectsUnsupportedModesOrAnotherAssembly(string mode, string member)
+    {
+        ExternalLibrarySourceFixture fixture = await ExternalLibrarySourceFixture.PrepareAsync();
+        (int line, int column) = fixture.Position(fixture.ConsumerSource, "normalizedShort", "Normalize");
+        ExternalLibrarySourceFixture.CliResult result = await fixture.RunReadAsync(fixture.ConsumerProject,
+            fixture.ConsumerSource, line, column, mode, projectName: "Consumer(net10.0)", externalMember: member);
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Equal("", result.Stdout);
+        Assert.Contains(mode == "decompiled" && member.StartsWith("M:", StringComparison.Ordinal) ? "NAVLYN1403" : "NAVLYN1401", result.Stderr, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ArtifactsOutput_UsesActiveAssetsDespiteStaleConventionalAssets()
     {
         ExternalLibrarySourceFixture fixture = await ExternalLibrarySourceFixture.PrepareAsync();
@@ -582,7 +666,7 @@ public sealed class ExternalLibrarySourceContractTests
     {
         ExternalLibrarySourceFixture fixture = await ExternalLibrarySourceFixture.PrepareAsync();
         ExternalLibrarySourceFixture.CliResult response = await fixture.RunReadAsync(
-            fixture.ConsumerProject, fixture.ConsumerSource, 4, 25, "decompiled", view: "members",
+            fixture.ConsumerProject, fixture.ConsumerSource, 4, 25, "decompiled", view: "attributes",
             projectName: "Consumer(net10.0)");
 
         Assert.NotEqual(0, response.ExitCode);

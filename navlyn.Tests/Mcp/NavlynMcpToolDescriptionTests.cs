@@ -1,11 +1,39 @@
 ﻿using System.ComponentModel;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Navlyn.Mcp.Tools;
 
 namespace Navlyn.Tests.Mcp;
 
 public sealed class NavlynMcpToolDescriptionTests
 {
+    [Fact]
+    public void FocusedDiscoveryShortensProseWithoutChangingInputsOrConstraints()
+    {
+        using JsonDocument original = JsonDocument.Parse("""
+            {"type":"object","required":["operation"],"properties":{
+              "operation":{"type":"string","description":"Relationship operation"},
+              "file":{"type":["string","null"],"description":"Source path"},
+              "scope":{"type":["string","null"],"enum":["workspace","project","file",null]},
+              "maxDocuments":{"type":["integer","null"],"minimum":1}}}
+            """);
+        JsonNode full = JsonNode.Parse(NavlynMcpResponsePolicy.InputSchema(NavlynMcpTools.NavigateTool, original.RootElement).GetRawText())!;
+        JsonNode focused = JsonNode.Parse(NavlynMcpResponsePolicy.InputSchema(NavlynMcpTools.NavigateTool, original.RootElement, focusedCompact: true).GetRawText())!;
+        RemoveDescriptions(full);
+        RemoveDescriptions(focused);
+        Assert.True(JsonNode.DeepEquals(full, focused));
+
+        static void RemoveDescriptions(JsonNode? node)
+        {
+            if (node is JsonObject value)
+            {
+                value.Remove("description");
+                foreach (JsonNode? child in value.Select(property => property.Value)) RemoveDescriptions(child);
+            }
+            else if (node is JsonArray array) foreach (JsonNode? child in array) RemoveDescriptions(child);
+        }
+    }
     private static readonly string[] ExpectedToolNames =
     [
         "navlyn_target",
